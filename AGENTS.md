@@ -16,12 +16,12 @@ Claude Code、Devin、Codexは、このリポジトリの同じルールと成�
 
 - 工程6を閉じてから実装に入る。最初の実装は、登録からグループ・公演を経て、チケットのリマインドがiPhoneに届くまでを通す1本にし、本番と同じ構成の環境で動かす。この1本はL3の機能として、要件・設計・実装計画・試験計画を書いてから始める。
 - 実装は最初からDevinに委譲する。土台（IaC・CI・デプロイ・Cognito・Web Push）も委譲する。そのため、道具の選択は委譲の前に工程4〜6で決め切る。
-- Devinは、手元のDevin CLI（SWE-2 Flash）とDevin Cloudを両方使い、並行で進められるタスクは並行で渡す（2026-11-10 ユーザーの判断）。
-  - Devin Cloudが実装の主な担い手。計画のタスク（機能の実装、土台づくり）はCloudに渡す。
-  - Devin CLIは、既存のコードの調査と小さな修正（L0 / L1）に使う。
-  - 並行で渡すタスクは、触るファイルが重ならないように分ける。実装計画の分け方の表に、タスクごとの主に触るファイルと、CLIかCloudかを書く（tomotabiでは、ファイルで分けて3本を同時に進めても衝突しなかった）。
+- Devinは、手元のDevin CLIを基本にする（2026-11-11 ユーザーの判断）。並行で進められるタスクは並行で渡す。
+  - 委譲はDevin CLI（SWE-2 Flash、`swe-2-flash-<effort>`）で起動する。effortは、タスクの実装の難しさで選び、計画のタスクごとに書く。
+  - Devin CLIが、自分では実装できないと判断したときは、Devin CLIの中からDevin Cloudを呼び出して渡す。Claude Codeが直接Cloudを起動することはしない。
+  - 並行で渡すタスクは、触るファイルが重ならないように分ける。実装計画の分け方の表に、タスクごとの主に触るファイルとeffortを書く（tomotabiでは、ファイルで分けて3本を同時に進めても衝突しなかった）。
   - 手元のDevin CLIは、専用のクローン1つにつき1本だけ動かす。
-  - Cloudは、最初の委譲の前に起動を1回確かめてから使う（`.claude/config/delegation-review.json`の`cloud_launch_verified`を`true`にする）。確かめるまでは実装の委譲を始めない。
+  - Devin CLIからCloudを呼び出せることは、最初の委譲の前に1回確かめる。確かめるまでは、CLIで実装できないタスクはユーザーに渡す。
   - DevinのPRのレビューと委譲の記録は、CLIでもCloudでも同じ手順（`review-devin-pr`）にする。
 - 最初の委譲の前に、Cookpitの配布物を更新して、tomotabiで育てたハーネスを取り込む。
 - ハーネスは、困ったときにその都度作る。
@@ -128,6 +128,6 @@ tomotabiでは改善のサイクルを休眠にしたが、yoinでは回す。�
 ## ツールごとの入口
 
 - Claude Code: `CLAUDE.md`、`.claude/skills/`、検証用の`.claude/agents/`（`reviewer`と`security-reviewer`）、`.claude/settings.json`のフックを使う。ハーネスの状態を扱うコマンドをClaude Codeの外で実行するときは、settingsの`env.HARNESS_NAMESPACE`と同じ値を付ける。
-- Devin: 本ファイルと`.agents/skills/devin-workflow/SKILL.md`を使う。担当は承認済みの計画のタスク（主にCloud）、調査と小さな修正（主にCLI）、PRのレビューへの対応。ブランチは`devin/<内容>`。Claude Codeのフックは動かないため、本ファイルのブランチ運用と破壊的操作の事前確認を守る。
+- Devin: 本ファイルと`.agents/skills/devin-workflow/SKILL.md`を使う。担当は承認済みの計画のタスク、調査と小さな修正、PRのレビューへの対応。基本はDevin CLIで、難しいタスクはCLIからDevin Cloudに渡す。ブランチは`devin/<内容>`。Claude Codeのフックは動かないため、本ファイルのブランチ運用と破壊的操作の事前確認を守る。
 - Devinへの委譲とDevinのPRのレビューは`.claude/skills/review-devin-pr/SKILL.md`。マージはユーザーが行う。
 - Codex: 設計の敵対的レビューと、PRのレビュー（上の「レビュー」）を担う。実装はしない。
