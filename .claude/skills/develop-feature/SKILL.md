@@ -36,7 +36,7 @@ description: >
 6. 承認のあと[implement-change](../implement-change/SKILL.md)を読んで実装する。設計と食い違ったら、実装を止めてユーザーに聞く。
 7. 実装のあと`reviewer`を起動する。渡すのは目的、範囲、`feature-name`、差分の場所。返ってきた指摘の表を、自分の文脈でコードと突き合わせてから直す。指摘を無条件では採用しない。
 8. `security-reviewer`を起動しなかったL2は、省略理由を報告に1行書く。判断に迷うときは起動する。
-9. 改善サイクルは`AGENTS.md`で休眠。振り返りはユーザーが頼んだときだけ[reflect-task](../reflect-task/SKILL.md)。
+9. 改善サイクルは`AGENTS.md`の「振り返りと改善」に従う。L2/L3のPRがマージされたら、このセッションが[reflect-task](../reflect-task/SKILL.md)を読んで振り返りを書く。
 10. 品質コマンドは実在するものだけ。報告の粒度は`AGENTS.md`の作業分担（L2/L3は何を・なぜ・別案、L1は3行、L0は省略）。
 
 ## 検証役への渡し方
