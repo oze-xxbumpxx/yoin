@@ -18,7 +18,7 @@
   │         → 実装計画と試験計画 → implement-change
   │         → reviewer
   │         →〔security-reviewer。条件は orchestration-policy〕
-  └─(頼まれたとき)→ reflect-task。改善サイクルは休眠
+  └─(頼まれたとき)→ reflect-task。改善サイクルは`AGENTS.md`の「振り返りと改善」に従う
   │
   ▼
 このセッション … 矛盾を解消し、完了条件を見てユーザーへ報告
