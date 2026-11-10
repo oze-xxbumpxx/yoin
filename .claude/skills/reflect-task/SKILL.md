@@ -2,8 +2,8 @@
 name: reflect-task
 description: >
   タスク完了後の振り返りを行い、再利用可能な知見と改善候補を抽出する手順とチェックリスト。
-  ユーザーが振り返りを頼んだとき、このセッションで
-  docs/claude-code/improvements/candidates/<task-id>.mdを書く。毎タスクでは使わない。
+  L2/L3のPRがマージされたとき、設計の工程を閉じたとき、ユーザーが振り返りを頼んだときに、
+  このセッションでdocs/claude-code/improvements/candidates/<task-id>.mdを書く。L0/L1では使わない。
 ---
 
 # タスク振り返りスキル

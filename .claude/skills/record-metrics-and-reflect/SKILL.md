@@ -48,8 +48,8 @@ description: >
      タスク完了時に、このセッションがpacketとauditから埋める（不明値はunknownのまま）。
    - `review.active_time_bucket/confidence/full_diff_opened`だけは人間の任意回答。計時や回答を
      完了条件にせず、未回答を推測しない。
-2. **振り返り**（L2/L3で、ユーザーが頼んだとき）: `reflect-task`スキルをこのセッションで読み、
-   candidateを作成する。改善サイクルが休眠のあいだ、およびL0/L1はスキップする。
+2. **振り返り**（L2/L3のPRがマージされたとき）: `reflect-task`スキルをこのセッションで読み、
+   candidateを作成する。`AGENTS.md`で改善サイクルが休眠のあいだ（ユーザーが頼んだときを除く）、およびL0/L1はスキップする。
 3. **引き渡しpacket確認**（人間マージ判断へ渡すL2/L3）:
    `docs/reviews/<feature>.md`をstructured packetで作ったときだけ
    （`review-readiness`は`AGENTS.md`で休眠）
