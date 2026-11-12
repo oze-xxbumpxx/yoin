@@ -5,7 +5,7 @@ Claude Code、Devin、Codexは、このリポジトリの同じルールと成�
 ## 現在の状態
 
 - yoinは、いつもの仲間でグループを作り、公演ごとの記録（セトリ・参戦記録）とチケット・グッズの準備を共有する招待制のPWA。2027年1月のプレリリースを目標にMVP1を作る。1月に間に合わせるために設計を削ることはしない。
-- 設計は工程ごとに進めている。工程1（PR/FAQ）と工程2（用語集・文脈マップ・ADR-0001）は確定。工程3（データモデル・ADR-0002）は2026-11-12にADR-0002を承認して確定。工程4（ORM・マイグレーション・Neonへの接続の道具・文脈の境目の検査）、工程5、工程6（AWS構成と費用の試算）はこれから。
+- 設計は工程ごとに進めている。工程1（PR/FAQ）と工程2（用語集・文脈マップ・ADR-0001）は確定。工程3（データモデル・ADR-0002）は2026-11-12にADR-0002を承認して確定。工程6のうちAWS構成は2026-11-13に先に確定した（`docs/architecture.md`）。工程4（ORM・マイグレーション・Neonへの接続の道具・文脈の境目の検査）、工程5、工程6の費用の試算はこれから。
 - 設計文書は`docs/`に置く（`prfaq.md`・`glossary.md`・`context-map.md`・`data-model.md`・`architecture.md`・`user-stories.md`、ADRは`docs/decisions/`）。承認はPRのマージで残す。
 - 採用スタック: AWS（Lambda、EventBridge Scheduler、Cognito、S3）、Neon（PostgreSQL）、Web Push、IaC。IaCの道具・ORM・言語の細部は工程4で決める。まだアプリのコードは無い。
 - コードの名前には、用語集の英語名をそのまま使う（例: `Concert`、`Attendance`、`TicketApplication`、`MerchItem`）。
