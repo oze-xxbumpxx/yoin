@@ -2,7 +2,7 @@
 
 状態：案（2026-11-07）。同日、確かめたい点3つへの大関さんの答えを反映（末尾の「決めたこと」）。
 
-- 関連：[PR/FAQ](prfaq.md)、[用語集](glossary.md)、[文脈マップ](context-map.md)、[データモデル](data-model.md)、[ADR-0002](decisions/ADR-0002-schema-and-functions.md)（承認待ち）
+- 関連：[PR/FAQ](prfaq.md)、[用語集](glossary.md)、[文脈マップ](context-map.md)、[データモデル](data-model.md)、[ADR-0002](decisions/ADR-0002-schema-and-functions.md)（2026-11-12承認）
 - 前半はMVP1（2027年1月プレリリース）の範囲、後半はMVP1のあとに入れる候補を書く。
 - 用語は用語集に合わせる。ストーリーの番号は文脈の頭文字（G：グループ、C：公演カタログ、A：参戦記録、T：チケット、M：グッズ、N：通知）と連番にする。
 - 書き方は「〈誰〉として、〈何〉をしたい。〈なぜ〉」。受け入れ条件は、データモデルとレビュー対応で決めたことから書いた。
