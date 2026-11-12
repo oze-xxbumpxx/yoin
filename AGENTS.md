@@ -131,3 +131,4 @@ tomotabiでは改善のサイクルを休眠にしたが、yoinでは回す。�
 - Devin: 本ファイルと`.agents/skills/devin-workflow/SKILL.md`を使う。担当は承認済みの計画のタスク、調査と小さな修正、PRのレビューへの対応。基本はDevin CLIで、難しいタスクはCLIからDevin Cloudに渡す。ブランチは`devin/<内容>`。Claude Codeのフックは動かないため、本ファイルのブランチ運用と破壊的操作の事前確認を守る。
 - Devinへの委譲とDevinのPRのレビューは`.claude/skills/review-devin-pr/SKILL.md`。マージはユーザーが行う。
 - Codex: 設計の敵対的レビューと、PRのレビュー（上の「レビュー」）を担う。実装はしない。
+- Cursor: ユーザーが「必ず見る」差分を読み、手で直すときに使う。AIの役割（実装・レビュー）は持たせない（2026-11-12 ユーザーの判断）。
