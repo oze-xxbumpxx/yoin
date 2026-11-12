@@ -1,0 +1,37 @@
+{
+  "feature": "aws-architecture",
+  "title": "AWS構成",
+  "level": "L2",
+  "page": "https://claude.ai/artifact/QdNUjBy5B1Qak5kjCFCXmd",
+  "round": 1,
+  "stages": {
+    "requirements": {
+      "state": "skipped",
+      "reason": "L2なので要件定義書は作らない"
+    },
+    "design": {
+      "state": "approval",
+      "docs": [
+        "docs/architecture.md"
+      ]
+    },
+    "plan": {
+      "state": "skipped",
+      "reason": "設計の工程の記録で、実装はない。実装は最初の1本（L3）で計画する"
+    },
+    "implement": {
+      "state": "skipped",
+      "reason": "設計の工程の記録で、実装はない。実装は最初の1本（L3）で計画する"
+    },
+    "review": {
+      "state": "active"
+    },
+    "merge": {
+      "state": "pending"
+    },
+    "reflect": {
+      "state": "pending"
+    }
+  },
+  "updated_at": "2026-11-12T23:03:40.779Z"
+}
