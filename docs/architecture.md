@@ -6,6 +6,10 @@
 
 ## 全体図
 
+AWSの公式アイコン（AWS Architecture Icons）で描いた図。下のmermaidの図と同じ内容である。
+
+![AWS構成図](images/aws-architecture.svg)
+
 ```mermaid
 flowchart LR
   device[利用者の端末<br>PWA・Service Worker]
