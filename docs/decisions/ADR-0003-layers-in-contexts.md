@@ -1,6 +1,6 @@
 # ADR-0003文脈の中の層の分け方
 
-- 状態：提案（2026-11-17）
+- 状態：提案（2026-11-17）。層の数（決定1）は2026-11-17に大関が選んだ。承認はこのPRのマージで残す
 - 決めた人：大関
 - 関連：[ADR-0001](ADR-0001-bounded-contexts.md)、[ADR-0002](ADR-0002-schema-and-functions.md)、[論点の記録](../discussions/code-layers.md)
 
