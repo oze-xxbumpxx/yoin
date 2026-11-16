@@ -18,6 +18,10 @@
 
 ## 決定
 
+使う技術の全体は次の図のとおり。
+
+![yoinで使う技術](../images/tech-stack.svg)
+
 ### 1.言語は、LambdaもPWAもTypeScriptにする
 
 LambdaはNode.jsで動かす。Node.jsの版は、Lambdaで使えるLTSのうち最新のものにし、最初の委譲の前にAWSのランタイムの一覧で確かめる。APIの入力と出力の型は、画面とLambdaで共有する。
