@@ -1,0 +1,35 @@
+{
+  "feature": "code-layers",
+  "title": "文脈の中の層の分け方",
+  "level": "L2",
+  "page": null,
+  "round": 1,
+  "stages": {
+    "requirements": {
+      "state": "skipped",
+      "reason": "L2なので要件定義書は作らない"
+    },
+    "design": {
+      "state": "approval",
+      "docs": [
+        "docs/decisions/ADR-0003-layers-in-contexts.md"
+      ]
+    },
+    "plan": {
+      "state": "pending"
+    },
+    "implement": {
+      "state": "pending"
+    },
+    "review": {
+      "state": "pending"
+    },
+    "merge": {
+      "state": "pending"
+    },
+    "reflect": {
+      "state": "pending"
+    }
+  },
+  "updated_at": "2026-11-16T22:43:50.204Z"
+}
