@@ -31,6 +31,8 @@ LambdaはNode.jsで動かす。Node.jsの版は、Lambdaで使えるLTSのうち
 - テーブルは文脈ごとに`pgSchema`で定義し、定義のファイルはその文脈の`infrastructure/`に置く（ADR-0003）。
 - ロックは`select().for('share')`のように型つきで書く。SQLの文字列を直接書くのは、Drizzleで表せないときだけにし、PRの説明に理由を書く。
 - マイグレーションはdrizzle-kitでSQLのファイルを作り、リポジトリに入れる。作ったSQLは、PRのレビューで中身を読む（`AGENTS.md`の「必ず見る」の「DBの表とmigration」）。
+- 同じ文脈の中の外部キーは、Drizzleのテーブル定義に書く。文脈をまたぐ外部キー（ADR-0002の決定2。例：`attendance.attendances.concert_id`から`catalog.concerts.id`へのRESTRICT）は、テーブル定義に書かず、drizzle-kitの手書きのマイグレーション（`drizzle-kit generate --custom`）にSQLで書く。Drizzleで外部キーを書くには参照先のテーブル定義をimportする必要があり、それは決定6の検査が止める依存だからである。
+- drizzle-kitの設定は、各文脈の`infrastructure/`のテーブル定義をファイルの場所で集める。設定とマイグレーションのファイルは`src/contexts/`の外に置き、実行時のコードからはimportしない。
 
 ### 3.マイグレーションは、GitHub Actionsのデプロイで先に流す
 
@@ -44,6 +46,7 @@ LambdaはNode.jsで動かす。Node.jsの版は、Lambdaで使えるLTSのうち
 - GitHub ActionsからAWSへは、GitHubのOIDCで一時的な権限を受けて入る。長期の鍵はGitHubに置かない。
 - Neonの接続文字列は、SSM Parameter Storeから読む（AWS構成のC-1）。GitHubのSecretsには置かない。直接の接続（マイグレーション用）とプールを通す接続（Lambda用）の2つをSSMに置く。
 - マイグレーションを先に流すので、マイグレーションは前の版のLambdaでも動く形にする。列や表を消すときは、使わなくするデプロイと消すデプロイを分ける。
+- デプロイの仕事は、環境ごとに1本ずつ動かす（GitHub Actionsの`concurrency`。`cancel-in-progress`はfalse）。2つのマージが続いても、先のデプロイが手順4まで終わってから次の手順2が始まる。動いている途中のデプロイは取り消さない。待っている古い実行は新しい実行に置き換わり、新しい実行は`main`の先頭を使うので、古い版が後から出ることはない。
 
 ### 4. LambdaからNeonへは、サーバーレスドライバーのPoolでつなぐ
 
@@ -58,7 +61,7 @@ LambdaはNode.jsで動かす。Node.jsの版は、Lambdaで使えるLTSのうち
 
 ### 6.文脈の境目は、ESLintのプラグインで検査する
 
-eslint-plugin-boundariesで、ADR-0003の決定5の2つを書く。lintはCIとエディタの両方で動く。Drizzleのテーブル定義はTypeScriptの値なので、ほかの文脈の`infrastructure/`をimportした時点でこの検査が止める。SQLの文字列でほかの文脈の表を読むことは検査で止められないので、レビューで見る。
+eslint-plugin-boundariesで、ADR-0003の決定5の2つを書く。lintはCIとエディタの両方で動く。Drizzleのテーブル定義はTypeScriptの値なので、ほかの文脈の`infrastructure/`をimportした時点でこの検査が止める。文脈をまたぐ外部キーはSQLのマイグレーションに書くので（決定2）、この検査の例外は作らない。SQLの文字列でほかの文脈の表を読むことは検査で止められないので、レビューで見る。
 
 ### 7. PWAはReactとViteで作る
 
