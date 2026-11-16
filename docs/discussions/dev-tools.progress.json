@@ -1,0 +1,32 @@
+{
+  "feature": "dev-tools",
+  "title": "工程4 開発の道具",
+  "level": "L2",
+  "page": "https://claude.ai/artifact/AcBYH3AUQLTSmjMKQKPNmJ",
+  "round": 1,
+  "stages": {
+    "requirements": {
+      "state": "skipped",
+      "reason": "L2なので要件定義書は作らない"
+    },
+    "design": {
+      "state": "waiting"
+    },
+    "plan": {
+      "state": "pending"
+    },
+    "implement": {
+      "state": "pending"
+    },
+    "review": {
+      "state": "pending"
+    },
+    "merge": {
+      "state": "pending"
+    },
+    "reflect": {
+      "state": "pending"
+    }
+  },
+  "updated_at": "2026-11-16T23:05:12.833Z"
+}
