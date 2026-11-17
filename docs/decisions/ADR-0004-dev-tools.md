@@ -48,16 +48,24 @@ LambdaはNode.jsで動かす。Node.jsの版は、Lambdaで使えるLTSのうち
 - マイグレーションを先に流すので、マイグレーションは前の版のLambdaでも動く形にする。列や表を消すときは、使わなくするデプロイと消すデプロイを分ける。
 - デプロイの仕事は、環境ごとに1本ずつ動かす（GitHub Actionsの`concurrency`。`cancel-in-progress`はfalse）。2つのマージが続いても、先のデプロイが手順4まで終わってから次の手順2が始まる。動いている途中のデプロイは取り消さない。待っている古い実行は新しい実行に置き換わり、新しい実行は`main`の先頭を使うので、古い版が後から出ることはない。
 
+最初のデプロイの前に、次の順で1回だけ準備する。この準備が済めば、最初のデプロイから手順1〜4がそのまま流れる。
+
+1. Neonのプロジェクトを作る（手で）。
+2. 初回用の小さなTerraformの構成で、状態ファイルのバケットと、GitHubのOIDCのロールを作る。
+3. 準備用のスクリプトで、SSMのパラメーターをSecureStringとして作り、値を入れる。値はスクリプトを動かす人がその場で入れ、リポジトリにもTerraformにも残さない。
+4. GitHub Actionsのロールに、マイグレーション用の接続文字列のパラメーターだけを読む権限を付ける（初回用の構成で、名前を指定して付ける）。
+
 ### 4. LambdaからNeonへは、サーバーレスドライバーのPoolでつなぐ
 
 `@neondatabase/serverless`の`Pool`をWebSocketでつなぎ、Drizzleの`neon-serverless`のつなぎ方で使う。接続はプールを通す接続文字列にし、要求ごとにつないで、終わったら切る（AWS構成のA-1）。HTTPで1回ずつ送る`neon()`は、途中で判断を挟めないので使わない。
 
 ### 5. IaCはTerraformにする
 
-- AWSの資源（Lambda、API Gateway、Cognito、EventBridge Scheduler、S3、CloudFront、IAM、SSMのパラメーターの枠）をTerraformで書く。
+- AWSの資源（Lambda、API Gateway、Cognito、EventBridge Scheduler、S3、CloudFront、IAM）をTerraformで書く。
 - 状態ファイルは、東京リージョンのS3のバケットに置き、同じバケットのロックファイルで同時の実行を防ぐ。このバケットとGitHubのOIDCの設定は、最初に1回だけ作る小さなTerraformの構成で作る。
 - Lambdaのコードは、手順1でまとめたファイルをTerraformが受け取って更新する。
-- Neonのプロジェクトと、SSMに入れる秘密の値は、Terraformでは作らない。Neonのプロジェクトは数が少なく変えることもまれなので、手で作る。秘密の値を状態ファイルに残さないため、値はTerraformの外で入れる。
+- Neonのプロジェクトは、Terraformでは作らない。数が少なく変えることもまれなので、手で作る。
+- SSMのパラメーター（Neonの接続文字列2つとWeb PushのVAPID鍵）は、置き場所ごとTerraformの外で作る（2026-11-17 大関の判断）。Terraformが`aws_ssm_parameter`を資源やデータソースとして持つと、値を外で入れても、状態の更新のたびに値が状態ファイルに平文で記録されるためである。TerraformはIAMの権限とLambdaの設定で、パラメーターの名前（とそこから組み立てたARN）だけを使う。Lambdaは動くときに名前で値を読む。
 
 ### 6.文脈の境目は、ESLintのプラグインで検査する
 
@@ -100,7 +108,7 @@ eslint-plugin-boundariesで、ADR-0003の決定5の2つを書く。lintはCIと�
 
 ### 引き受けること
 
-- Terraformの状態ファイルのバケットと、GitHubのOIDCの設定を、最初に1回作る必要がある。
+- Terraformの状態ファイルのバケット、GitHubのOIDCの設定、SSMのパラメーターを、最初に1回作る必要がある。SSMのパラメーターはTerraformの外にあるので、名前を変えるときはTerraformの設定と準備用のスクリプトの両方を直す。
 - Lambdaのビルドを、Terraformの外の手順で用意する必要がある。
 - サーバーレスドライバーはNeon専用なので、ほかのPostgresへ移るときは接続の部分を差し替える。
 - drizzle-kitが作るマイグレーションのSQLを、毎回読む必要がある。
