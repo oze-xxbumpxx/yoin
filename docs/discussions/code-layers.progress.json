@@ -10,10 +10,14 @@
       "reason": "L2なので要件定義書は作らない"
     },
     "design": {
-      "state": "approval",
+      "state": "done",
       "docs": [
         "docs/decisions/ADR-0003-layers-in-contexts.md"
-      ]
+      ],
+      "approved": {
+        "pr": 7,
+        "at": "2026-11-17"
+      }
     },
     "plan": {
       "state": "pending"
@@ -31,5 +35,5 @@
       "state": "pending"
     }
   },
-  "updated_at": "2026-11-16T22:43:50.204Z"
+  "updated_at": "2026-11-16T23:01:55.099Z"
 }
