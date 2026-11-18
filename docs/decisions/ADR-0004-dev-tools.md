@@ -82,6 +82,7 @@ eslint-plugin-boundariesで、ADR-0003の決定5の2つを書く。lintはCIと�
 |---|---|
 | パッケージの管理 | pnpm（workspace） |
 | 単体と結合の試験 | Vitest |
+| 性質で確かめる試験 | fast-check（Vitestの中で動かす）。コアの文脈の決まり、リマインドの送信と再送、解散などの削除ジョブに使う（2026-11-18 大関の判断。記録は`docs/discussions/verification-loop.md`の論点「property-tests」） |
 | E2E | Playwright。2人をブラウザのcontext 2つで動かす |
 | lintと整形 | ESLintとPrettier |
 | CIとデプロイ | GitHub Actions |
