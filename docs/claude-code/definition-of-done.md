@@ -3,22 +3,22 @@
 タスクを「完了」と報告してよい条件を変更レベル別に定める。`development-workflow.md`の
 完了条件をLevel別に具体化したもの。**実在するコマンドだけ**をゲートに含める。
 
-## このリポジトリで実在する品質コマンド（2026-09時点）
+## このリポジトリで実在する品質コマンド（2026-11-18時点）
 
-| ゲート             | コマンド                                 | 備考                                                                    |
-| ------------------ | ---------------------------------------- | ----------------------------------------------------------------------- |
-| Lint               | `npm run lint`                           | ESLint                                                                  |
-| Type check         | `npm run type-check`                     |                                                                         |
-| Build              | `npm run build`                          | contracts → api → web。重いのでL2 / L3で必要なときに実行                |
-| Format check       | `unavailable`                            | Prettier未導入                                                          |
-| Unit / Integration | `npm test`                               | Vitest（web / api）。実DBの結合は`npm run test:api-db`（Dockerが必要）  |
-| Contract / Schema  | `npm run api:check` / `npm run db:check` | API契約を変えたら`api:check`、DBスキーマを変えたら`db:check`            |
-| Harness            | `npm run test:harness`                   | `.claude/`か`.agents/`を変えたときに実行。CIのharnessジョブでも実行する |
-| E2E                | `unavailable`                            | Playwright未導入                                                        |
-| 依存脆弱性         | `npm audit`                              | security-reviewerが、起動条件に当たるとき実行する                       |
+アプリのコードがまだ無いので、ハーネス試験のほかは`unknown`。道具はADR-0004（Vitest・Playwright・ESLint・Prettier。fast-checkは足す予定）で決め、承認後に実際のコマンドへ書き換える。
+
+| ゲート             | コマンド                                 |
+| ------------------ | ---------------------------------------- |
+| Lint               | `unknown`                                |
+| Type check         | `unknown`                                |
+| Build              | `unknown`                                |
+| Format check       | `unknown`                                |
+| Unit / Integration | `unknown`                                |
+| E2E                | `unknown`                                |
+| Harness            | `node --test .claude/tests/*.test.mjs`   |
 
 > ゲートは`bash .claude/scripts/run-quality-gates.sh`で実行する。ロックファイルから
-> パッケージマネージャー（本リポジトリではnpm）を検出し、既定では休眠中の試験を除いて回る。
+> パッケージマネージャーを検出し、既定では休眠中の試験を除いて回る。
 > 実在しないコマンドは実行せず`unavailable`と報告する（推測で通過扱いにしない）。
 
 ## Review readinessの共通契約
@@ -75,10 +75,8 @@ AI作業の完了報告と、Gate Bでの人間のマージ受容を混同しな
 
 - `docs/designs/<feature>.md` / `docs/implementation-plans/<feature>.md` /
   `docs/tests/<feature>.md`を作成・更新（必須セクション非空、対象外は「対象外」と明記）。
-- `npm run lint`成功。
-- `npm run type-check`成功。
-- 必要に応じ`npm run build`成功。
-- Unit/Integration test：`npm test`成功必須（変更パッケージの対応テスト追加を含む）。
+- 上の表のLint・Type check・Unit / Integrationが成功（変更パッケージの対応テスト追加を含む）。必要に応じBuildも。`unknown`のものは報告にそう書く。
+- アプリを起動して操作する確かめのスキルができてからは、変えた流れをそれで動かし、結果をPRの「確かめたこと」に書く。
 - 独立Reviewerのopen `BLOCK`が0、critical / highの未検証が0。
 - review文書をstructured packetで作成・更新した場合だけ、packetがcurrentで
   `handoff-check`が成功している（legacy不可）。`review-readiness`は`AGENTS.md`で休眠のため、packetを作らないL2は指摘と検証結果をPRと日次ログに残せばよい。

@@ -50,6 +50,8 @@ description: >
 
 ## レビュー（round 0は全体、round 1以降は前回のレビュー以降の差分）
 
+`main`の`REVIEW.md`を先に読み、差分で当たる確認項目を選んでから見る。PRの版の`REVIEW.md`では判定しない。
+
 1. **状態**: `gh pr view <n> --json files,statusCheckRollup,mergeable,body,headRefOid`。既存CIの結果を確認する。
    round 1以降は`gh api repos/{owner}/{repo}/compare/<前回の sha>...<今の head>`で差分を見て、
    前回の指摘が直ったかと、新しい変更に問題が無いかを見る。Devinの返信コメントも読む。
@@ -66,6 +68,7 @@ description: >
    サンドボックス外で実行する（Dockerの認証ヘルパーを避けるため）。
 6. **衝突**: 並行PRが同じファイルを触っていないか。マージ順を提案する。
    DevinのPRに`logs/`の変更があれば、`scope-creep`の`must`にする（`devin-workflow` §5。並行PRの衝突の元）。
+7. **検査の変更**: アプリのタスクのPRが`REVIEW.md`・`.github/workflows/`・`docs/tests/`を変えていたら`scope-creep`の`must`にする。既存の試験を消した・assertを弱めた箇所は、理由があっても「必ず見る」に挙げる。
 
 ## IssueなしPR（Devinが自分から出したPR）
 
@@ -125,7 +128,8 @@ description: >
 
 どの場合も、記録に追記する:
 `node .claude/scripts/delegation.mjs review <Issue> --round <n> --sha <レビューした head> --verdict <merge|fix|escalate> [--posted] --finding '<severity>:<category>:<summary>' …`。
-`security`のsummaryは自動で`(非公開)`になる。再現手順を記録やログに書かない（公開リポジトリのため）。
+`security`のsummaryは自動で`(非公開)`になる。
+summaryの先頭には、最初にその指摘を出したレビュアーを`[claude]` `[reviewer]` `[codex]` `[devin-review]`の形で付ける。誰の指摘が採用されたかを数え、3回続けて新しい指摘を出さないレビュアーを外すかどうかの材料にする（`AGENTS.md`の「レビュー」）。再現手順を記録やログに書かない（公開リポジトリのため）。
 
 ## 自動投稿（`must` / `nit`）
 
