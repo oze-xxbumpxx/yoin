@@ -131,10 +131,47 @@ tomotabiでは改善のサイクルを休眠にしたが、yoinでは回す。�
 6. 作業の終わりと、設計の工程を閉じたときに、変更・検証・未完了事項を`logs/YYYY-MM-DD.md`に記録する。
 7. ハーネス構成（`.claude/` / `.agents/` / `AGENTS.md`）の変更はPRで重点レビューする。
 
+## コマンドの範囲
+
+Claude Code、Devin、Codexがコマンドを実行してよい範囲は、この節に書く。
+根拠はOpenAIの記事「Inside the Codex sandbox」（2026-11-18、https://openai.com/index/inside-the-codex-sandbox ）。
+記事の既定は、作業フォルダの中だけを書き換え、`.git`の設定は読み取りだけにし、通信は必要なときだけ足す、というもの。
+yoinはOSによる強制をまだ入れず、同じ範囲を文章の決まりとして置く。
+DevinにはClaude Codeの危険操作フックが効かないので、起動引数の`--permission-mode dangerous`が付いていても、この範囲は広がらない。
+
+書き込んでよいのは、今の作業クローンの作業ツリーだけ。
+コミットと、作業ブランチへのpushに必要なgitの更新は、作業ツリーへの書き込みに含める。
+次の場所は変えない。
+
+- `.git/hooks`、`.git/config`、`core.hooksPath`、リモートのURL
+- ホームディレクトリ（`~/.gitconfig`、`~/.ssh`、`~/.aws`、`~/.codex`、シェルの設定）
+- 作業クローンの外
+
+確認なしで通信してよい相手は、次の3つ。
+
+- このリポジトリのGitHub。`git fetch`、作業ブランチへの`git push`、このリポジトリを見る`gh`
+- パッケージの取得先。依存を新しく足してよいのは、依頼がその依存を含めているときだけ
+- 手元のテストが使うlocalhost
+
+AWS、Neon、Cognito、SSM、本番、結合検証には繋がない。
+`terraform apply`、`terraform destroy`、デプロイ、マイグレーションの適用もしない。
+リポジトリのファイルや環境変数を、上の3つ以外へ送らない。
+
+Gitが追跡しないディレクトリ（`node_modules`など）を書き換えて、不具合を直したことにしない。
+その変更はPRに含まれず、次にコマンドを実行する人の手元の道具だけが変わる。
+依存を変えるときは、リポジトリに入るロックファイルを変える。
+
+範囲を超えるコマンドが要るときは、実行せずに止める。
+何が要るかと、そうする理由を、ユーザーか呼び出し側に渡す。
+
+品質コマンドを通したと書くときは、このセッションで実行したコマンドと終了コードを、PRの「確かめたこと」に書く。
+PRの「コマンドの範囲」には、上の禁止に触れたものを書く。
+無ければ「なし」と書く。
+
 ## ツールごとの入口
 
 - Claude Code: `CLAUDE.md`、`.claude/skills/`、検証用の`.claude/agents/`（`reviewer`と`security-reviewer`）、`.claude/settings.json`のフックを使う。ハーネスの状態を扱うコマンドをClaude Codeの外で実行するときは、settingsの`env.HARNESS_NAMESPACE`と同じ値を付ける。
-- Devin: 本ファイルと`.agents/skills/devin-workflow/SKILL.md`を使う。担当は承認済みの計画のタスク、調査と小さな修正、PRのレビューへの対応。基本はDevin CLIで、難しいタスクはCLIからDevin Cloudに渡す。ブランチは`devin/<内容>`。Claude Codeのフックは動かないため、本ファイルのブランチ運用と破壊的操作の事前確認を守る。
+- Devin: 本ファイルと`.agents/skills/devin-workflow/SKILL.md`を使う。担当は承認済みの計画のタスク、調査と小さな修正、PRのレビューへの対応。基本はDevin CLIで、難しいタスクはCLIからDevin Cloudに渡す。ブランチは`devin/<内容>`。Claude Codeのフックは動かないため、本ファイルのブランチ運用、破壊的操作の事前確認、上の「コマンドの範囲」を守る。
 - Devinへの委譲とDevinのPRのレビューは`.claude/skills/review-devin-pr/SKILL.md`。マージはユーザーが行う。
-- Codex: 設計の敵対的レビューと、PRのレビュー（上の「レビュー」）を担う。実装はしない。
+- Codex: 設計の敵対的レビューと、PRのレビュー（上の「レビュー」）を担う。実装はしない。レビューでコマンドを動かすときも、上の「コマンドの範囲」に従う。
 - Cursor: ユーザーが「必ず見る」差分を読み、手で直すときに使う。AIの役割（実装・レビュー）は持たせない（2026-11-12 ユーザーの判断）。

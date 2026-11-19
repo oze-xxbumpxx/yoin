@@ -41,6 +41,8 @@
 | `validate-agent-config`        | エージェント定義とスキルのfrontmatter                   |
 | `record-subagent`              | 検証役が動いたことの記録                                |
 
+`guard-dangerous`はClaude Codeのフックであり、Devinには効かない。コマンドの範囲は`AGENTS.md`の「コマンドの範囲」で、Claude Code、Devin、Codexが従う。
+
 ## 消したもの
 
 上の8つの定義ファイル。中身はスキルと、この一覧と、orchestration-policyに移した。古いevalsの`cases/`は配布元向けのまま残し、休眠とする。
