@@ -5,7 +5,7 @@
 
 | ID | タイトル | ステータス | 出典 | 更新日 |
 | --- | --- | --- | --- | --- |
-| IMP-2026-001 | 設計のレビューで、途中で止まる・2回流れる・前の版と重なる流れの穴が見つかる（工程3で2回、工程4で1回）。問いの前にこの流れを書き出す | accepted（2026-11-21、`ask-questions`の進め方3に1文） | candidates/design-step4-dev-tools.md（事象1）、candidates/design-step3-data-model.md（事象1） | 2026-11-21 |
+| IMP-2026-001 | 設計のレビューで、途中で止まる・2回流れる・前の版と重なる流れの穴が見つかる（工程3で2回、工程4で1回）。問いの前にこの流れを書き出す。`ask-questions`の進め方3に1文足した | accepted | candidates/design-step4-dev-tools.md（事象1）、candidates/design-step3-data-model.md（事象1） | 2026-11-21 |
 
 accepted / rejected以外の行が、セッション開始時とスプリントの集計の「未決定IMP」になる。
 
