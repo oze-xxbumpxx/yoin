@@ -84,7 +84,7 @@ C-1〜C-3は2026-11-13に大関さんが回答フォームで決めた。C-3の�
 | C-1 | Neonの接続文字列とWeb PushのVAPID鍵は、SSM Parameter Store（SecureString）に置く | 標準のパラメーターは無料のため | Secrets Manager（1つごとに月額がかかる） |
 | C-2 | リージョンは東京（ap-northeast-1）。Neonのリージョンは、東京に近いものを工程6で公式の一覧から選ぶ | 利用者が日本にいるため | 大阪（ap-northeast-3） |
 | C-3 | CloudWatch Logsの保存期間は7日にする | 個人で作るアプリなので7日で足りると判断し、費用も抑えるため（大関さんの判断。お勧めは14日） | 14日、30日 |
-| C-4 | Schedulerが起動できなかったときと、Lambda（`notification-sender`と`erasure-worker`）が失敗したときの送り先を、同じSQSのキューにする。キューに1件でも入ったら、CloudWatchのアラームからメールで知らせる。Lambdaの自動の再試行は0回にし、古くなった再試行は捨てる（2026-11-21） | リマインドが知らないうちに失敗すると、発券忘れを防ぐ目的が成り立たないため。引き受け直しは10分後の見張りの予約が行うので、Lambdaが自分で再試行すると2本同時に動く | CloudWatch Logsを見に行ったときだけ気づく |
+| C-4 | Schedulerが起動できなかったときと、Lambda（`notification-sender`と`erasure-worker`）が再試行を使い切ったときの送り先を、同じSQSのキューにする。再送を3回しても届かない端末が残ったときも、`notification-sender`がこのキューに入れる。キューに1件でも入ったら、CloudWatchのアラームからメールで知らせる。Lambdaの自動の再試行は既定の2回のままにし、1時間を過ぎた再試行は捨てる。見張りの予約は、リマインドを予約するときに一緒に作る（2026-11-21） | リマインドが知らないうちに失敗すると、発券忘れを防ぐ目的が成り立たないため。関数の失敗と、関数は終わったが届かなかったことの両方を見る | CloudWatch Logsを見に行ったときだけ気づく |
 | C-5 | 通知の中身はDeclarative Web Pushの形にする。Service Workerは対応していない環境のために残し、同じ中身を読んで表示する（2026-11-21） | iOSでService Workerが通知を出し損ねると、購読ごと取り消されることがあるため | 今の形のまま、Service Workerがすべて表示する |
 | C-6 | ログはPowertools for AWS LambdaのLoggerで書く。Idempotencyの機能は使わない（2026-11-21） | 二重送信はNeonの行の引き受けで防いでいて、記録用の表を増やさずに済むため | Idempotencyも使う（DynamoDBなどの表が増える） |
 
