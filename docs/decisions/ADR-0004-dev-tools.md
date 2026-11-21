@@ -125,4 +125,12 @@ eslint-plugin-boundariesで、ADR-0003の決定5の2つを書く。lintはCIと�
 - 画面の移り方やデータの取り方の道具（最初の1本の設計で決める）
 - 監視とアラートの範囲（工程6）
 - Neonのリージョンと、無料枠に収まるか（工程6）
-- Neonのブランチを試験に使うか（工程5以降）
+- Neonのブランチを試験に使うか。2026-11-21に、MVP1では使わないと決めた（無料枠の計算時間を使うため。記録は`docs/discussions/api-design.md`の論点「neon-branch」）
+
+## 2026-11-21の追記
+
+承認のあと、大関さんが出した構成の見直しをClaudeが確かめ、次の3つを足した。決めた理由と選ばなかった案は、`docs/discussions/api-design.md`の論点「contract-source」と、`docs/discussions/aws-architecture.md`の論点「declarative-web-push」「powertools」にある。
+
+- APIの入力と出力の型は、Honoの`hono/client`で画面と共有する。OpenAPIの文書は作らない。APIを外部に公開しないため。
+- 通知の中身はDeclarative Web Pushの形にする。決定7のService Workerは、対応していない環境のために残す。
+- ログはPowertools for AWS LambdaのLoggerで書く。Idempotencyの機能は使わない。
