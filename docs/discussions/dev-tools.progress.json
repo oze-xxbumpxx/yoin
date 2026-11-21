@@ -1,8 +1,8 @@
 {
-  "feature": "tooling",
-  "title": "道具の選び方",
+  "feature": "dev-tools",
+  "title": "工程4 開発の道具",
   "level": "L2",
-  "page": "https://claude.ai/artifact/HTr5u2hU63aVstD3T7spXb",
+  "page": "https://claude.ai/artifact/AcBYH3AUQLTSmjMKQKPNmJ",
   "round": 1,
   "stages": {
     "requirements": {
@@ -10,7 +10,10 @@
       "reason": "L2なので要件定義書は作らない"
     },
     "design": {
-      "state": "waiting"
+      "state": "approval",
+      "docs": [
+        "docs/decisions/ADR-0004-dev-tools.md"
+      ]
     },
     "plan": {
       "state": "pending"
@@ -28,5 +31,5 @@
       "state": "pending"
     }
   },
-  "updated_at": "2026-11-16T23:01:45.791Z"
+  "updated_at": "2026-11-16T23:17:25.452Z"
 }
