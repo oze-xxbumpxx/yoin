@@ -198,7 +198,7 @@ function awsSVG(o={}){
   AEDGES.forEach(([a,b,l0],i)=>{
     const l = LABEL_FIX[a+">"+b]||l0;
     const k=a+">"+b, A0=APOS[a], B0=APOS[b]; let d, lx, ly;
-    if(k==="push>device"){ d=`M${B0[0]+W/2} ${A0[1]+H} C${A0[0]+W/2} ${A0[1]+H+140},${B0[0]+W/2} ${A0[1]+H+140},${B0[0]+W/2} ${B0[1]+H}`; d=`M${A0[0]+W/2} ${A0[1]+H} C${A0[0]+W/2} 720,${B0[0]+W/2} 720,${B0[0]+W/2} ${B0[1]+H}`; lx=A0[0]+W/2; ly=A0[1]+H+26; }
+    if(k==="push>device"){ d=`M${B0[0]+W/2} ${A0[1]+H} C${A0[0]+W/2} ${A0[1]+H+140},${B0[0]+W/2} ${A0[1]+H+140},${B0[0]+W/2} ${B0[1]+H}`; const x1=A0[0]+W/2, x2=B0[0]+W/2, yb=790; d=`M${x1} ${A0[1]+H} L${x1} ${yb-16} Q${x1} ${yb} ${x1-16} ${yb} L${x2+16} ${yb} Q${x2} ${yb} ${x2} ${yb-16} L${x2} ${B0[1]+H}`; lx=x1+70; ly=A0[1]+H+40; }
     else {
       const ca=c(a), cb=c(b), dx=cb.x-ca.x, dy=cb.y-ca.y;
       let p,q;
@@ -212,9 +212,9 @@ function awsSVG(o={}){
     if(l && (!focus||hi)){
       const w=l.length*11.2+12;
       let r={x:lx-w/2,y:ly-10,w,h:20};
-      for(const dy of [0,-22,22,-44,44,-66,66]){ const t={...r,y:ly-10+dy}; if(![...placed,...boxes].some(q=>hit(t,q))){ r=t; break; } }
+      let tx=lx; outer: for(const dx of [0,-70,70,-140,140]) for(const dy of [0,-22,22,-44,44,-66,66,-88,88]){ const t={...r,x:lx-w/2+dx,y:ly-10+dy}; if(![...placed,...boxes].some(q=>hit(t,q))){ r=t; tx=lx+dx; break outer; } }
       placed.push(r);
-      ls+=`<g class="al${hi?" hi":""}"><rect x="${r.x}" y="${r.y}" width="${w}" height="20" rx="10"/><text x="${lx}" y="${r.y+14}" text-anchor="middle">${esc(l)}</text></g>`;
+      ls+=`<g class="al${hi?" hi":""}"><rect x="${r.x}" y="${r.y}" width="${w}" height="20" rx="10"/><text x="${tx}" y="${r.y+14}" text-anchor="middle">${esc(l)}</text></g>`;
     }
   });
   let ns="";
@@ -223,7 +223,7 @@ function awsSVG(o={}){
     const cls=`an ${AKIND[k]}${o.node===k?" cur":""}${focus&&!hiN.has(k)?" dim":""}`;
     ns+=`<g class="${cls}" data-go="${ANID(k)}" tabindex="0" role="link" aria-label="${esc(AN[k])}" transform="translate(${x},${y})"><rect width="${W}" height="${H}" rx="${k==="neon"?18:10}"/>${awsIcon(k)}<text class="t1" x="44" y="25">${esc(t1)}</text><text class="t2" x="44" y="43">${esc(t2)}</text></g>`;
   });
-  return `<svg class="awsd" width="1140" height="740" style="width:100%;min-width:780px;height:auto" viewBox="0 0 1140 740" role="img" aria-label="AWS構成図"><defs>
+  return `<svg class="awsd" width="1140" height="810" style="width:100%;min-width:780px;height:auto" viewBox="0 0 1140 810" role="img" aria-label="AWS構成図"><defs>
    <marker id="am" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker>
    <marker id="amh" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--accent)"/></marker></defs>
    <rect class="frame" x="220" y="14" width="690" height="666" rx="16"/><text class="frame-t" x="236" y="36">AWS 東京リージョン（ap-northeast-1。シンガポールに移す案あり）</text>
