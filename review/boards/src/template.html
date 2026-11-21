@@ -293,7 +293,7 @@ code.big{font-size:14px}
 .rule.CASCADE{background:color-mix(in srgb,var(--m-delete) 15%,transparent);border-color:var(--m-delete)}
 .rule.RESTRICT{background:color-mix(in srgb,var(--m-put) 15%,transparent);border-color:var(--m-put)}
 .rule.SETNULL{background:color-mix(in srgb,var(--m-patch) 15%,transparent);border-color:var(--m-patch)}
-.xc{font-size:10.5px;color:var(--muted)}
+.xc{font-size:10.5px;color:var(--muted)}.xc.warn{color:var(--m-delete);font-weight:600}.rule.NODOC{border-style:dotted}.rule.NOFK{border-style:dashed}.fki.nofk{background:var(--muted)}
 .split2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
 .er-wrap{padding:6px}.er{display:block;max-width:none}
 .sbox{fill:color-mix(in srgb,var(--cc) 7%,var(--surface));stroke:var(--cc)}
@@ -301,12 +301,12 @@ code.big{font-size:14px}
 .tnode{cursor:pointer}.tnode rect{fill:var(--surface);stroke:var(--line)}.tnode text{font-family:var(--mono);font-size:11.5px;fill:var(--ink)}.tnode .tja{font-family:var(--body);font-size:10.5px;fill:var(--muted)}
 .tnode:hover rect,.tnode:focus rect{stroke:var(--cc)}.tnode.cur rect{fill:var(--cc);stroke:var(--cc)}.tnode.cur text{fill:var(--surface)}.tnode.dim{opacity:.4}
 .fk{fill:none;stroke:var(--muted);stroke-width:1.2;opacity:.75}.fk.common{stroke-dasharray:2 3;opacity:.45}
-.fk.CASCADE{stroke:var(--m-delete)}.fk.RESTRICT{stroke:var(--m-put)}.fk.SETNULL{stroke:var(--m-patch)}.fk.IDだけ{stroke-dasharray:5 4}
+.fk.CASCADE{stroke:var(--m-delete)}.fk.RESTRICT{stroke:var(--m-put)}.fk.SETNULL{stroke:var(--m-patch)}.fk.NOFK{stroke-dasharray:5 4}.fk.NODOC{stroke:var(--muted);stroke-dasharray:1 3}
 .fk.hi{stroke-width:2.2;opacity:1}.fk.dim{opacity:.12}
 .ertools{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:13px;margin:4px 0 10px}
 .ertools label{display:flex;gap:6px;align-items:center;cursor:pointer}
 .lg{display:inline-flex;gap:6px;align-items:center;color:var(--muted)}.lg i{width:22px;height:0;border-top:2px solid var(--muted)}
-.lg i.CASCADE{border-color:var(--m-delete)}.lg i.RESTRICT{border-color:var(--m-put)}.lg i.SETNULL{border-color:var(--m-patch)}.lg i.IDだけ{border-top-style:dashed}
+.lg i.CASCADE{border-color:var(--m-delete)}.lg i.RESTRICT{border-color:var(--m-put)}.lg i.SETNULL{border-color:var(--m-patch)}.lg i.NOFK{border-top-style:dashed}.lg i.NODOC{border-top-style:dotted}
 .order{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.ostep{font-family:var(--mono);font-size:13px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}.order .arrow{color:var(--muted)}
 .lockflow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
 .lockflow>div{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:10px 12px;display:grid;gap:4px;font-size:13px;align-content:start}

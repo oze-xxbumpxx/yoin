@@ -6,7 +6,20 @@ const TBN = Object.fromEntries(DB.tables.map(t=>[t.id,t]));
 const SCH_JA = {groups:"グループ",catalog:"公演カタログ",attendance:"参戦記録",ticket:"チケット",merch:"グッズ",notification:"通知"};
 const SC = s => DB.schemaCtx[s];
 const COLREF = {requested_by:"groups.users",group_id:"groups.groups",user_id:"groups.users",applicant_user_id:"groups.users",created_by:"groups.users",updated_by:"groups.users",owner_user_id:"groups.users",concert_id:"catalog.concerts",tour_id:"catalog.tours",venue_id:"catalog.venues",artist_id:"catalog.artists",attendance_id:"attendance.attendances",ticket_application_id:"ticket.ticket_applications",merch_list_id:"merch.merch_lists",merch_item_id:"merch.merch_items",reminder_id:"notification.reminders",push_subscription_id:"notification.push_subscriptions"};
-const CASCADE_CHILD = ["groups.members","groups.invite_links","catalog.setlists","catalog.setlist_items","catalog.concert_artists","attendance.attendance_records","attendance.companions","attendance.concert_snapshots","ticket.distributions","merch.buyers","merch.merch_requests","notification.reminder_deliveries"];
+// data-model.mdの外部キーの表のCASCADEの行を、子の表と親の表の組で写したもの。表に無い組はCASCADEにしない。
+const CASCADE_PAIRS = {"groups.members":["groups.groups"],"groups.invite_links":["groups.groups"],"catalog.setlists":["catalog.concerts"],"catalog.setlist_items":["catalog.concerts","catalog.setlists"],"catalog.concert_artists":["catalog.concerts"],"attendance.attendance_records":["attendance.attendances"],"attendance.companions":["attendance.attendances","attendance.attendance_records"],"attendance.concert_snapshots":["attendance.attendances"],"ticket.distributions":["ticket.ticket_applications"],"merch.buyers":["merch.merch_lists","merch.merch_items"],"merch.merch_requests":["merch.merch_lists","merch.merch_items"],"notification.reminder_deliveries":["notification.reminders","notification.push_subscriptions"]};
+// 列の説明と外部キーの表で、参照先が違って書かれているもの。
+const DOC_CONFLICT = {"catalog.setlist_items.concert_id":"列の説明ではsetlistsを指すが、外部キーの表では「setlist_items → concerts」と書いてある","attendance.companions.attendance_id":"列の説明ではattendance_recordsを指すが、外部キーの表では「companions → attendances」と書いてある"};
+// テーブルごとの決定と試験。設計資料に表との対応表が無いので、決定と試験の中身を読んで手で付けた。
+const TABLE_DOCS = {
+ "groups.users":["Q2","Q4","R1","YADR-04"],"groups.groups":["Q4","Q8","Q9","R2","YADR-06","YADR-07"],"groups.members":["Q2","R10","YADR-01","YADR-02"],
+ "groups.invite_links":[],"groups.erasure_jobs":["R5","R11","YADR-03"],
+ "catalog.artists":["Q1","R7","YADR-09"],"catalog.venues":["YADR-01","YADR-07"],"catalog.tours":["YADR-01"],"catalog.concerts":["Q1","YADR-01"],"catalog.concert_artists":["Q1","R7","YADR-09"],
+ "catalog.setlists":["YADR-06"],"catalog.setlist_items":[],"catalog.drafts":["Q3"],
+ "attendance.attendances":["R2","R8","YADR-06"],"attendance.attendance_records":["R8"],"attendance.companions":["R10"],"attendance.concert_snapshots":["R2","YADR-06"],
+ "ticket.ticket_applications":["R9"],"ticket.distributions":["Q5"],
+ "merch.merch_items":["R12","R13","YADR-01"],"merch.merch_lists":["YADR-01"],"merch.buyers":["R14"],"merch.merch_requests":[],"merch.drafts":["Q3","R13"],"merch.object_deletions":["R13","YADR-03"],
+ "notification.reminders":["R3","R4","R11","YADR-05","YADR-08"],"notification.push_subscriptions":["YADR-05"],"notification.reminder_deliveries":["R4","YADR-05"]};
 function refsOf(t){
   const out=[];
   t.cols.forEach(c=>{
@@ -16,17 +29,22 @@ function refsOf(t){
     if(t.id===tgt) return;
     const cross = tgt.split(".")[0]!==t.schema;
     let rule;
-    if(/SET NULL/.test(c.desc)) rule="SET NULL";
+    if(t.id==="groups.erasure_jobs") rule="外部キーなし";
+    else if(/SET NULL/.test(c.desc)) rule="SET NULL";
     else if(/RESTRICT/.test(c.desc)) rule="RESTRICT";
-    else if(t.id==="groups.erasure_jobs") rule="IDだけ";
     else if(cross) rule="RESTRICT";
-    else if(CASCADE_CHILD.includes(t.id)) rule="CASCADE";
-    else rule="RESTRICT";
-    out.push({col:c.name,to:tgt,cross,rule,nullable:/null可/.test(c.desc)});
+    else if((CASCADE_PAIRS[t.id]||[]).includes(tgt)) rule="CASCADE";
+    else if(t.id==="groups.groups"&&c.name==="owner_user_id") rule="RESTRICT";
+    else rule="資料に無い";
+    const tt=TBN[tgt];
+    const comp = !cross && rule!=="外部キーなし" && tgt!=="groups.groups" && c.name!=="group_id" && t.cols.some(x=>x.name==="group_id") && tt && tt.cols.some(x=>x.name==="group_id");
+    out.push({col:c.name,to:tgt,cross,rule,comp,conflict:DOC_CONFLICT[t.id+"."+c.name]||null,nullable:/null可/.test(c.desc)});
   });
   return out;
 }
 DB.tables.forEach(t=>t.refs=refsOf(t));
+const RCLS = r => ({"SET NULL":"SETNULL","外部キーなし":"NOFK","資料に無い":"NODOC"})[r]||r;
+const colLabel = r => r.comp?`(group_id, ${r.col})`:r.col;
 const childrenOf = id => DB.tables.flatMap(t=>t.refs.filter(r=>r.to===id).map(r=>({from:t.id,...r})));
 const isPK = c => /PK/.test(c.desc);
 const valuesOf = c => (c.desc.match(/`([a-z_]+)`/g)||[]).map(x=>x.replace(/`/g,"")).filter(x=>!/_id$|^[a-z]+_[a-z_]+_id$/.test(x)&&!COLREF[x]&&!DB.tables.some(t=>t.name===x));
@@ -65,7 +83,7 @@ function erSVG(cur, showCommon){
     if(Math.abs(ax-bx)<5){ const x=a.x+a.w; const off=24+Math.abs(a.y-b.y)/14; d=`M${x} ${a.y+a.h/2} C${x+off} ${a.y+a.h/2},${x+off} ${b.y+b.h/2},${x} ${b.y+b.h/2}`; }
     else if(ax>bx){ d=`M${a.x} ${a.y+a.h/2} C${a.x-55} ${a.y+a.h/2},${b.x+b.w+55} ${b.y+b.h/2},${b.x+b.w} ${b.y+b.h/2}`; }
     else { d=`M${a.x+a.w} ${a.y+a.h/2} C${a.x+a.w+55} ${a.y+a.h/2},${b.x-55} ${b.y+b.h/2},${b.x} ${b.y+b.h/2}`; }
-    lines+=`<path class="fk ${r.rule.replace(/\s/g,"")}${hi?" hi":""}${common?" common":""}${cur&&!hi?" dim":""}" d="${d}" marker-end="url(#fk${hi?"h":""})"><title>${t.id}.${r.col} → ${r.to}（${r.rule}）</title></path>`;
+    lines+=`<path class="fk ${RCLS(r.rule)}${hi?" hi":""}${common?" common":""}${cur&&!hi?" dim":""}" d="${d}" marker-end="url(#fk${hi?"h":""})"><title>${t.id}.${colLabel(r)} → ${r.to}（${r.rule}）</title></path>`;
   }));
   let bx="";
   boxes.forEach(b=>{ bx+=`<g style="${cc(SC(b.s))}"><rect class="sbox" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="10"/><text class="sname" x="${b.x+12}" y="${b.y+22}">${b.s}</text><text class="sja" x="${b.x+b.w-12}" y="${b.y+22}" text-anchor="end">${SCH_JA[b.s]}</text></g>`; });
@@ -76,16 +94,19 @@ function erSVG(cur, showCommon){
   <marker id="fk" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker>
   <marker id="fkh" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--accent)"/></marker></defs>${bx}${lines}${tb}</svg>`;
 }
-const RULE_TIP = {"CASCADE":"親を消すと一緒に消える","RESTRICT":"使われていれば親を消せない","SET NULL":"親を消すと空になる","IDだけ":"外部キーは資料に書いていない"};
+const RULE_TIP = {"CASCADE":"親を消すと一緒に消える","RESTRICT":"使われていれば親を消せない","SET NULL":"親を消すと空になる","外部キーなし":"IDを持つだけで外部キーは張らない（資料に外部キーの記述が無い）","資料に無い":"消したときの動きが設計資料に書かれていない"};
 function renderTable(id){
   const t=TB[id], c=SC(t.schema);
   const kids=childrenOf(t.id);
   const ctxRow = DB.erase.find(r=>r[0]===({groups:"グループ",catalog:"公演カタログ",attendance:"参戦記録",ticket:"チケット",merch:"グッズ",notification:"通知"})[t.schema]);
-  const decs = DB.decisions.filter(d=>(d[1]+d[2]).includes(t.name)||(t.entity&&(d[1]+d[2]).includes(t.entity)));
-  const tests = DB.tests.filter(r=>(r[1]+r[2]).includes(t.name));
+  const keys = [...(TABLE_DOCS[t.id]||[]), ...(t.refs.some(r=>r.cross)?["R6"]:[])];
+  const decs = DB.decisions.filter(d=>keys.includes(d[0]));
+  const tests = DB.tests.filter(r=>keys.includes(r[0]));
   const apis = D.apis.filter(a=>a.ctx===c);
-  const refsHtml = t.refs.map(r=>`<div class="rel"><code>${r.col}</code><span class="arrow">→</span>${tableLink(r.to)}<span class="rule ${r.rule.replace(/\s/g,"")}" title="${RULE_TIP[r.rule]}">${r.rule}</span>${r.cross?'<span class="xc">文脈をまたぐ</span>':""}</div>`).join("");
-  const kidsHtml = kids.map(r=>`<div class="rel">${tableLink(r.from)}<span class="arrow">の</span><code>${r.col}</code><span class="arrow">が指す</span><span class="rule ${r.rule.replace(/\s/g,"")}" title="${RULE_TIP[r.rule]}">${r.rule}</span></div>`).join("");
+  const ruleTag = r => `<span class="rule ${RCLS(r.rule)}" title="${RULE_TIP[r.rule]}">${r.rule}</span>`;
+  const extra = r => (r.comp?'<span class="xc" title="参照される側に(group_id, id)の一意制約を付け、別グループの行は結べない">複合キー</span>':"")+(r.conflict?`<span class="xc warn" title="${esc(r.conflict)}">資料の中で食い違い</span>`:"");
+  const refsHtml = t.refs.map(r=>`<div class="rel"><code>${colLabel(r)}</code><span class="arrow">→</span>${tableLink(r.to)}${ruleTag(r)}${r.cross?'<span class="xc">文脈をまたぐ</span>':""}${extra(r)}</div>${r.conflict?`<p class="empty" style="margin:2px 0 6px">${esc(r.conflict)}。ボードは列の説明に合わせた。</p>`:""}`).join("");
+  const kidsHtml = kids.map(r=>`<div class="rel">${tableLink(r.from)}<span class="arrow">の</span><code>${colLabel(r)}</code><span class="arrow">が指す</span>${ruleTag(r)}${extra(r)}</div>`).join("");
   return `<div class="pane" style="${cc(c)}">
   <div class="head"><span class="ctxlabel"><span class="dot"></span>スキーマ ${t.schema}（${SCH_JA[t.schema]}）</span></div>
   <div class="head"><h2>${esc(t.ja)}</h2><code class="big">${t.id}</code>${t.entity?`<span class="ent">${t.entity}</span>`:""}</div>
@@ -94,7 +115,7 @@ function renderTable(id){
     <div style="min-width:0">
       <div class="tcard"><div class="tcard-h"><span>${t.name}</span><em>${t.cols.length}列</em></div>
       ${t.cols.map(col=>{const ref=t.refs.find(r=>r.col===col.name);const vals=/^(status|kind|step|pickup_method|purchase_status)$/.test(col.name)?valuesOf(col):[];
-        return `<div class="trow"><span class="key">${isPK(col)?'<i class="pk" title="主キー">PK</i>':""}${ref?`<i class="fki" title="${ref.to}を指す">FK</i>`:""}</span><span class="cn">${esc(col.name)}${/null可/.test(col.desc)?'<em class="nl">null可</em>':""}</span><span class="ty">${esc(col.type)}</span>${col.desc||vals.length?`<span class="cd">${vals.length?`<span class="vals">${vals.map(v=>`<i>${v}</i>`).join("")}</span>`:""}${inl(col.desc.replace(/^PK・?/,""))}</span>`:""}</div>`;}).join("")}
+        return `<div class="trow"><span class="key">${isPK(col)?'<i class="pk" title="主キー">PK</i>':""}${ref?(ref.rule==="外部キーなし"?`<i class="fki nofk" title="${ref.to}のIDを持つが、外部キーは張らない">ID</i>`:`<i class="fki" title="${ref.to}を指す${ref.comp?"（(group_id, "+ref.col+")の複合キー）":""}">FK</i>`):""}</span><span class="cn">${esc(col.name)}${/null可/.test(col.desc)?'<em class="nl">null可</em>':""}</span><span class="ty">${esc(col.type)}</span>${col.desc||vals.length?`<span class="cd">${vals.length?`<span class="vals">${vals.map(v=>`<i>${v}</i>`).join("")}</span>`:""}${inl(col.desc.replace(/^PK・?/,""))}</span>`:""}</div>`;}).join("")}
       </div>
     </div>
     <div style="min-width:0">
@@ -106,6 +127,7 @@ function renderTable(id){
   <section class="blk"><h4>つながりの図</h4><div class="scroll er-wrap">${erSVG(t.id,false)}</div><p class="empty" style="margin-top:6px">このテーブルにつながる線だけを色で出した。箱を押すとそのテーブルを開く。</p></section>
   ${decs.length?`<section class="blk"><h4>このテーブルに関わる決定</h4><div class="decs">${decs.map(d=>`<div class="dec"><b>${d[0]}</b><span>${inl(d[1])}</span><p>${inl(d[2])}</p></div>`).join("")}</div></section>`:""}
   ${tests.length?`<section class="blk"><h4>このテーブルに関わる試験</h4><div class="decs">${tests.map(r=>`<div class="dec"><b>${r[0]}</b><span>${inl(r[1])}</span><p>${inl(r[2])}</p></div>`).join("")}</div></section>`:""}
+  <p class="empty">決定と試験はClaudeが中身を読んでテーブルに付けた。全部のテーブルにかかる決まり（外部キーの消え方、書き込みのロック）は<a href="${boardLink("db","overview")||"#overview"}">全体図</a>にある。</p>
   <section class="blk"><h4>同じ文脈のAPI <span class="n">${apis.length}</span></h4><div class="chips">${apis.map(a=>{const h=boardLink("apis",a.id);return `<a class="chip" style="${cc(a.ctx)}" ${h?`href="${h}" target="_blank" rel="noopener"`:""}><b class="m ${MCOL(a.id)}" style="color:var(--surface)">${MCOL(a.id)}</b>${esc(a.name)}</a>`;}).join("")}</div><p class="empty" style="margin-top:6px">APIとテーブルの1対1の対応は設計資料に無いので、同じ文脈のAPIを並べた。</p></section>
   </div>`;
 }
@@ -115,11 +137,15 @@ function renderDbOverview(){
   return `<div class="pane"><div class="head"><h2>DBの全体図</h2></div>
   <div class="stats"><div class="stat"><span class="v">6</span><span class="k">スキーマ</span></div><div class="stat"><span class="v">${DB.tables.length}</span><span class="k">テーブル</span></div><div class="stat"><span class="v">${DB.tables.reduce((n,t)=>n+t.cols.length,0)}</span><span class="k">列</span></div><div class="stat"><span class="v">${nCross}</span><span class="k">文脈をまたぐ参照</span></div></div>
   <p class="lead">Neon（Postgres）の1つのデータベースを、文脈ごとのスキーマに分けている。箱を押すとそのテーブルを開く。</p>
-  <div class="ertools"><label><input type="checkbox" id="common"> グループとユーザーへの線も出す</label><span class="lg"><i class="CASCADE"></i>CASCADE</span><span class="lg"><i class="RESTRICT"></i>RESTRICT</span><span class="lg"><i class="SETNULL"></i>SET NULL</span><span class="lg"><i class="IDだけ"></i>IDだけ</span></div>
+  <div class="ertools"><label><input type="checkbox" id="common"> グループとユーザーへの線も出す</label><span class="lg"><i class="CASCADE"></i>CASCADE</span><span class="lg"><i class="RESTRICT"></i>RESTRICT</span><span class="lg"><i class="SETNULL"></i>SET NULL</span><span class="lg"><i class="NODOC"></i>資料に無い</span><span class="lg"><i class="NOFK"></i>外部キーなし（IDだけ）</span></div>
   <div class="scroll er-wrap" id="erbox">${erSVG(null,false)}</div>
   <section class="blk"><h4>マイグレーションを流す順番</h4><div class="order">${["groups","catalog","attendance・ticket・merch・notification"].map((s,i)=>`${i?'<span class="arrow">→</span>':""}<span class="ostep">${s}</span>`).join("")}</div><p class="empty" style="margin-top:6px">文脈をまたぐIDにRESTRICTの外部キーを張るので、この順でないと流せない。</p></section>
-  <section class="blk"><h4>書き込みの順番</h4><div class="lockflow">
-    <div><b>1</b><span>トランザクションを始める</span></div><div><b>2</b><span><code>groups</code>と<code>users</code>と<code>members</code>が<code>active</code>かを確かめ、<code>FOR SHARE</code>でロック</span></div><div><b>3</b><span>文脈の表に書く（同行者や分配先も相手の行をロック）</span></div><div><b>4</b><span>コミット。解散・退会・外すの開始は、ここまで待ってから状態を変える</span></div></div></section>
+  <section class="blk"><h4>書き込みの順番（画面の操作。解散・退会の説明では「F2のロック」と呼ぶ）</h4><div class="lockflow">
+    <div><b>1</b><span>Lambdaの入口がトランザクションを1つ開き、公開関数に渡す</span></div><div><b>2</b><span><code>groups</code>と<code>users</code>と<code>members</code>が<code>active</code>かを確かめ、<code>FOR SHARE</code>でロック</span></div><div><b>3</b><span>文脈の表に書く。同行者や分配先に別のメンバーを指定するときは、指定されたユーザーの行も同じようにロックして<code>active</code>かを確かめる</span></div><div><b>4</b><span>コミット。解散・退会・外すの開始は、ここまで待ってから状態を変える</span></div></div>
+  <div class="md" style="margin-top:10px">${md(["| 場面 | ロックの取り方 | 資料 |","|---|---|---|",
+   "| 作成のAPI | 2本の要求が重なったときのために、`INSERT ... ON CONFLICT DO NOTHING`で書いて読み直す。招待リンク・下書き・申込の行は`FOR UPDATE`で取る | ADR-0005 |",
+   "| 画像の確定 | F2のロックを持ったまま、S3の中でコピーしてから`image_key`を書いてコミットする。ロックの間は解散・退会・抜けるが始まらない | data-model「解散と退会」 |",
+   "| `erasure-worker` | `active`は確かめない。削除ジョブ用の公開関数が`erasure_jobs`の行を`FOR UPDATE`でロックし、`running`と処理中の状態を確かめる。`step`の1段階ごとに1つのトランザクション。2つ動いても1つずつ進む | ADR-0003 |"])}</div></section>
   <section class="blk"><h4>解散と退会で、文脈ごとに起きること</h4><div class="md">${md(["| 文脈 | 解散のとき | 退会のとき |","|---|---|---|",...DB.erase.map(r=>`| ${r.join(" | ")} |`)])}</div></section>
   <section class="blk"><h4>全体の決まり（設計資料から）</h4><div class="md">${Object.entries(S).map(([h,l])=>`<h5>${inl(h)}</h5>${md(l)}`).join("")}</div></section>
   <section class="blk"><h4>決めたこと <span class="n">${DB.decisions.length}件</span></h4><div class="decs">${DB.decisions.map(d=>`<div class="dec"><b>${d[0]}</b><span>${inl(d[1])}</span><p>${inl(d[2])}</p></div>`).join("")}</div></section>
