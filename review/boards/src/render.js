@@ -85,7 +85,10 @@ function pipeline(id){
     ["Neon",f.write?"1つのトランザクションで書く":"読む",true],
   ];
   const side = f.async?["erasure-worker","受け付けたあと、消す処理を続きから最後まで進める"]:f.sched?["EventBridge Scheduler","リマインドの予約を作る・直すのはコミットの前、消すのはあと"]:f.s3?["S3",f.s3]:null;
-  const W=114,H=84,G=18,P=6, n=steps.length+(side?1:0)+1;
+  // 説明の行数から枠の高さを決める。全角1字を1、半角を0.55として、1行に9字ほど入る。
+  const cols=t=>[...String(t||"")].reduce((a,ch)=>a+(ch.charCodeAt(0)<128?0.55:1),0);
+  const maxLines=Math.max(...steps.map(s=>Math.ceil(cols(s[1])/8.5)),side?Math.ceil(cols(side[1])/8.5):1,1);
+  const W=114,G=18,P=6, H=Math.max(84,Math.ceil(30+maxLines*14.7+10)), n=steps.length+(side?1:0)+1;
   const width=P*2+n*W+(n-1)*G, height=H+P*2;
   let x=P, h="";
   const node=(t,sub,on,cls="")=>{const r=`<g class="pn ${on?"on":"off"} ${cls}" transform="translate(${x},${P})"><rect width="${W}" height="${H}" rx="10"/><text class="pt" x="10" y="20">${esc(t)}</text><foreignObject x="6" y="26" width="${W-12}" height="${H-30}"><div xmlns="http://www.w3.org/1999/xhtml" class="ps">${esc(sub)}</div></foreignObject></g>`; x+=W+G; return r;};
