@@ -45,7 +45,7 @@ const EX = {
 "ticket-04":{req:{paymentDeadline:"2027-02-11T20:00:00+09:00"},res:[200,{id:"ta_01…01",paymentDeadline:"2027-02-11T20:00:00+09:00"}],err:"forbidden"},
 "ticket-05":{req:{status:"paid"},res:[200,{id:"ta_01…01",status:"paid",displayStatus:"paid"}],err:"invalid_transition"},
 "ticket-06":{res:[204,null],err:"forbidden"},
-"ticket-07":{req:{items:[{seq:1,userId:"u_01…a1",guestName:null,distributedAt:"2027-02-12T09:00:00+09:00"},{seq:2,userId:"u_01…b2",guestName:null,distributedAt:null}]},res:[200,{items:[{seq:1,userId:"u_01…a1",guestName:null,distributedAt:"2027-02-12T09:00:00+09:00"},{seq:2,userId:"u_01…b2",guestName:null,distributedAt:null}]}]},
+"ticket-07":{req:{items:[{seq:1,userId:"u_01…a1",guestName:null,distributedAt:"2027-02-12T09:00:00+09:00"},{seq:2,userId:"u_01…b2",guestName:null,distributedAt:null}]},res:[200,{items:[{seq:1,userId:"u_01…a1",guestName:null,distributedAt:"2027-02-12T09:00:00+09:00"},{seq:2,userId:"u_01…b2",guestName:null,distributedAt:null}]}],err:"invalid_input",errBody:{status:422,code:"invalid_input",errors:[{path:"pickupMethod",code:"not_smart_ticket"}]}},
 "merch-01":{req:{contentType:"image/jpeg"},res:[200,{key:"uploads/g_01…c3/u_01…a1/9f2c…",uploadUrl:"https://（S3の署名付きURL）"}]},
 "merch-02":{req:{id:"md_01…01",name:"ツアーTシャツ",price:4500,tourId:"t_01…01",concertId:null,imageKey:"uploads/g_01…c3/u_01…a1/9f2c…"},res:[201,{id:"md_01…01",name:"ツアーTシャツ",imageUrl:"https://（5分で切れるURL）"}]},
 "merch-03":{res:[200,{drafts:[{id:"md_01…02",name:"ペンライト",price:null,tourId:"t_01…01",concertId:null,imageUrl:"https://（5分で切れるURL）"}]}]},
