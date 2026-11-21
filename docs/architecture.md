@@ -68,11 +68,12 @@ flowchart LR
 | データベース | Neon（Postgres）。AWSの外にある | PR/FAQで決めた。途中で判断を挟めるトランザクションで接続する | ADR-0002 |
 | 画像 | S3（非公開のバケット）と署名付きURL | グループのメンバーだけが見られる、という非機能要件のため | このページ（B-2） |
 | 設定と秘密 | SSM Parameter Store（SecureString） | Neonの接続文字列とWeb PushのVAPID鍵を置く。標準のパラメーターは無料 | このページ（C-1） |
+| 失敗の知らせ | SQSのキュー、CloudWatchのアラーム、メール | リマインドと削除の処理の失敗を見落とさないため | このページ（C-4） |
 | ログ | CloudWatch Logs。保存は7日 | 個人の情報は書かない。保存期間を短く決める | データモデル（ログの方針）、期間はこのページ（C-3） |
 
 ## 決めたこと
 
-2026-11-13に大関さんが回答フォームで決めた。C-3のほかは、お勧めの案のとおりである。選択肢ごとの利点と欠点は、論点の記録（[aws-architecture](discussions/aws-architecture.md)）にある。
+C-1〜C-3は2026-11-13に大関さんが回答フォームで決めた。C-3のほかは、お勧めの案のとおりである。C-4〜C-6は、2026-11-21に大関さんが出した構成の見直しを、Claudeが確かめて決めた。選択肢ごとの利点と欠点は、論点の記録（[aws-architecture](discussions/aws-architecture.md)）にある。
 
 | | 決めたこと | 理由 | 選ばなかった案 |
 |---|---|---|---|
@@ -83,6 +84,9 @@ flowchart LR
 | C-1 | Neonの接続文字列とWeb PushのVAPID鍵は、SSM Parameter Store（SecureString）に置く | 標準のパラメーターは無料のため | Secrets Manager（1つごとに月額がかかる） |
 | C-2 | リージョンは東京（ap-northeast-1）。Neonのリージョンは、東京に近いものを工程6で公式の一覧から選ぶ | 利用者が日本にいるため | 大阪（ap-northeast-3） |
 | C-3 | CloudWatch Logsの保存期間は7日にする | 個人で作るアプリなので7日で足りると判断し、費用も抑えるため（大関さんの判断。お勧めは14日） | 14日、30日 |
+| C-4 | Schedulerが起動できなかったときと、Lambda（`notification-sender`と`erasure-worker`）が再試行を使い切ったときの送り先を、同じSQSのキューにする。再送を3回しても届かない端末が残ったときも、`notification-sender`がこのキューに入れる。キューに1件でも入ったら、CloudWatchのアラームからメールで知らせる。Lambdaの自動の再試行は既定の2回のままにし、1時間を過ぎた再試行は捨てる。見張りの予約は、リマインドを予約するときに一緒に作る（2026-11-21） | リマインドが知らないうちに失敗すると、発券忘れを防ぐ目的が成り立たないため。関数の失敗と、関数は終わったが届かなかったことの両方を見る | CloudWatch Logsを見に行ったときだけ気づく |
+| C-5 | 通知の中身はDeclarative Web Pushの形にする。Service Workerは対応していない環境のために残し、同じ中身を読んで表示する（2026-11-21） | iOSでService Workerが通知を出し損ねると、購読ごと取り消されることがあるため | 今の形のまま、Service Workerがすべて表示する |
+| C-6 | ログはPowertools for AWS LambdaのLoggerで書く。Idempotencyの機能は使わない（2026-11-21） | 二重送信はNeonの行の引き受けで防いでいて、記録用の表を増やさずに済むため | Idempotencyも使う（DynamoDBなどの表が増える） |
 
 ## 費用の見込み（推測）
 
@@ -97,4 +101,5 @@ flowchart LR
 
 - IaCの道具（CDK、Terraformなど）、ORM、Neonへの接続の道具（工程4）
 - 独自ドメインを使うか（公開前）
-- 監視とアラートの範囲（`erasure_jobs`の失敗をどう知らせるか）（工程4以降）
+- C-4のほかの監視（Neonの計算時間の残り、費用の通知など）（工程6）
+- リージョン。Neonに東京は無く、近いのはシンガポール。AWSごとシンガポールに移す案を、工程6でADRにする。NeonとCognitoのリージョンは作ったあと変えられないので、Devinに土台を渡す前に決める（2026-11-21。論点の記録の「neon-region」）

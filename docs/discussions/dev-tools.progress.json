@@ -10,26 +10,40 @@
       "reason": "L2なので要件定義書は作らない"
     },
     "design": {
-      "state": "approval",
+      "state": "done",
       "docs": [
         "docs/decisions/ADR-0004-dev-tools.md"
-      ]
+      ],
+      "approved": {
+        "pr": 9,
+        "at": "2026-11-21"
+      }
     },
     "plan": {
-      "state": "pending"
+      "state": "skipped",
+      "reason": "道具の決定で、実装計画は最初の1本で書く"
     },
     "implement": {
-      "state": "pending"
+      "state": "skipped",
+      "reason": "ADRだけの変更で、PR #9に含めた"
     },
     "review": {
-      "state": "pending"
+      "state": "done",
+      "approved": {
+        "pr": 9,
+        "at": "2026-11-21"
+      }
     },
     "merge": {
-      "state": "pending"
+      "state": "done",
+      "approved": {
+        "pr": 9,
+        "at": "2026-11-21"
+      }
     },
     "reflect": {
-      "state": "pending"
+      "state": "done"
     }
   },
-  "updated_at": "2026-11-16T23:17:25.452Z"
+  "updated_at": "2026-11-21T01:41:33.365Z"
 }
