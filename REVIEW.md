@@ -31,6 +31,7 @@
 ## 差分で当てる確認項目
 
 差分を読み、条件に当たった項目だけを確かめる。当たらない項目は見ない。見逃しが出たら、条件を差分から読める形にして1行足す。
+PRの説明の「コマンドの範囲」が「なし」でないときも、表の最後の行を見る。
 
 | 条件（差分にこれがあれば） | 確かめること | 元にした事例 |
 | --- | --- | --- |
@@ -45,6 +46,7 @@
 | S3の署名付きURLを出す処理 | メンバーかを確かめてから出しているか。取得の期限は5分か。アップロードは`uploads/`に置き、確定のときにコピーしているか | `docs/data-model.md`のR12・R13 |
 | 例外をログや応答に出す処理 | 例外の`message`をそのまま出していないか。接続先のURLやトークンが入りうる | `.agents/skills/devin-workflow/SKILL.md`の実装の約束 |
 | 拒否（403・404）の規則を足した | 同じ規則を持つ読み取りと書き込みのすべての経路で確かめているか | `.agents/skills/devin-workflow/SKILL.md`の実装の約束 |
+| 作業クローンの外、`.git/hooks`、`.git/config`、ホームディレクトリ、AWS、Neon、Cognito、SSM、本番、結合検証へのコマンドを足した。またはGitが追跡しないディレクトリの書き換えで動きを直した | ユーザーの確認がPRの説明にあるか。`--permission-mode dangerous`を理由にしていないか | `AGENTS.md`の「コマンドの範囲」。OpenAI「Inside the Codex sandbox」（2026-11-18、https://openai.com/index/inside-the-codex-sandbox ） |
 
 ## 前回のレビューを使う
 

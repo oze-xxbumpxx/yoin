@@ -85,3 +85,4 @@ PRを出したらセッションを終了せず、コメントとCIを監視し�
 - `.claude/`・`.agents/`・`AGENTS.md`・`CLAUDE.md`の変更（ハーネスの構成。変えるならPRで理由を書き、重点レビューを依頼する）
 - アプリのタスクのPRで、`REVIEW.md`・`.github/workflows/`・`docs/tests/`を変えること（検査の変更は別のPRにする。`AGENTS.md`の「レビュー」）
 - 他のリポジトリのスキルをこのリポジトリの作業に使うこと。使うのは、このリポジトリの`.agents/skills/`にあるスキルとDevin組み込みのスキルだけ。
+- `AGENTS.md`の「コマンドの範囲」を超える操作。`--permission-mode dangerous`はこの範囲を広げない。危険操作フックはDevinには効かないので、実行する前にこの範囲で自分で止める。
