@@ -10,26 +10,40 @@
       "reason": "L2なので要件定義書は作らない"
     },
     "design": {
-      "state": "approval",
+      "state": "done",
       "docs": [
         "REVIEW.md"
-      ]
+      ],
+      "approved": {
+        "pr": 10,
+        "at": "2026-11-18"
+      }
     },
     "plan": {
-      "state": "pending"
+      "state": "skipped",
+      "reason": "決まりと文書だけの変更"
     },
     "implement": {
-      "state": "pending"
+      "state": "skipped",
+      "reason": "決まりと文書だけの変更で、PR #10に含めた"
     },
     "review": {
-      "state": "pending"
+      "state": "done",
+      "approved": {
+        "pr": 10,
+        "at": "2026-11-18"
+      }
     },
     "merge": {
-      "state": "pending"
+      "state": "done",
+      "approved": {
+        "pr": 10,
+        "at": "2026-11-18"
+      }
     },
     "reflect": {
-      "state": "pending"
+      "state": "done"
     }
   },
-  "updated_at": "2026-11-18T00:08:13.730Z"
+  "updated_at": "2026-11-18T00:28:58.659Z"
 }

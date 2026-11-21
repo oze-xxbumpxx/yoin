@@ -17,3 +17,4 @@ accepted / rejected以外の行が、セッション開始時とスプリント�
 | 確定したデータモデルに、レビューで重大な穴が見つかる（止まったとき・2回目の操作の流れ） | 2 | candidates/design-step3-data-model.md | 2026-11-12 |
 | 定期に動く処理の費用（外部サービスを起こし続ける）を、構成図を作るまで見落とす | 1 | candidates/design-step3-data-model.md | 2026-11-12 |
 | 人数・件数の下限を推測で置き、ユーザーに訂正される | 1 | candidates/design-step3-data-model.md | 2026-11-12 |
+| 確認項目や決まりを事例の一言から書き、出典の設計にある例外を読み落とす | 1 | candidates/verification-loop.md | 2026-11-18 |
