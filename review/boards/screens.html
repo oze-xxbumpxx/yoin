@@ -1,0 +1,1099 @@
+<title>yoin 画面ボード</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Old+Mincho:wght@600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* 左にタブのレール、右に1件ずつの詳しい面。文脈ごとの色で、画面・API・ストーリーの対応をたどれるようにする */
+:root{
+  --bg:#f2f3f6; --surface:#ffffff; --ink:#1b1f2c; --muted:#5d6376; --line:#d8dbe4; --soft:#e9ebf1;
+  --accent:#2d3f8e;
+  --c-group:#4a5ca6; --c-catalog:#23806f; --c-attendance:#b9532f; --c-ticket:#a87a14; --c-merch:#86479b; --c-notification:#2f7fa8; --c-none:#6b7080;
+  --m-get:#23806f; --m-post:#2d58b8; --m-put:#a8700f; --m-patch:#7c4aa0; --m-delete:#b8413a;
+  --display:"Zen Old Mincho","Hiragino Mincho ProN","Yu Mincho",serif;
+  --body:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11131a; --surface:#1a1d27; --ink:#e7e9f0; --muted:#9ba1b4; --line:#2d313f; --soft:#232735;
+  --accent:#9fb0f2;
+  --c-group:#8f9ff0; --c-catalog:#5cc7b2; --c-attendance:#f08a63; --c-ticket:#e0b04a; --c-merch:#c690dc; --c-notification:#6cc0ea; --c-none:#9ba1b4;
+  --m-get:#5cc7b2; --m-post:#86a6f5; --m-put:#e3ad4e; --m-patch:#bf98e0; --m-delete:#f08a82; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11131a; --surface:#1a1d27; --ink:#e7e9f0; --muted:#9ba1b4; --line:#2d313f; --soft:#232735;
+  --accent:#9fb0f2;
+  --c-group:#8f9ff0; --c-catalog:#5cc7b2; --c-attendance:#f08a63; --c-ticket:#e0b04a; --c-merch:#c690dc; --c-notification:#6cc0ea; --c-none:#9ba1b4;
+  --m-get:#5cc7b2; --m-post:#86a6f5; --m-put:#e3ad4e; --m-patch:#bf98e0; --m-delete:#f08a82; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--body);font-size:15px;line-height:1.75;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+a{color:var(--accent)}
+code{font-family:var(--mono);font-size:.86em;background:var(--soft);padding:.05em .35em;border-radius:4px;overflow-wrap:anywhere}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1280px;margin:0 auto}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;padding-block:28px 18px;border-bottom:1px solid var(--line)}
+header.top h1{font-family:var(--display);font-size:clamp(26px,4vw,36px);line-height:1.25;margin:0;text-wrap:balance}
+header.top p{margin:4px 0 0;color:var(--muted);font-size:13px;max-width:62ch}
+nav.boards{display:flex;gap:6px;flex-wrap:wrap}
+nav.boards a,nav.boards span{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--ink);font-size:14px;background:var(--surface)}
+nav.boards span.cur{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.layout{display:grid;grid-template-columns:290px minmax(0,1fr);gap:28px;padding-top:22px;align-items:start}
+.rail{position:sticky;top:max(12px,env(safe-area-inset-top,0px));max-height:calc(100vh - 24px);overflow:auto;padding-right:4px}
+.rail input{width:100%;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px;margin-bottom:10px}
+.rail h3{font-size:12px;letter-spacing:.06em;color:var(--muted);margin:14px 0 4px;display:flex;align-items:center;gap:6px;font-weight:700}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--cc,var(--c-none));flex:none}
+.tab{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;background:none;border:0;padding:6px 10px;border-radius:7px;cursor:pointer;font-size:14px;line-height:1.45}
+.tab:hover{background:var(--soft)}
+.tab[aria-selected="true"]{background:var(--surface);box-shadow:inset 3px 0 0 var(--cc,var(--accent)),0 0 0 1px var(--line)}
+.tab .tid{font-family:var(--mono);font-size:11.5px;color:var(--cc,var(--muted));flex:none;min-width:3.6em}
+.tab .tname{min-width:0}
+.rail .toggle{display:none}
+main{min-width:0}
+.head{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:baseline;margin-bottom:6px}
+.head .bid{font-family:var(--mono);font-size:14px;color:var(--cc);border:1px solid var(--cc);padding:1px 8px;border-radius:5px}
+.head h2{font-family:var(--display);font-size:clamp(24px,3.4vw,32px);margin:0;line-height:1.3;text-wrap:balance}
+.ctxlabel{font-size:13px;color:var(--cc);display:inline-flex;gap:6px;align-items:center}
+.lead{color:var(--muted);margin:0 0 20px;max-width:70ch}
+section.blk{margin-top:26px}
+section.blk>h4{font-size:14px;margin:0 0 10px;color:var(--muted);font-weight:700;display:flex;gap:8px;align-items:baseline}
+section.blk>h4 .n{font-family:var(--mono);font-size:12px;color:var(--muted);font-weight:400}
+.grid2{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:28px;align-items:start}
+/* phone mock */
+.phone{border:1.5px solid var(--line);border-radius:30px;padding:12px 10px 18px;background:var(--surface);max-width:300px;width:100%}
+.phone .notch{width:70px;height:6px;border-radius:6px;background:var(--line);margin:2px auto 12px}
+.phone .bar{display:flex;align-items:center;gap:8px;padding:0 6px 10px;border-bottom:1px solid var(--line);font-weight:700;font-size:15px}
+.phone .bar svg{flex:none}
+.phone ul{list-style:none;margin:12px 0 0;padding:0 4px;display:grid;gap:8px}
+.phone li{background:var(--soft);border-radius:10px;padding:8px 10px;font-size:13px;line-height:1.55;border-left:3px solid var(--cc)}
+.phone .cap{font-size:11px;color:var(--muted);text-align:center;margin-top:12px}
+/* api cards */
+.apis{display:grid;gap:8px}
+.api{border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.api summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;padding:10px 12px;align-items:baseline}
+.api summary::-webkit-details-marker{display:none}
+.api .nm{font-weight:700;font-size:14.5px}
+.api .rt{grid-column:2;font-family:var(--mono);font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+.api .body{padding:0 12px 12px 12px;border-top:1px dashed var(--line);font-size:14px}
+.api .body p{margin:10px 0 0}
+.api .ctxbar{width:4px;align-self:stretch;border-radius:3px;background:var(--cc);grid-row:span 2}
+.methods{display:inline-flex;gap:4px;flex-wrap:wrap}
+.m{font-family:var(--mono);font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px;color:var(--surface);background:var(--mc)}
+.m.GET{--mc:var(--m-get)}.m.POST{--mc:var(--m-post)}.m.PUT{--mc:var(--m-put)}.m.PATCH{--mc:var(--m-patch)}.m.DELETE{--mc:var(--m-delete)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;gap:6px;align-items:baseline;padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:13px;cursor:pointer;text-decoration:none;color:var(--ink)}
+.chip:hover{border-color:var(--cc,var(--accent))}
+.chip b{font-family:var(--mono);font-weight:600;font-size:11.5px;color:var(--cc,var(--muted))}
+.ext{font-size:12px;margin-left:6px}
+.empty{color:var(--muted);font-size:14px}
+/* mini flow */
+.mini{overflow-x:auto}
+.mini svg{display:block;max-width:none}
+.node rect{fill:var(--surface);stroke:var(--line)}
+.node text{fill:var(--ink);font-size:12.5px;font-family:var(--body)}
+.node .nid{fill:var(--muted);font-family:var(--mono);font-size:10.5px}
+.node.cur rect{fill:var(--ink);stroke:var(--ink)}
+.node.cur text,.node.cur .nid{fill:var(--bg)}
+.node.link{cursor:pointer}
+.node.link:hover rect{stroke:var(--accent)}
+.node.dim{opacity:.35}
+.edge{fill:none;stroke:var(--muted);stroke-width:1.2}
+.edge.dot{stroke-dasharray:4 4}
+.edge.hi{stroke:var(--accent);stroke-width:2}
+/* story */
+.quote{font-family:var(--display);font-size:clamp(18px,2.3vw,21px);line-height:1.7;margin:4px 0 0;padding:14px 18px;border-left:4px solid var(--cc);background:var(--surface);border-radius:0 10px 10px 0;max-width:62ch}
+.ac{list-style:none;padding:0;margin:0;display:grid;gap:6px;max-width:72ch}
+.ac li{display:grid;grid-template-columns:18px minmax(0,1fr);gap:8px;font-size:14.5px}
+.ac li svg{margin-top:5px}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.thumb{border:1px solid var(--line);border-radius:16px;padding:10px 12px;background:var(--surface);cursor:pointer;text-align:left}
+.thumb:hover{border-color:var(--accent)}
+.thumb .tt{font-weight:700;font-size:14px;display:flex;gap:8px;align-items:baseline}
+.thumb .tt b{font-family:var(--mono);font-size:11.5px;color:var(--muted);font-weight:600}
+.thumb p{margin:4px 0 0;font-size:12.5px;color:var(--muted);line-height:1.55}
+/* overview */
+.stats{display:flex;flex-wrap:wrap;gap:10px 28px;margin:6px 0 4px}
+.stat{display:flex;gap:8px;align-items:baseline}
+.stat .v{font-family:var(--display);font-size:30px;line-height:1}
+.stat .k{font-size:13px;color:var(--muted)}
+.bars{display:grid;gap:6px;max-width:560px}
+.barrow a{text-decoration:none;color:var(--ink)}.barrow a:hover{color:var(--accent)}
+.barrow{display:grid;grid-template-columns:12em minmax(0,1fr) 2.5em;gap:10px;align-items:center;font-size:13px}
+.barrow .track{height:10px;border-radius:5px;background:var(--soft)}
+.barrow .fill{height:100%;border-radius:5px;background:var(--cc)}
+.barrow .num{font-variant-numeric:tabular-nums;text-align:right;color:var(--muted)}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;font-size:13.5px;width:100%}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-weight:700;color:var(--muted);font-size:12.5px;background:var(--soft)}
+tr:last-child td{border-bottom:0}
+.matrix th,.matrix td{padding:0;border:1px solid var(--line);text-align:center;font-size:11px}
+.matrix th.rowh{text-align:left;padding:3px 8px;white-space:nowrap;font-family:var(--mono);background:var(--surface);position:sticky;left:0;z-index:1}
+.matrix th.colh{writing-mode:vertical-rl;padding:6px 2px;font-family:var(--mono);font-weight:600;height:56px;cursor:pointer}
+.matrix td{width:24px;height:22px}
+.matrix td.on{background:var(--cc)}
+.matrix tr:hover th.rowh{color:var(--accent)}
+.matrix th.rowh button{background:none;border:0;padding:0;cursor:pointer;font:inherit;color:inherit}
+.md p{margin:0 0 10px;max-width:72ch}
+.md ul{margin:0 0 10px;padding-left:1.2em;max-width:76ch}
+.md li{margin:3px 0}
+.md h5{font-size:16px;margin:22px 0 8px;font-family:var(--display)}
+.md pre{background:var(--soft);padding:10px 12px;border-radius:8px;overflow-x:auto;font-family:var(--mono);font-size:12.5px}
+.md .scroll{margin-bottom:12px}
+.box{border:1px solid var(--line);border-left:4px solid var(--cc,var(--accent));border-radius:8px;padding:12px 14px;background:var(--surface);font-size:14px;max-width:80ch}
+.box p{margin:0 0 6px}
+.err{display:inline-flex;gap:6px;align-items:baseline;font-family:var(--mono);font-size:12px;padding:2px 8px;border-radius:5px;background:var(--soft);border:1px solid var(--line)}
+.err i{font-style:normal;color:var(--muted)}
+.sentences{display:grid;gap:6px;margin:0;padding:0;list-style:none;max-width:76ch}
+.sentences li{padding-left:14px;position:relative;font-size:14.5px}
+.sentences li::before{content:"";position:absolute;left:0;top:.75em;width:6px;height:6px;border-radius:50%;background:var(--cc)}
+.route{font-family:var(--mono);font-size:clamp(14px,1.8vw,17px);padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow-x:auto;white-space:nowrap}
+.route .p{color:var(--cc);font-weight:600}
+.route .q{color:var(--muted)}
+.route .line{display:flex;gap:12px;align-items:center}
+.route .line+.line{margin-top:6px}
+.src{font-size:12px;color:var(--muted);margin-top:36px;border-top:1px solid var(--line);padding-top:10px}
+
+/* wireframe */
+.phone.wf{padding:10px 10px 14px;max-width:300px}
+.wf .scr{display:grid;gap:7px;font-size:12.5px;line-height:1.45}
+.wf .scr>*{position:relative}
+.wf .pin{position:absolute;right:-16px;top:50%;transform:translateY(-50%);min-width:20px;height:20px;border-radius:50%;display:inline-grid;place-items:center;font-size:10.5px;padding:0;box-shadow:0 0 0 2px var(--surface)}
+.wf .pin+.pin{right:-38px}
+.wf .scr .pin.m{color:var(--surface);font-size:10.5px;font-family:var(--mono);margin:0}
+.wf .hl{outline:2.5px solid var(--accent);outline-offset:3px;border-radius:6px}
+.w-logo{font-family:var(--display);font-size:26px;text-align:center;padding:14px 0 8px}
+.w-title{font-weight:700;font-size:16px;padding:2px 2px 4px}
+.w-back{display:flex;gap:8px;align-items:center;font-weight:700;font-size:14px;padding:0 2px 7px;border-bottom:1px solid var(--line)}
+.w-back span{font-size:18px;line-height:1;color:var(--muted)}.w-back em{margin-left:auto;font-style:normal;font-weight:400;font-size:11px;color:var(--muted);background:var(--soft);padding:1px 7px;border-radius:9px}
+.w-hero{background:var(--soft);border-radius:10px;padding:12px;display:grid;gap:2px}.w-hero b{font-family:var(--display);font-size:16px}.w-hero span{color:var(--muted)}
+.w-in label{display:block;font-size:10.5px;color:var(--muted);margin-bottom:2px}
+.w-in>div{border:1px solid var(--line);border-radius:7px;padding:6px 9px;background:var(--bg)}
+.w-in .sel{display:flex;justify-content:space-between;gap:6px}.w-in .sel i{font-style:normal;color:var(--muted)}
+.w-btn{text-align:center;border:1px solid var(--line);border-radius:8px;padding:7px;font-weight:700}
+.w-btn.pri{background:var(--cc);border-color:var(--cc);color:var(--surface)}
+.w-btn.dng{color:var(--m-delete);border-color:var(--m-delete)}
+.w-btns{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.w-link{color:var(--accent);font-size:12px;text-align:center}
+.w-note{font-size:11px;color:var(--muted)}
+.w-warn{font-size:11.5px;background:color-mix(in srgb,var(--c-ticket) 16%,transparent);border:1px solid color-mix(in srgb,var(--c-ticket) 45%,transparent);border-radius:7px;padding:6px 8px}
+.w-sec{font-size:11px;font-weight:700;color:var(--muted);padding-top:4px;letter-spacing:.04em}
+.w-row{display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--line);padding:4px 2px 6px}
+.w-row>div{flex:1;min-width:0;display:grid}.w-row b{font-weight:500}.w-row span{font-size:11px;color:var(--muted)}
+.w-row em{font-style:normal;font-size:11.5px;color:var(--muted);text-align:right}
+.w-row.todo i{font-style:normal;font-size:10.5px;background:var(--cc);color:var(--surface);padding:1px 6px;border-radius:5px}
+.st{font-style:normal;font-size:10.5px;padding:1px 7px;border-radius:9px;background:var(--soft);color:var(--ink)}
+.st.won{background:color-mix(in srgb,var(--m-get) 22%,transparent)}.st.lost{background:color-mix(in srgb,var(--m-delete) 18%,transparent)}
+.w-tabs{display:flex;background:var(--soft);border-radius:8px;padding:3px;gap:3px}.w-tabs span{flex:1;text-align:center;padding:4px;border-radius:6px;font-size:11.5px;color:var(--muted)}.w-tabs span.on{background:var(--surface);color:var(--ink);font-weight:700}
+.w-kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12px}.w-kv span{color:var(--muted)}.w-kv b{font-weight:500}
+.w-av{display:flex;align-items:center;gap:0}.w-av i{font-style:normal;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--cc);color:var(--surface);font-size:11px;margin-right:-6px;box-shadow:0 0 0 2px var(--surface)}.w-av span{margin-left:14px;font-size:11.5px;color:var(--muted)}
+.w-chips{display:flex;flex-wrap:wrap;gap:4px;align-items:center}.w-chips label{width:100%;font-size:10.5px;color:var(--muted)}.w-chips i{font-style:normal;border:1px solid var(--line);border-radius:10px;padding:1px 8px;font-size:11.5px}
+.w-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}.w-grid span{border:1px solid var(--line);border-radius:8px;padding:8px;text-align:center;font-size:11.5px}
+.w-step,.w-song{display:flex;gap:9px;align-items:center}.w-step i,.w-song i{font-style:normal;width:22px;height:22px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--soft);font-size:11px;font-weight:700}
+.w-step>div,.w-song>div{display:grid;flex:1}.w-step span,.w-song span{font-size:11px;color:var(--muted)}.w-song em{font-style:normal;color:var(--muted)}
+.w-status{display:grid;grid-template-columns:repeat(4,1fr);gap:3px}.w-status span{font-size:10px;text-align:center;padding:5px 2px;border-radius:5px;background:var(--soft);color:var(--muted)}
+.w-status span.done{background:color-mix(in srgb,var(--cc) 30%,transparent);color:var(--ink)}.w-status span.on{background:var(--cc);color:var(--surface);font-weight:700}
+.w-photo{border:1.5px dashed var(--line);border-radius:10px;height:84px;display:grid;place-items:center;align-content:center;gap:4px;color:var(--muted);font-size:11.5px}
+.w-item{display:flex;gap:9px;border:1px solid var(--line);border-radius:9px;padding:7px}.w-item .ph{width:44px;height:44px;border-radius:7px;background:var(--soft);flex:none}.w-item>div{display:grid}.w-item span{font-size:11px;color:var(--muted)}.w-item .req{color:var(--ink)}.w-item u{text-decoration:none;color:var(--accent)}
+.w-total{display:flex;justify-content:space-between;font-size:12.5px;padding:2px}.w-total b{font-variant-numeric:tabular-nums}
+.w-bars{display:grid;grid-template-columns:auto 1fr auto;gap:5px 8px;align-items:center;font-size:11.5px}.w-bars div{height:8px;background:var(--soft);border-radius:4px}.w-bars i{display:block;height:100%;background:var(--cc);border-radius:4px}
+.w-prev{border:1px solid var(--line);border-radius:8px;padding:6px 9px;display:grid;background:var(--bg)}.w-prev b{font-size:11.5px}.w-prev span{font-size:11px;color:var(--muted)}
+.w-fab{justify-self:end;width:34px;height:34px;border-radius:50%;background:var(--cc);color:var(--surface);display:grid;place-items:center;font-size:18px}
+.w-nav{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);padding-top:6px;margin-top:4px}.w-nav span{text-align:center;font-size:10.5px;color:var(--muted)}.w-nav span.on{color:var(--cc);font-weight:700}
+.wf.sm{max-width:220px;border-radius:22px;padding:8px 8px 10px;pointer-events:none}
+.wf.sm .scr{font-size:10.5px;gap:5px}.wf.sm .w-title,.wf.sm .w-back{font-size:12px}.wf.sm .w-logo{font-size:20px;padding:6px 0 2px}
+.wf.sm .w-hero b{font-size:13px}.wf.sm .pin{display:none}
+.cap2{font-size:12px;color:var(--muted);max-width:300px;margin:8px 0 0}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:18px 14px}
+.wfcell{display:grid;gap:6px;align-content:start;text-decoration:none;color:inherit}
+.wfcell:hover .phone{border-color:var(--accent)}
+.wfcap{font-size:13px;font-weight:700;display:flex;gap:6px;align-items:baseline;text-decoration:none;color:var(--ink)}.wfcap b{font-family:var(--mono);font-size:11.5px;color:var(--muted)}.wfcap .n{margin-left:auto;font-size:11px;color:var(--muted);font-weight:400}
+.wfrow{display:flex;gap:14px;overflow-x:auto;padding:4px 4px 8px}.wfrow .wfcell{flex:0 0 220px}
+/* api extras */
+.api .pin{min-width:20px;height:18px;border-radius:9px;display:inline-grid;place-items:center;padding:0 5px}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tag{font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface)}
+.tag.w{border-color:var(--m-post);color:var(--m-post)}.tag.o{border-color:var(--m-put);color:var(--m-put)}.tag.a{border-color:var(--m-delete);color:var(--m-delete)}.tag.n{border-color:var(--c-notification);color:var(--c-notification)}
+.pipe{overflow-x:auto;padding-bottom:4px}.pipe svg{display:block;max-width:none}
+.pn rect{fill:var(--surface);stroke:var(--line)}.pn.on rect{stroke:var(--cc)}.pn.off{opacity:.45}
+.pn.side rect{fill:color-mix(in srgb,var(--c-notification) 12%,var(--surface));stroke:var(--c-notification)}
+.pn.resp rect{fill:var(--soft)}.pn.resp.s202 rect{stroke:var(--m-delete)}.pn.resp.s201 rect{stroke:var(--m-post)}
+.pt{fill:var(--ink);font-size:12.5px;font-weight:700;font-family:var(--body)}
+.ps{font-size:10.5px;line-height:1.4;color:var(--muted);font-family:var(--body)}
+.pa{stroke:var(--muted);stroke-width:1.3;fill:none}
+.ex{border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}
+.exh{display:flex;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}.exh code{background:none;padding:0;font-size:13px}
+.excols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.excols>div{min-width:0}.excols>div+div{border-left:1px solid var(--line)}
+.exl{font-size:11.5px;color:var(--muted);padding:8px 12px 0;display:flex;gap:6px;align-items:center}
+.code{font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:5px;color:var(--surface);background:var(--m-get)}.code.c201{background:var(--m-post)}.code.c202{background:var(--m-put)}.code.c204{background:var(--muted)}
+pre.json{margin:0;padding:8px 12px 12px;font-family:var(--mono);font-size:12px;line-height:1.55;overflow-x:auto;white-space:pre}
+.j-k{color:var(--c-group)}.j-s{color:var(--c-catalog)}.j-num{color:var(--c-attendance)}.j-n{color:var(--muted)}
+.exerr{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;padding:8px 12px;border-top:1px dashed var(--line);font-size:13px}
+.exnote{font-size:11.5px;color:var(--muted);margin:0;padding:6px 12px 10px;border-top:1px solid var(--line)}
+.errs{display:grid;gap:6px}.errs>div{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;font-size:13.5px}
+.apimap{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.amcol{border:1px solid var(--line);border-top:3px solid var(--cc);border-radius:8px;background:var(--surface);padding:8px}
+.amcol h5{margin:2px 4px 6px;font-size:13.5px;display:flex;gap:6px;align-items:center}
+.amrow{display:flex;gap:8px;align-items:center;text-decoration:none;color:var(--ink);font-size:13px;padding:3px 4px;border-radius:5px}.amrow:hover{background:var(--soft)}
+.amrow .methods{min-width:3.4em}.amrow .m{font-size:10px;padding:0 4px}
+.errgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;margin-top:12px}
+.eg{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface);display:grid;grid-template-columns:1fr auto;gap:2px 8px;font-size:12.5px}
+.eg b{font-weight:400}.eg i{font-style:normal;font-family:var(--mono);font-size:12px;padding:0 6px;border-radius:4px;color:var(--surface);background:var(--m-put);align-self:start}
+.eg.s4 i{background:var(--m-delete)}.eg.s5 i{background:var(--ink)}
+.eg span{grid-column:1/-1;color:var(--muted)}
+/* story extras */
+.card3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:10px}
+.card3>div{background:var(--surface);padding:12px 14px;display:grid;gap:4px;align-content:start}
+.card3 span{font-size:11.5px;color:var(--cc);font-weight:700}.card3 b{font-family:var(--display);font-weight:600;font-size:16px;line-height:1.6}
+.prog{list-style:none;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;padding:0;margin:0;counter-reset:s}
+.prog li{position:relative;display:grid;gap:2px;padding:0 8px 0 0;font-size:12px}
+.prog li::before{content:"";position:absolute;left:24px;right:0;top:11px;height:2px;background:var(--line)}
+.prog li.done::before{background:var(--m-get)}
+.prog li:last-child::before{display:none}
+.prog i{position:relative;z-index:1;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:12px;background:var(--surface);border:2px solid var(--line);color:var(--surface)}
+.prog li.done i{background:var(--m-get);border-color:var(--m-get)}
+.prog li.now i{border-color:var(--m-put);color:var(--m-put);font-size:10px}
+.prog b{font-size:13px;margin-top:4px}.prog span{color:var(--muted);font-size:11.5px;line-height:1.5}
+.journey{display:flex;gap:6px;align-items:flex-start;overflow-x:auto;padding:4px 4px 10px}
+.jstep{flex:0 0 230px;display:grid;gap:6px;align-content:start}
+.jarrow{flex:none;align-self:center;font-size:22px;color:var(--muted);padding:0 2px}
+.japis{display:grid;gap:4px}.ja{display:flex;gap:6px;align-items:center;font-size:12.5px;text-decoration:none;color:var(--ink)}.ja .m{font-size:10px}
+.kanban{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.kcol{background:var(--soft);border-radius:10px;padding:8px;display:grid;gap:6px;align-content:start}
+.kcol h5{margin:2px 4px;font-size:13.5px;display:flex;gap:6px;align-items:center}.kcol h5 .n{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.kcard{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--cc);border-radius:7px;padding:7px 9px;display:grid;gap:1px;text-decoration:none;color:var(--ink)}
+.kcard:hover{border-color:var(--cc)}
+.kcard b{font-family:var(--mono);font-size:11px;color:var(--cc)}.kcard span{font-size:13px;line-height:1.45}.kcard small{font-size:10.5px;color:var(--muted)}
+@media (max-width:820px){.excols{grid-template-columns:minmax(0,1fr)}.excols>div+div{border-left:0;border-top:1px solid var(--line)}.card3{grid-template-columns:minmax(0,1fr)}.prog{grid-template-columns:minmax(0,1fr);gap:8px}.prog li{grid-template-columns:24px minmax(0,1fr);column-gap:10px}.prog li::before{display:none}.prog i{grid-row:span 2}.prog b{margin:0}.wf .pin{right:-12px}}
+
+/* db */
+:root{--k-client:#5d6376;--k-ext:#23806f;--k-edge:#7c4aa0;--k-sec:#b8413a;--k-fn:#c46a12;--k-int:#b0306a;--k-store:#3c8a2e;--k-ops:#2f6fa8}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--k-client:#9ba1b4;--k-ext:#5cc7b2;--k-edge:#bf98e0;--k-sec:#f08a82;--k-fn:#f0a35a;--k-int:#ea7fb0;--k-store:#86d276;--k-ops:#7fb8ea}}
+:root[data-theme="dark"]{--k-client:#9ba1b4;--k-ext:#5cc7b2;--k-edge:#bf98e0;--k-sec:#f08a82;--k-fn:#f0a35a;--k-int:#ea7fb0;--k-store:#86d276;--k-ops:#7fb8ea}
+.tab .tname small{display:block;font-family:var(--mono);font-size:11px;color:var(--muted)}
+code.big{font-size:14px}
+.ent{font-family:var(--mono);font-size:13px;color:var(--cc);border:1px solid var(--cc);border-radius:5px;padding:0 7px}
+.grid2.wide{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}
+.tcard{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.tcard-h{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;background:var(--cc);color:var(--surface);font-family:var(--mono);font-weight:600}
+.tcard-h em{font-style:normal;font-size:12px;opacity:.85;font-family:var(--body)}
+.trow{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:2px 8px;padding:7px 12px;border-top:1px solid var(--line);align-items:baseline}
+.trow:first-of-type{border-top:0}
+.trow .key{display:flex;gap:2px}
+.pk,.fki{font-style:normal;font-family:var(--mono);font-size:9.5px;font-weight:600;padding:0 4px;border-radius:3px;color:var(--surface);background:var(--c-ticket)}
+.fki{background:var(--accent)}
+.trow .cn{font-family:var(--mono);font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.nl{font-style:normal;font-family:var(--body);font-weight:400;font-size:10.5px;color:var(--muted);border:1px dashed var(--line);border-radius:4px;padding:0 4px;margin-left:6px}
+.trow .ty{font-family:var(--mono);font-size:12px;color:var(--cc)}
+.trow .cd{grid-column:2/-1;font-size:12.5px;color:var(--muted);line-height:1.6}
+.vals{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 4px}.vals i{font-style:normal;font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:9px;background:color-mix(in srgb,var(--cc) 16%,transparent);color:var(--ink)}
+.rel{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px;font-size:13px}
+.rel .arrow{color:var(--muted);font-size:12px}
+.rule{font-family:var(--mono);font-size:10.5px;padding:1px 7px;border-radius:9px;border:1px solid var(--line)}
+.rule.CASCADE{background:color-mix(in srgb,var(--m-delete) 15%,transparent);border-color:var(--m-delete)}
+.rule.RESTRICT{background:color-mix(in srgb,var(--m-put) 15%,transparent);border-color:var(--m-put)}
+.rule.SETNULL{background:color-mix(in srgb,var(--m-patch) 15%,transparent);border-color:var(--m-patch)}
+.xc{font-size:10.5px;color:var(--muted)}
+.split2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.er-wrap{padding:6px}.er{display:block;max-width:none}
+.sbox{fill:color-mix(in srgb,var(--cc) 7%,var(--surface));stroke:var(--cc)}
+.sname{font-family:var(--mono);font-weight:600;font-size:13px;fill:var(--cc)}.sja{font-size:11.5px;fill:var(--muted)}
+.tnode{cursor:pointer}.tnode rect{fill:var(--surface);stroke:var(--line)}.tnode text{font-family:var(--mono);font-size:11.5px;fill:var(--ink)}.tnode .tja{font-family:var(--body);font-size:10.5px;fill:var(--muted)}
+.tnode:hover rect,.tnode:focus rect{stroke:var(--cc)}.tnode.cur rect{fill:var(--cc);stroke:var(--cc)}.tnode.cur text{fill:var(--surface)}.tnode.dim{opacity:.4}
+.fk{fill:none;stroke:var(--muted);stroke-width:1.2;opacity:.75}.fk.common{stroke-dasharray:2 3;opacity:.45}
+.fk.CASCADE{stroke:var(--m-delete)}.fk.RESTRICT{stroke:var(--m-put)}.fk.SETNULL{stroke:var(--m-patch)}.fk.IDだけ{stroke-dasharray:5 4}
+.fk.hi{stroke-width:2.2;opacity:1}.fk.dim{opacity:.12}
+.ertools{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:13px;margin:4px 0 10px}
+.ertools label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.lg{display:inline-flex;gap:6px;align-items:center;color:var(--muted)}.lg i{width:22px;height:0;border-top:2px solid var(--muted)}
+.lg i.CASCADE{border-color:var(--m-delete)}.lg i.RESTRICT{border-color:var(--m-put)}.lg i.SETNULL{border-color:var(--m-patch)}.lg i.IDだけ{border-top-style:dashed}
+.order{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.ostep{font-family:var(--mono);font-size:13px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}.order .arrow{color:var(--muted)}
+.lockflow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.lockflow>div{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:10px 12px;display:grid;gap:4px;font-size:13px;align-content:start}
+.lockflow b{font-family:var(--display);font-size:20px;color:var(--accent)}
+.decs{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.dec{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:10px 12px;display:grid;gap:4px;align-content:start}
+.dec b{font-family:var(--mono);font-size:12px;color:var(--accent)}.dec span{font-weight:700;font-size:14px;line-height:1.5}.dec p{margin:0;font-size:13px;line-height:1.65}.dec small{font-size:12px;color:var(--muted)}
+/* aws */
+.awsd{display:block;max-width:none}
+.frame{fill:color-mix(in srgb,var(--c-ticket) 5%,transparent);stroke:var(--c-ticket);stroke-dasharray:6 5}
+.frame-t{font-size:12.5px;fill:var(--c-ticket);font-weight:700}
+.an{cursor:pointer;--kc:var(--k-client)}
+.an.client{--kc:var(--k-client)}.an.ext{--kc:var(--k-ext)}.an.edge{--kc:var(--k-edge)}.an.sec{--kc:var(--k-sec)}.an.fn{--kc:var(--k-fn)}.an.int{--kc:var(--k-int)}.an.store{--kc:var(--k-store)}.an.ops{--kc:var(--k-ops)}
+.an rect{fill:var(--surface);stroke:var(--kc);stroke-width:1.4}
+.an .ic{stroke:var(--kc)}
+.an .t1{font-size:13px;font-weight:700;fill:var(--ink);font-family:var(--body)}.an .t2{font-size:10.5px;fill:var(--muted);font-family:var(--body)}
+.an:hover rect,.an:focus rect{stroke-width:2.4}
+.an.cur rect{fill:var(--kc)}.an.cur .t1,.an.cur .t2{fill:var(--surface)}.an.cur .ic{stroke:var(--surface)}
+.an.dim{opacity:.3}
+.ae{fill:none;stroke:var(--muted);stroke-width:1.3}.ae.added{stroke-dasharray:5 4}
+.ae.hi{stroke:var(--accent);stroke-width:2.4;stroke-dasharray:7 5}
+@media (prefers-reduced-motion:no-preference){.ae.hi{animation:flow 1s linear infinite}@keyframes flow{to{stroke-dashoffset:-24}}}
+.ae.dim{opacity:.15}
+.al rect{fill:var(--bg);stroke:var(--line)}.al text{font-size:11px;fill:var(--muted);font-family:var(--body)}.al.hi rect{stroke:var(--accent)}.al.hi text{fill:var(--ink)}
+.flowbtns{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.fb{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer}.fb:hover{border-color:var(--accent)}.fb.on{background:var(--accent);color:var(--surface);border-color:var(--accent)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--muted);margin-top:8px}.legend span{display:inline-flex;gap:6px;align-items:center}.legend i{width:14px;height:14px;border-radius:4px;border:2px solid var(--cc)}.legend i.dash{width:22px;height:0;border:0;border-top:2px dashed var(--muted);border-radius:0}
+.steps{margin:0;padding-left:1.4em;display:grid;gap:6px;max-width:76ch}.steps li{font-size:14.5px}
+@media (max-width:820px){.grid2.wide{grid-template-columns:minmax(0,1fr)}.split2{grid-template-columns:minmax(0,1fr)}.lockflow{grid-template-columns:minmax(0,1fr)}}
+
+@media (max-width:820px){
+  .layout{grid-template-columns:minmax(0,1fr);gap:14px}
+  .rail{position:static;max-height:none;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:8px}
+  .rail .toggle{display:flex;justify-content:space-between;align-items:center;width:100%;background:none;border:0;padding:4px 6px;font-weight:700;cursor:pointer}
+  .rail.closed .list{display:none}
+  .grid2{grid-template-columns:minmax(0,1fr)}
+  .phone{margin:0 auto}
+}
+@media (prefers-reduced-motion:no-preference){ main .pane{animation:in .22s ease-out} @keyframes in{from{opacity:.6;transform:translateY(4px)}to{opacity:1;transform:none}} }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1 id="h1"></h1>
+      <p id="sub"></p>
+    </div>
+    <nav class="boards" id="boards" aria-label="ボードの切り替え"></nav>
+  </header>
+  <div class="layout">
+    <aside class="rail" id="rail">
+      <button class="toggle" id="toggle" aria-expanded="true">一覧<span id="cnt"></span></button>
+      <div class="list">
+        <input id="q" type="search" placeholder="番号や言葉でしぼる" aria-label="しぼりこみ">
+        <div id="tabs" role="tablist" aria-orientation="vertical"></div>
+      </div>
+    </aside>
+    <main id="main" aria-live="polite"></main>
+  </div>
+  <p class="src" id="src"></p>
+</div>
+
+<script>
+// 画面のワイヤーフレーム（イメージ）。要素の最後の {a:"…"} は、その操作で呼ぶAPI
+const WF = {
+"S-01":[["logo","yoin"],["input","メールアドレス","you@example.com"],["input","パスワード（方式は最初の1本で決める）","••••••••"],["btn","ログイン",1],["note","招待リンクを通らないと、ユーザーは作られない"]],
+"S-02":[["hero","港の仲間たち","に招待されています"],["note","リンクの期限：2027/01/31　残り3回",{a:"group-03"}],["input","表示名（はじめての人だけ）","みなと"],["btn","参加する",1,{a:"group-04"}],["warn","期限切れ・上限・取り消し済みのときは「このリンクは使えません」とだけ出す"]],
+"S-03":[["title","はじめに"],["step","1","ホーム画面に追加する","共有ボタン →「ホーム画面に追加」"],["step","2","通知を許可する","チケットの期限を知らせます"],["btn","通知を許可する",1,{a:"notification-02"}],["link","あとで"]],
+"S-04":[["title","グループ"],["sec","仲間と使う",{a:"group-02"}],["row","港の仲間たち","オーナー・5人","›"],["row","フェス組","3人","›"],["sec","自分用"],["row","自分用","自分だけの記録","›"],["btn","＋ グループを作る",0,{a:"group-05"}]],
+"S-05":[["bar","港の仲間たち","⇄",{a:"group-06"}],["warn","通知を受け取る端末がありません。登録する ›",{a:"notification-01"}],["sec","次にすること",{a:"ticket-01"}],["todo","入金","ツアーA 2/14 公演","あと2日"],["todo","結果発表","フェスB","1/20 18:00"],["sec","これからの公演",{a:"catalog-09"}],["row","2/14（土）ツアーA","港ホール","›"],["row","3/02（日）フェスB","海浜パーク","›"],["nav"]],
+"S-06":[["title","公演"],["tabs",["これから","過去"],0,{a:"catalog-09"}],["row","2/14（土）ツアーA 東京公演","港ホール・開演18:00","›"],["row","3/02（日）フェスB","海浜パーク・11:00","›"],["sec","自分の下書き",{a:"catalog-12"}],["row","ツアーC（3公演）","下書き・未確定","›"],["fab","＋"]],
+"S-07":[["back","公演"],["hero","ツアーA 東京公演","2/14（土）港ホール",{a:"catalog-10"}],["kv",[["最寄り駅","港駅"],["開場 / 開演","17:00 / 18:00"],["グッズ販売","14:00〜"],["出演","アーティストA"]]],["sec","行く人",{a:"attendance-01"}],["avatars",["み","さ","た"]],["btn","行く",1,{a:"attendance-02"}],["link","行くのをやめる",{a:"attendance-03"}],["grid",["セトリ","参戦記録","申込","グッズ"]]],
+"S-08":[["back","公演の下書き"],["seg",["ツアーとまとめて","単発の公演"],0],["input","ツアー名","ツアーC"],["sec","公演 1"],["input","日付","2027-04-10"],["select","会場","港ホール（登録済み）",{a:"catalog-04"}],["select","アーティスト","＋ 新しく：アーティストC",{a:"catalog-01"}],["select","ツアー","ツアーC（既存から選ぶ）",{a:"catalog-07"}],["link","＋ 公演を足す"],["btns","下書きを保存","確定する",{a:"catalog-13"},{a:"catalog-14"}]],
+"S-09":[["back","公演の編集"],["input","日付","2027-02-14"],["input","開場 / 開演","17:00 / 18:00"],["input","URL","https://…"],["btn","公演を保存",1,{a:"catalog-11"}],["sec","ツアー"],["input","グッズ販売時間","14:00〜"],["btn","ツアーを保存",0,{a:"catalog-08"}],["sec","会場とアーティスト",{a:"catalog-04"}],["row","港ホール","使用中","直す",{a:"catalog-06"}],["row","旧ホール","未使用","消す",{a:"catalog-06"}],["row","アーティストA","使用中","直す",{a:"catalog-03"}],["link","＋ 会場を足す　＋ アーティストを足す",{a:"catalog-05"},{a:"catalog-02"},{a:"catalog-01"}]],
+"S-10":[["back","セトリ","版 3",{a:"catalog-15"}],["song","1","オープニング","アーティストA"],["song","2","二曲目","アーティストA・MCのあと"],["song","3","アンコール","アーティストA"],["link","＋ 曲を足す"],["btn","保存する",1,{a:"catalog-16"}],["warn","ほかの人が先に保存しました。取り直してから直してください"]],
+"S-11":[["back","参戦記録"],["input","座席","アリーナ B5 12番"],["chips",["みなと","さくら","＋名前で足す"],{a:"group-07"}],["area","ひとこと","最後の曲で泣いた"],["btn","保存する",1,{a:"attendance-04"}],["link","参戦記録を消す（行く予定に戻る）",{a:"attendance-05"}]],
+"S-12":[["back","公演の申込"],["sec","ツアーA 東京公演",{a:"ticket-01"}],["app","みなと","FC先行・2枚","当選"],["app","さくら","一般・2枚","申込済み"],["app","たける","プレイガイド・1枚","落選"],["btn","＋ 申込を足す",1,{a:"ticket-02"}]],
+"S-13":[["back","申込",null,{a:"ticket-03"}],["status",["申込済み","当選","入金済み","受取済み"],1,{a:"ticket-05"}],["warn","入金期限 2/10 20:00（あと2日）"],["kv",[["受付","FC先行"],["枚数","2"],["受取","スマチケ・2/12から"]]],["btn","入金済みにする",1,{a:"ticket-05"}],["sec","分配",{a:"ticket-07"}],["row","1枚目","みなと（自分）","",{a:"group-07"}],["row","2枚目","さくら","分配済み"],["link","申込を直す　申込を消す",{a:"ticket-04"},{a:"ticket-06"}]],
+"S-14":[["back","品目の下書き"],["photo","写真を選ぶ",{a:"merch-01"}],["input","品名","ツアーTシャツ"],["input","価格","¥4,500"],["select","属する先","ツアーA（ツアーの品目）"],["btns","下書きを保存","確定する",{a:"merch-02"},{a:"merch-04"}]],
+"S-15":[["back","グッズリスト",null,{a:"merch-06"}],["item","ツアーTシャツ","¥4,500","担当：みなと","み×1 さ×2",{a:"merch-07"},{a:"merch-08"}],["item","タオル","¥2,000","担当なし","た×1"],["sec","自分の品目の下書き",{a:"merch-03"}],["row","ペンライト","下書き","›"],["link","＋ 品目を足す　品目を直す・消す",{a:"merch-05"},{a:"group-07"}],["grid",["買う物","頼んだ物"]]],
+"S-16":[["back","買う物",null,{a:"merch-10"}],["buy","ツアーTシャツ ×3","み1・さ2","¥13,500","買えた",{a:"merch-09"}],["buy","タオル ×1","た1","¥2,000","売り切れ"],["total","合計","¥15,500"],["total","売り切れを除く","¥13,500"]],
+"S-17":[["back","頼んだ物",null,{a:"merch-11"}],["buy","ツアーTシャツ ×2","担当：みなと","¥9,000","買えた"],["buy","タオル ×1","担当なし","¥2,000",""]],
+"S-18":[["title","自分の参戦"],["tabs",["これから","行った"],1,{a:"attendance-06"}],["chips2",["すべて","2020年代","2010年代"],1,{a:"attendance-07"}],["chips2",["2026（9）","2025（14）","2024（6）"],-1],["sec","2026年"],["row","12/20 ツアーZ","港の仲間たち","›",{a:"attendance-08"}],["row","10/03 フェスY","解散したグループ・写し","›"],["sec","2025年"],["row","08/11 ツアーX","港の仲間たち","›"],["link","アーティストごとに見る ›"]],
+"S-19":[["title","アーティストごと",null,{a:"attendance-09"}],["bars",[["アーティストA",7],["アーティストB",4],["アーティストC",2]]],["note","名前を正規化してまとめる。解散したグループの写しも数える"]],
+"S-20":[["back","グループの設定",null,{a:"group-06"}],["kv",[["名前","港の仲間たち"],["オーナー","みなと"]]],["sec","抜ける"],["preview","抜けると消えるもの","予定2・申込1・頼まれ物3",{a:"group-09"}],["danger","グループを抜ける",{a:"group-10"}],["sec","解散（オーナーだけ）"],["preview","解散で消えるもの","申込8・品目12・招待リンク2",{a:"group-11"}],["danger","グループを解散する",{a:"group-12"}]],
+"S-21":[["back","メンバーと招待"],["row","みなと","オーナー・2026/11/01から","",{a:"group-07"}],["row","さくら","2026/11/03から","外す",{a:"group-09"},{a:"group-10"}],["row","たける","2026/11/10から","外す"],["sec","招待リンク（オーナーだけ）"],["input","期限 / 回数","2027/01/31 / 3回"],["btn","招待リンクを発行する",1,{a:"group-08"}],["copy","https://yoin.example/invite/…"]],
+"S-22":[["back","自分の設定",null,{a:"group-01"}],["kv",[["表示名","みなと"]]],["link","通知を受け取る端末 ›"],["preview","退会で消えるもの","参戦12・申込3・下書き1",{a:"group-13"}],["note","オーナーのグループ：港の仲間たち → さくらに引き継ぐ"],["danger","退会する",{a:"group-14"}]],
+"S-23":[["back","通知先",null,{a:"notification-01"}],["dev","iPhone（ホーム画面）","2026/11/21 登録","",{a:"notification-03"}],["dev","iPad","2026/11/02 登録","11/20 送れなかった"],["btn","この端末を登録する",1,{a:"notification-02"}]],
+};
+
+// APIの要求と応答の例。欄は設計資料の「中身と決まり」から組み立てた。値は架空で、IDは短く書いた
+const EX = {
+"group-01":{res:[200,{userId:"u_01…a1",displayName:"みなと",personalGroupId:"g_01…p1"}]},
+"group-02":{res:[200,{groups:[{id:"g_01…c3",name:"港の仲間たち",kind:"shared",isOwner:true,status:"active"},{id:"g_01…p1",name:"自分用",kind:"personal",isOwner:true,status:"active"}]}]},
+"group-03":{res:[200,{groupName:"港の仲間たち",usable:true,alreadyMember:false}],err:"invite_unusable"},
+"group-04":{req:{displayName:"みなと"},res:[200,{groupId:"g_01…c3"}],err:"invite_unusable"},
+"group-05":{req:{id:"g_01…c4",name:"フェス組"},res:[201,{id:"g_01…c4",name:"フェス組",kind:"shared",isOwner:true}]},
+"group-06":{res:[200,{id:"g_01…c3",name:"港の仲間たち",kind:"shared",ownerUserId:"u_01…a1",status:"active",isOwner:true}]},
+"group-07":{res:[200,{members:[{userId:"u_01…a1",displayName:"みなと",joinedAt:"2026-11-01T10:00:00+09:00",isOwner:true},{userId:"u_01…b2",displayName:"さくら",joinedAt:"2026-11-03T21:15:00+09:00",isOwner:false}]}]},
+"group-08":{req:{id:"il_01…d1",expiresAt:"2027-01-31T23:59:00+09:00",maxUses:3},res:[201,{id:"il_01…d1",url:"https://（画面のドメイン）/invites/<トークン>"}],err:"forbidden"},
+"group-09":{res:[200,{keeps:{attendances:4},removes:{plans:2,ticketApplications:1,merchRequests:3,drafts:1},resets:{distributions:1,buyers:2},companionsToCount:3}]},
+"group-10":{res:[202,{accepted:true}],err:"last_member"},
+"group-11":{res:[200,{keeps:{attendances:23},removes:{members:5,inviteLinks:2,ticketApplications:8,merchItems:12,merchRequests:20}}]},
+"group-12":{res:[202,{accepted:true}],err:"forbidden"},
+"group-13":{res:[200,{keeps:{groupData:"公演・セトリ・品目は残る"},removes:{attendances:12,ticketApplications:3,drafts:1},ownedGroups:[{groupId:"g_01…c3",name:"港の仲間たち",result:"transfer",to:"さくら"}]}]},
+"group-14":{res:[202,{accepted:true}]},
+"catalog-01":{res:[200,{artists:[{id:"ar_01…01",name:"アーティストA"},{id:"ar_01…02",name:"アーティストB"}]}]},
+"catalog-02":{req:{id:"ar_01…03",name:"アーティストC"},res:[201,{id:"ar_01…03",name:"アーティストC"}],err:"already_exists"},
+"catalog-03":{req:{name:"アーティストC（新表記）"},res:[200,{id:"ar_01…03",name:"アーティストC（新表記）"}],err:"in_use"},
+"catalog-04":{res:[200,{venues:[{id:"v_01…01",name:"港ホール",nearestStation:"港駅",memo:null}]}]},
+"catalog-05":{req:{id:"v_01…02",name:"海浜パーク",nearestStation:"海浜駅",memo:"入口は東側"},res:[201,{id:"v_01…02",name:"海浜パーク",nearestStation:"海浜駅",memo:"入口は東側"}]},
+"catalog-06":{req:{memo:null},res:[200,{id:"v_01…02",name:"海浜パーク",nearestStation:"海浜駅",memo:null}],err:"in_use"},
+"catalog-07":{res:[200,{tours:[{id:"t_01…01",name:"ツアーA",merchSalesInfo:"14:00〜",url:"https://…"}]}]},
+"catalog-08":{req:{merchSalesInfo:"13:00〜（変更）"},res:[200,{id:"t_01…01",name:"ツアーA",merchSalesInfo:"13:00〜（変更）"}]},
+"catalog-09":{q:"?when=upcoming",res:[200,{concerts:[{id:"c_01…01",date:"2027-02-14",title:null,tour:{id:"t_01…01",name:"ツアーA"},venue:{name:"港ホール"},openAt:"17:00",startAt:"18:00"}]}]},
+"catalog-10":{res:[200,{id:"c_01…01",date:"2027-02-14",openAt:"17:00",startAt:"18:00",url:"https://…",tour:{name:"ツアーA",merchSalesInfo:"14:00〜"},venue:{name:"港ホール",nearestStation:"港駅"},artists:[{id:"ar_01…01",name:"アーティストA",order:1}]}]},
+"catalog-11":{req:{startAt:"18:30",artistIds:["ar_01…01","ar_01…02"]},res:[200,{id:"c_01…01",startAt:"18:30"}]},
+"catalog-12":{res:[200,{drafts:[{id:"cd_01…01",tour:{name:"ツアーC"},concerts:3,updatedAt:"2026-11-20T22:00:00+09:00"}]}]},
+"catalog-13":{req:{id:"cd_01…01",tour:{name:"ツアーC"},concerts:[{date:"2027-04-10",venue:{id:"v_01…01"},artists:[{name:"アーティストC"}]}]},res:[201,{id:"cd_01…01"}]},
+"catalog-14":{req:{tourId:"t_01…05",concertIds:["c_01…21"]},res:[200,{tourId:"t_01…05",concertIds:["c_01…21"]}],err:"invalid_input"},
+"catalog-15":{res:[200,{version:3,items:[{order:1,title:"オープニング",artistId:"ar_01…01",memo:null},{order:2,title:"二曲目",artistId:"ar_01…01",memo:"MCのあと"}]}]},
+"catalog-16":{req:{version:3,items:[{title:"オープニング",artistId:"ar_01…01",memo:null}]},res:[200,{version:4}],err:"stale_version"},
+"attendance-01":{res:[200,{attendances:[{id:"at_01…01",userId:"u_01…a1",displayName:"みなと",record:{seat:"アリーナ B5",comment:"最高",companions:[{userId:"u_01…b2"}],hiddenCompanionCount:1}}]}]},
+"attendance-02":{req:{id:"at_01…02"},res:[201,{id:"at_01…02",concertId:"c_01…01"}],err:"already_exists"},
+"attendance-03":{res:[204,null]},
+"attendance-04":{req:{seat:"アリーナ B5 12番",comment:"最後の曲で泣いた",companions:[{userId:"u_01…b2"},{name:"友だち"}]},res:[200,{seat:"アリーナ B5 12番",companions:[{userId:"u_01…b2"},{name:"友だち"}],hiddenCompanionCount:0}]},
+"attendance-05":{res:[204,null]},
+"attendance-06":{q:"?when=past&year=2026",res:[200,{attendances:[{id:"at_01…09",date:"2026-10-03",title:"フェスY",groupName:null,fromSnapshot:true,companionCount:2}]}]},
+"attendance-07":{res:[200,{years:[{year:2026,past:9,upcoming:2},{year:2025,past:14,upcoming:0},{year:2019,past:3,upcoming:0}]}]},
+"attendance-08":{res:[200,{id:"at_01…09",fromSnapshot:true,concert:{date:"2026-10-03",title:"フェスY",artists:["アーティストB"]},setlist:[{order:1,title:"一曲目"}]}]},
+"attendance-09":{res:[200,{artists:[{name:"アーティストA",count:7,dates:["2026-12-20","2026-08-11"]}]}]},
+"ticket-01":{q:"?concertId=c_01…01",res:[200,{applications:[{id:"ta_01…01",applicant:{displayName:"みなと"},saleName:"FC先行",quantity:2,status:"won",displayStatus:"won",paymentDeadline:"2027-02-10T20:00:00+09:00",pickupAvailable:false}]}]},
+"ticket-02":{req:{id:"ta_01…02",concertId:"c_01…01",saleName:"一般",quantity:2,pickupMethod:"smart_ticket",status:"applied",resultAnnouncedAt:"2027-01-20T18:00:00+09:00",paymentDeadline:null,pickupStartsAt:null},res:[201,{id:"ta_01…02",status:"applied",displayStatus:"applied"}]},
+"ticket-03":{res:[200,{id:"ta_01…01",saleName:"FC先行",quantity:2,status:"won",displayStatus:"won",pickupAvailable:false,paymentDeadline:"2027-02-10T20:00:00+09:00",distributions:[{seq:1,userId:"u_01…a1"},{seq:2,userId:null,guestName:null}]}]},
+"ticket-04":{req:{paymentDeadline:"2027-02-11T20:00:00+09:00"},res:[200,{id:"ta_01…01",paymentDeadline:"2027-02-11T20:00:00+09:00"}],err:"forbidden"},
+"ticket-05":{req:{status:"paid"},res:[200,{id:"ta_01…01",status:"paid",displayStatus:"paid"}],err:"invalid_transition"},
+"ticket-06":{res:[204,null],err:"forbidden"},
+"ticket-07":{req:{items:[{seq:1,userId:"u_01…a1",guestName:null,distributedAt:"2027-02-12T09:00:00+09:00"},{seq:2,userId:"u_01…b2",guestName:null,distributedAt:null}]},res:[200,{items:"（送った配列と同じ）"}]},
+"merch-01":{req:{contentType:"image/jpeg"},res:[200,{key:"uploads/9f2c….jpg",uploadUrl:"https://（S3の署名付きURL）"}]},
+"merch-02":{req:{id:"md_01…01",name:"ツアーTシャツ",price:4500,tourId:"t_01…01",concertId:null,imageKey:"uploads/9f2c….jpg"},res:[201,{id:"md_01…01",name:"ツアーTシャツ",imageUrl:"https://（5分で切れるURL）"}]},
+"merch-03":{res:[200,{drafts:[{id:"md_01…02",name:"ペンライト",price:null}]}]},
+"merch-04":{req:{itemId:"mi_01…01"},res:[200,{itemId:"mi_01…01"}]},
+"merch-05":{req:{price:5000},res:[200,{id:"mi_01…01",price:5000,imageUrl:"https://（5分で切れるURL）"}]},
+"merch-06":{res:[200,{items:[{id:"mi_01…01",name:"ツアーTシャツ",price:4500,imageUrl:"https://…",buyer:{userId:"u_01…a1"},purchaseStatus:null,requests:[{userId:"u_01…b2",quantity:2}]}]}]},
+"merch-07":{req:{quantity:2},res:[200,{itemId:"mi_01…01",quantity:2}]},
+"merch-08":{req:{userId:"u_01…a1"},res:[200,{itemId:"mi_01…01",buyer:{userId:"u_01…a1"},purchaseStatus:null}]},
+"merch-09":{req:{purchaseStatus:"bought"},res:[200,{itemId:"mi_01…01",purchaseStatus:"bought"}],err:"not_found"},
+"merch-10":{res:[200,{items:[{itemId:"mi_01…01",name:"ツアーTシャツ",quantity:3,byRequester:[{displayName:"さくら",quantity:2}],subtotal:13500}],total:15500,totalExcludingSoldOut:13500,hasUnpricedItem:false}]},
+"merch-11":{res:[200,{items:[{itemId:"mi_01…01",name:"ツアーTシャツ",quantity:2,buyer:{displayName:"みなと"},amount:9000,purchaseStatus:"bought"}]}]},
+"notification-01":{res:[200,{subscriptions:[{id:"ps_01…01",createdAt:"2026-11-21T09:00:00+09:00",lastFailedAt:null},{id:"ps_01…02",createdAt:"2026-11-02T08:00:00+09:00",lastFailedAt:"2026-11-20T20:00:05+09:00"}]}]},
+"notification-02":{req:{endpoint:"https://web.push.apple.com/…",keys:{p256dh:"BN…",auth:"x1…"}},res:[201,{id:"ps_01…03",createdAt:"2026-11-21T14:00:00+09:00"}]},
+"notification-03":{res:[204,null]},
+};
+
+const BOARD = "screens";
+const URLS = {"screens": "https://claude.ai/artifact/4ZrJrKkYxaK3RZG4HX3PcV", "apis": "https://claude.ai/artifact/ADZBsC9S4JFC9gHHFqYkxU", "stories": "https://claude.ai/artifact/29Ft6Ury8kfb35hXBZTGfa", "db": "https://claude.ai/artifact/4h6MzsLNuina9XVcxWm7EK", "aws": "https://claude.ai/artifact/UmJ8sdv6BgU1nmNgczpok5"};
+const D = {"screens": [{"id": "S-01", "title": "ログイン", "body": "Cognitoでのログイン", "calls": "（Cognito）", "apis": [], "miss": [""], "stories": [], "from": [], "to": ["S-05"]}, {"id": "S-02", "title": "招待", "body": "グループ名と、参加するボタン。未登録なら表示名を入れる", "calls": "招待を見る、招待から参加する", "apis": ["group-03", "group-04"], "miss": [], "stories": ["G-01"], "from": [], "to": ["S-03"]}, {"id": "S-03", "title": "初回の案内", "body": "ホーム画面への追加と、通知の許可の案内。許可されたら端末を登録する", "calls": "通知先を登録する", "apis": ["notification-02"], "miss": [], "stories": ["G-01", "N-01"], "from": ["S-02"], "to": ["S-05"]}, {"id": "S-04", "title": "グループの切り替え", "body": "自分のグループの一覧。自分用グループは分けて出す。グループを作る", "calls": "自分のグループ一覧、グループを作る", "apis": ["group-02", "group-05"], "miss": [], "stories": ["G-03", "G-04"], "from": ["S-05"], "to": ["S-05"]}, {"id": "S-05", "title": "グループのホーム", "body": "これからの公演と、自分の申込で次にすることの一覧。通知先が無い・送れなかった端末があるときの帯", "calls": "グループを見る、公演一覧、申込一覧（`applicant=me`）、通知先一覧", "apis": ["group-06", "catalog-09", "ticket-01", "notification-01"], "miss": [], "stories": ["N-02"], "from": ["S-01", "S-03", "S-04"], "to": ["S-04", "S-06", "S-18", "S-20", "S-22"]}, {"id": "S-06", "title": "公演一覧", "body": "これからの公演と過去の公演。自分の下書き", "calls": "公演一覧、公演の下書き一覧", "apis": ["catalog-09", "catalog-12"], "miss": [], "stories": ["C-03", "C-07"], "from": ["S-05"], "to": ["S-07", "S-08"]}, {"id": "S-07", "title": "公演", "body": "日付・会場と最寄り駅・開場開演・ツアーのグッズ販売時間・URL・アーティスト。誰が行くか、参戦記録", "calls": "公演を見る、公演の参戦一覧、参戦する、参戦をやめる", "apis": ["catalog-10", "attendance-01", "attendance-02", "attendance-03"], "miss": [], "stories": ["C-07", "A-01", "A-02"], "from": ["S-06", "S-08"], "to": ["S-09", "S-10", "S-11", "S-12", "S-15"]}, {"id": "S-08", "title": "公演の下書き", "body": "ツアーと公演をまとめて、または単発の公演を入れる。会場とアーティストは登録済みから選ぶか新しく入れる", "calls": "公演の下書きを作る・直す・消す・確定する、会場一覧、アーティスト一覧、ツアー一覧", "apis": ["catalog-13", "catalog-14", "catalog-04", "catalog-01", "catalog-07"], "miss": [], "stories": ["C-01", "C-02", "C-03", "C-04", "C-05", "C-06"], "from": ["S-06"], "to": ["S-07"]}, {"id": "S-09", "title": "公演の編集", "body": "公演・ツアー・会場・アーティストを直す。使っていない会場とアーティストを消す", "calls": "公演を直す、ツアーを直す、会場を作る・直す・消す、アーティストを作る・直す・消す、会場一覧、アーティスト一覧", "apis": ["catalog-11", "catalog-08", "catalog-05", "catalog-06", "catalog-02", "catalog-03", "catalog-04", "catalog-01"], "miss": [], "stories": ["C-04", "C-05", "C-08"], "from": ["S-07"], "to": []}, {"id": "S-10", "title": "セトリ", "body": "曲順の入力。曲目ごとのメモとアーティスト。版が古いと出たら取り直しを促す", "calls": "セトリを見る、セトリを保存する", "apis": ["catalog-15", "catalog-16"], "miss": [], "stories": ["C-09"], "from": ["S-07"], "to": []}, {"id": "S-11", "title": "参戦記録", "body": "座席、同行者（メンバーか名前）、ひとこと", "calls": "参戦記録を保存する、参戦記録を消す、メンバー一覧", "apis": ["attendance-04", "attendance-05", "group-07"], "miss": [], "stories": ["A-03"], "from": ["S-07"], "to": []}, {"id": "S-12", "title": "公演の申込", "body": "公演ごとの、誰がどの受付にどの状態で申し込んだか。申込を足す", "calls": "申込一覧（`concertId`）、申込を作る", "apis": ["ticket-01", "ticket-02"], "miss": [], "stories": ["T-01", "T-04"], "from": ["S-07"], "to": ["S-13"]}, {"id": "S-13", "title": "申込", "body": "状態と期限、期限切れ・受取できるかの表示。状態を進める。スマチケの分配", "calls": "申込を見る、申込を直す、申込の状態を変える、申込を消す、分配を保存する、メンバー一覧", "apis": ["ticket-03", "ticket-04", "ticket-05", "ticket-06", "ticket-07", "group-07"], "miss": [], "stories": ["T-01", "T-02", "T-03", "T-05", "N-03"], "from": ["S-12", "push"], "to": []}, {"id": "S-14", "title": "品目の下書き", "body": "品名・価格・写真・属するツアーか公演", "calls": "画像を上げる準備、品目の下書きを作る・直す・消す・確定する", "apis": ["merch-01", "merch-02", "merch-04"], "miss": [], "stories": ["M-01"], "from": ["S-15"], "to": []}, {"id": "S-15", "title": "グッズリスト", "body": "載せられる品目と写真。品目ごとに、欲しい数・購入担当・印。自分の品目の下書き", "calls": "グッズリストを見る、品目の下書き一覧、欲しい数を入れる、欲しい数を消す、購入担当を決める、購入担当を外す、品目を直す、品目を消す、メンバー一覧", "apis": ["merch-06", "merch-03", "merch-07", "merch-08", "merch-05", "group-07"], "miss": [], "stories": ["M-02", "M-03"], "from": ["S-07"], "to": ["S-14", "S-16", "S-17"]}, {"id": "S-16", "title": "買う物", "body": "自分が購入担当の品目と数、誰に頼まれたか、合計金額（売り切れを除いた額も）。印を付ける", "calls": "自分が買う物、印を付ける", "apis": ["merch-10", "merch-09"], "miss": [], "stories": ["M-04", "M-06"], "from": ["S-15"], "to": []}, {"id": "S-17", "title": "頼んだ物", "body": "自分が頼んだ品目、数、購入担当、金額、印", "calls": "自分が頼んだ物", "apis": ["merch-11"], "miss": [], "stories": ["M-05"], "from": ["S-15"], "to": []}, {"id": "S-18", "title": "自分の参戦", "body": "グループをまたいだ、これからの予定と行った公演。解散したグループの参戦は写しで出す。行った公演は年代（2020年代など）でまとめ、その中を年ごとに区切って出す。年を選ぶとその年だけに絞る。年代へのまとめは画面が年の一覧から作る", "calls": "自分の参戦一覧、自分の参戦の年、自分の参戦を見る", "apis": ["attendance-06", "attendance-07", "attendance-08"], "miss": [], "stories": ["A-04"], "from": ["S-05"], "to": ["S-19"]}, {"id": "S-19", "title": "アーティストごと", "body": "アーティストごとの参戦回数と日付", "calls": "アーティストごとの参戦", "apis": ["attendance-09"], "miss": [], "stories": ["A-05"], "from": ["S-18"], "to": []}, {"id": "S-20", "title": "グループの設定", "body": "名前、オーナー。解散（何が消えて何が残るかを示して確かめる）、抜ける", "calls": "グループを見る、解散の確かめ、解散する、抜ける・外すの確かめ、メンバーを外す（自分）", "apis": ["group-06", "group-11", "group-12", "group-09", "group-10"], "miss": [], "stories": ["G-06", "G-08"], "from": ["S-05"], "to": ["S-21"]}, {"id": "S-21", "title": "メンバーと招待", "body": "メンバー一覧。オーナーは招待リンクを発行し、メンバーを外す", "calls": "メンバー一覧、招待リンクを発行する、抜ける・外すの確かめ、メンバーを外す", "apis": ["group-07", "group-08", "group-09", "group-10"], "miss": [], "stories": ["G-02", "G-07"], "from": ["S-20"], "to": []}, {"id": "S-22", "title": "自分の設定", "body": "表示名、退会（消えるものと残るものを示して確かめる）", "calls": "自分を見る、退会の確かめ、退会する", "apis": ["group-01", "group-13", "group-14"], "miss": [], "stories": ["G-05"], "from": ["S-05"], "to": ["S-23"]}, {"id": "S-23", "title": "通知先", "body": "登録した端末の一覧と、送れなかった端末の印。1台ずつ外す。この端末を登録する", "calls": "通知先一覧、通知先を登録する、通知先を外す", "apis": ["notification-01", "notification-02", "notification-03"], "miss": [], "stories": ["N-01", "N-02", "N-04"], "from": ["S-22"], "to": []}], "apis": [{"id": "group-01", "ctx": "group", "name": "自分を見る", "route": "`GET /me`", "rule": "ユーザーID、表示名、自分用グループのID", "screens": ["S-22"], "stories": []}, {"id": "group-02", "ctx": "group", "name": "自分のグループ一覧", "route": "`GET /me/groups`", "rule": "グループごとにID、名前、`kind`、自分がオーナーか、`status`", "screens": ["S-04"], "stories": ["G-04"]}, {"id": "group-03", "ctx": "group", "name": "招待を見る", "route": "`GET /invites/{token}`", "rule": "グループ名と、使えるか。すでにメンバーなら、リンクの状態を見ずに「メンバー」と返す。そうでなく使えなければ`invite_unusable`", "screens": ["S-02"], "stories": ["G-01"]}, {"id": "group-04", "ctx": "group", "name": "招待から参加する", "route": "`POST /invites/{token}/accept`", "rule": "本文は`{ displayName }`（未登録のときだけ必須）。すでにメンバーなら、リンクの状態を見ずに何もせず200。本人が退会を始めていれば`account_closing`。未登録なら、ユーザー・自分用グループ・メンバーを1つのトランザクションで作る。登録済みならメンバーだけ加える。利用回数は、メンバーを新しく加えたときだけ数える。そのグループを抜ける処理の途中なら`invite_unusable`（終わったら入り直せる）", "screens": ["S-02"], "stories": ["G-01"]}, {"id": "group-05", "ctx": "group", "name": "グループを作る", "route": "`POST /groups`", "rule": "本文は`{ id, name }`。作った人がオーナーになる。`kind`は`shared`", "screens": ["S-04"], "stories": ["G-03"]}, {"id": "group-06", "ctx": "group", "name": "グループを見る", "route": "`GET /groups/{g}`", "rule": "名前、`kind`、オーナー、`status`、自分がオーナーか", "screens": ["S-05", "S-20"], "stories": []}, {"id": "group-07", "ctx": "group", "name": "メンバー一覧", "route": "`GET /groups/{g}/members`", "rule": "ユーザーID、表示名、参加した日時、オーナーか", "screens": ["S-11", "S-13", "S-15", "S-21"], "stories": []}, {"id": "group-08", "ctx": "group", "name": "招待リンクを発行する", "route": "`POST /groups/{g}/invite-links`", "rule": "本文は`{ id, expiresAt, maxUses }`。オーナーだけ。自分用グループでは`forbidden`。応答でリンクのURLを返す。トークンは、SSMに置く秘密の値とリンクのIDからHMAC-SHA256で作り、サーバーはハッシュだけを保存する。こうすると、2回目の送信でも同じトークンを返せる（2026-11-21に大関さんが決めた）", "screens": ["S-21"], "stories": ["G-02"]}, {"id": "group-09", "ctx": "group", "name": "抜ける・外すの確かめ", "route": "`GET /groups/{g}/members/{userId}/removal-preview`", "rule": "消えるものと残るものの件数（残る参戦、消える予定・申込・頼まれ物・下書き、空に戻る分配と購入担当、人数に置き換わる同行者）。本人かオーナーだけ", "screens": ["S-20", "S-21"], "stories": ["G-07", "G-08"]}, {"id": "group-10", "ctx": "group", "name": "メンバーを外す", "route": "`DELETE /groups/{g}/members/{userId}`", "rule": "`userId`が自分なら抜ける、ほかの人なら外す。外すのはオーナーだけで、自分自身は外せない（抜けるとして扱う）。オーナーが抜けるときは一番前から参加しているメンバーに引き継ぐ。ほかにメンバーがいなければ`last_member`。自分用グループは`forbidden`。202", "screens": ["S-20", "S-21"], "stories": ["G-07", "G-08"]}, {"id": "group-11", "ctx": "group", "name": "解散の確かめ", "route": "`GET /groups/{g}/disband-preview`", "rule": "消えるものと残るものの件数。オーナーだけ", "screens": ["S-20"], "stories": ["G-06"]}, {"id": "group-12", "ctx": "group", "name": "解散する", "route": "`DELETE /groups/{g}`", "rule": "オーナーだけ。自分用グループは`forbidden`。202。解散を始めた時点で、招待リンクは使えなくなる", "screens": ["S-20"], "stories": ["G-06"]}, {"id": "group-13", "ctx": "group", "name": "退会の確かめ", "route": "`GET /me/withdrawal-preview`", "rule": "消えるものと残るものの件数。オーナーのグループごとに、引き継ぐ先か解散になるか", "screens": ["S-22"], "stories": ["G-05"]}, {"id": "group-14", "ctx": "group", "name": "退会する", "route": "`DELETE /me`", "rule": "202。画面は応答を受けたら「退会を受け付けました」と出してサインアウトする", "screens": ["S-22"], "stories": ["G-05"]}, {"id": "catalog-01", "ctx": "catalog", "name": "アーティスト一覧", "route": "`GET /groups/{g}/artists`", "rule": "名前の順", "screens": ["S-08", "S-09"], "stories": ["C-05"]}, {"id": "catalog-02", "ctx": "catalog", "name": "アーティストを作る", "route": "`POST /groups/{g}/artists`", "rule": "`{ id, name }`。正規化した名前が同じなら`already_exists`で、応答に既存のアーティストのIDを入れる", "screens": ["S-09"], "stories": ["C-05"]}, {"id": "catalog-03", "ctx": "catalog", "name": "アーティストを直す・消す", "route": "`PATCH`・`DELETE /groups/{g}/artists/{artistId}`", "rule": "使っていれば消せない（`in_use`）", "screens": ["S-09"], "stories": ["C-05"]}, {"id": "catalog-04", "ctx": "catalog", "name": "会場一覧", "route": "`GET /groups/{g}/venues`", "rule": "", "screens": ["S-08", "S-09"], "stories": ["C-04"]}, {"id": "catalog-05", "ctx": "catalog", "name": "会場を作る", "route": "`POST /groups/{g}/venues`", "rule": "`{ id, name, nearestStation, memo }`", "screens": ["S-09"], "stories": ["C-04"]}, {"id": "catalog-06", "ctx": "catalog", "name": "会場を直す・消す", "route": "`PATCH`・`DELETE /groups/{g}/venues/{venueId}`", "rule": "使っていれば消せない（`in_use`）", "screens": ["S-09"], "stories": ["C-04"]}, {"id": "catalog-07", "ctx": "catalog", "name": "ツアー一覧", "route": "`GET /groups/{g}/tours`", "rule": "", "screens": ["S-08"], "stories": []}, {"id": "catalog-08", "ctx": "catalog", "name": "ツアーを直す", "route": "`PATCH /groups/{g}/tours/{tourId}`", "rule": "ツアーは下書きの確定で作る", "screens": ["S-09"], "stories": ["C-08"]}, {"id": "catalog-09", "ctx": "catalog", "name": "公演一覧", "route": "`GET /groups/{g}/concerts?when=upcoming|past&year=`", "rule": "確定した公演だけ。日付の順（`past`は新しい順）。今日の公演は`upcoming`に入れる。日付は日本時間で比べる", "screens": ["S-05", "S-06"], "stories": ["C-07"]}, {"id": "catalog-10", "ctx": "catalog", "name": "公演を見る", "route": "`GET /groups/{g}/concerts/{concertId}`", "rule": "公演、ツアー（グッズ販売時間を含む）、会場、出演順のアーティスト", "screens": ["S-07"], "stories": ["C-07"]}, {"id": "catalog-11", "ctx": "catalog", "name": "公演を直す", "route": "`PATCH /groups/{g}/concerts/{concertId}`", "rule": "日付・会場・時刻・URL・題名・アーティストの並び。アーティストを送るときは並び全体を置き換える", "screens": ["S-09"], "stories": ["C-08"]}, {"id": "catalog-12", "ctx": "catalog", "name": "公演の下書き一覧", "route": "`GET /groups/{g}/concert-drafts`", "rule": "自分が作った下書きだけ", "screens": ["S-06"], "stories": ["C-03"]}, {"id": "catalog-13", "ctx": "catalog", "name": "公演の下書きを作る・直す・消す", "route": "`POST /groups/{g}/concert-drafts`、`PATCH`・`DELETE /groups/{g}/concert-drafts/{draftId}`", "rule": "中身は、ツアー（任意）と公演の配列。会場とアーティストは、登録済みのIDか新しい名前のどちらか。決まっていなくてもよい。直す・消すのは作った人だけ", "screens": ["S-08"], "stories": ["C-01", "C-02", "C-03", "C-06"]}, {"id": "catalog-14", "ctx": "catalog", "name": "公演の下書きを確定する", "route": "`POST /groups/{g}/concert-drafts/{draftId}/confirm`", "rule": "本文は`{ tourId, concertIds }`（画面が作るUUIDv7。`concertIds`は下書きの公演と同じ順）。1つのトランザクションで、新しい会場・アーティスト・ツアー・公演を作り、下書きを消す。新しい名前のアーティストが正規化して既存と同じなら、既存のほうを使う。会場が決まっていない公演や、ツアーも題名もない公演があれば`invalid_input`。下書きがもう無くても、`concertIds`の公演がすべてこのグループにあれば、確定済みとして同じ応答を返す。表に下書きとの対応を持たないので、別の下書きから作った公演と区別しないことは受け入れる（画面は自分が作ったIDしか送らない）", "screens": ["S-08"], "stories": ["C-01", "C-02", "C-03", "C-06"]}, {"id": "catalog-15", "ctx": "catalog", "name": "セトリを見る", "route": "`GET /groups/{g}/concerts/{concertId}/setlist`", "rule": "曲目の配列と`version`。まだ無ければ空の配列と`version: 0`", "screens": ["S-10"], "stories": ["C-09"]}, {"id": "catalog-16", "ctx": "catalog", "name": "セトリを保存する", "route": "`PUT /groups/{g}/concerts/{concertId}/setlist`", "rule": "本文は`{ version, items }`。曲目は全体を置き換える。`version`が今の版と違えば`stale_version`で、応答に今の版の曲目を入れる。保存できたら`version`を1増やす。送り直しに備えて、今の版が送った版の次で、最後に保存した人が自分で、曲目も同じなら、200で今の版を返す。曲目のアーティストは、その公演のアーティストだけ", "screens": ["S-10"], "stories": ["C-09"]}, {"id": "attendance-01", "ctx": "attendance", "name": "公演の参戦一覧", "route": "`GET /groups/{g}/concerts/{concertId}/attendances`", "rule": "メンバーごとに参戦と、あれば参戦記録（座席、同行者、ひとこと）", "screens": ["S-07"], "stories": ["A-02"]}, {"id": "attendance-02", "ctx": "attendance", "name": "参戦する", "route": "`POST /groups/{g}/concerts/{concertId}/attendances`", "rule": "本文は`{ id }`。自分の参戦を作る。同じ公演に自分の参戦がすでにあれば、IDが同じなら200、違えば`already_exists`", "screens": ["S-07"], "stories": ["A-01"]}, {"id": "attendance-03", "ctx": "attendance", "name": "参戦をやめる", "route": "`DELETE /groups/{g}/attendances/{attendanceId}`", "rule": "本人だけ。参戦記録も消える", "screens": ["S-07"], "stories": ["A-01"]}, {"id": "attendance-04", "ctx": "attendance", "name": "参戦記録を保存する", "route": "`PUT /groups/{g}/attendances/{attendanceId}/record`", "rule": "本文は`{ seat, comment, companions }`。同行者は`{ userId }`か`{ name }`の配列で、全体を置き換える。人数に置き換えた同行者の数（`hiddenCompanionCount`）は読むだけで、保存では変えない。一覧と参戦を見るAPIでは、この数も返す。本人だけ。`userId`は同じグループの有効なメンバーだけ（ロックして確かめる。データモデル「書き込みの順番」）", "screens": ["S-11"], "stories": ["A-03"]}, {"id": "attendance-05", "ctx": "attendance", "name": "参戦記録を消す", "route": "`DELETE /groups/{g}/attendances/{attendanceId}/record`", "rule": "本人だけ。参戦は残り、「行く予定」に戻る", "screens": ["S-11"], "stories": ["A-03"]}, {"id": "attendance-06", "ctx": "attendance", "name": "自分の参戦一覧", "route": "`GET /me/attendances?when=upcoming|past&year=`", "rule": "グループをまたいだ自分の参戦。解散・抜けたあとの参戦は公演の写しで返し、同行者は人数で返す。`year`は公演日（日本時間）の年で絞る", "screens": ["S-18"], "stories": ["A-04"]}, {"id": "attendance-07", "ctx": "attendance", "name": "自分の参戦の年", "route": "`GET /me/attendance-years`", "rule": "自分の参戦がある年と、年ごとの件数（行った公演と、これからの予定を分けて）。新しい年の順。S-18で年代と年を選ぶ一覧に使う。年代はAPIで返さない", "screens": ["S-18"], "stories": ["A-04"]}, {"id": "attendance-08", "ctx": "attendance", "name": "自分の参戦を見る", "route": "`GET /me/attendances/{attendanceId}`", "rule": "本人だけ。解散・抜けたあとの参戦は、写しのセトリも返す。解散・抜けたあとの参戦はMVP1では読むだけで、直す・消すAPIは無い（ロックを取るグループが無いため）", "screens": ["S-18"], "stories": ["A-04"]}, {"id": "attendance-09", "ctx": "attendance", "name": "アーティストごとの参戦", "route": "`GET /me/artist-summary`", "rule": "正規化した名前ごとに、表示名、回数、参戦の日付の一覧。写しの名前も含める", "screens": ["S-19"], "stories": ["A-05"]}, {"id": "ticket-01", "ctx": "ticket", "name": "申込一覧", "route": "`GET /groups/{g}/ticket-applications?concertId=&applicant=me`", "rule": "どちらの絞り込みも任意。申込ごとに、保存した状態と、計算した`displayStatus`（`won`のまま入金期限を過ぎたら`expired`）と`pickupAvailable`", "screens": ["S-05", "S-12"], "stories": ["T-04"]}, {"id": "ticket-02", "ctx": "ticket", "name": "申込を作る", "route": "`POST /groups/{g}/ticket-applications`", "rule": "本文は`{ id, concertId, saleName, quantity, pickupMethod, status, resultAnnouncedAt, paymentDeadline, pickupStartsAt }`。`status`は`applied`か`won`（先着）。作った人が申込者。リマインドは下の「申込とリマインド」の決まりで合わせる", "screens": ["S-12"], "stories": ["T-01", "T-03"]}, {"id": "ticket-03", "ctx": "ticket", "name": "申込を見る", "route": "`GET /groups/{g}/ticket-applications/{applicationId}`", "rule": "申込、計算した表示、分配", "screens": ["S-13"], "stories": ["N-03"]}, {"id": "ticket-04", "ctx": "ticket", "name": "申込を直す", "route": "`PATCH /groups/{g}/ticket-applications/{applicationId}`", "rule": "申込者だけ。期限を入れた・直した・空にしたときは、下の「申込とリマインド」の決まりで合わせる", "screens": ["S-13"], "stories": ["T-01", "T-03"]}, {"id": "ticket-05", "ctx": "ticket", "name": "申込の状態を変える", "route": "`PUT /groups/{g}/ticket-applications/{applicationId}/status`", "rule": "本文は`{ status }`。申込者だけ。移れるのは`applied`→`won`・`lost`、`won`→`paid`、`paid`→`picked_up`。期限切れ（`won`のまま期限を過ぎた）から`paid`にも移れる。すでにその状態なら何もせず200。ほかは`invalid_transition`。リマインドは下の「申込とリマインド」の決まりで合わせる", "screens": ["S-13"], "stories": ["T-02", "T-03"]}, {"id": "ticket-06", "ctx": "ticket", "name": "申込を消す", "route": "`DELETE /groups/{g}/ticket-applications/{applicationId}`", "rule": "申込者だけ。まだ届いていないリマインドを取り消す", "screens": ["S-13"], "stories": ["T-01", "T-03"]}, {"id": "ticket-07", "ctx": "ticket", "name": "分配を保存する", "route": "`PUT /groups/{g}/ticket-applications/{applicationId}/distributions`", "rule": "本文は`{ items: [{ seq, userId, guestName, distributedAt }] }`で全体を置き換える。申込者だけ。受取方法がスマチケの申込だけ。`seq`は1から枚数まで。`userId`は同じグループの有効なメンバー", "screens": ["S-13"], "stories": ["T-05"]}, {"id": "merch-01", "ctx": "merch", "name": "画像を上げる準備", "route": "`POST /groups/{g}/image-uploads`", "rule": "本文は`{ contentType }`（`image/jpeg`・`image/png`・`image/webp`・`image/heic`）。一時置き場のキーと、アップロード用URLを返す。大きさの上限は署名付きURLの条件で決める", "screens": ["S-14"], "stories": ["M-01"]}, {"id": "merch-02", "ctx": "merch", "name": "品目の下書きを作る・直す・消す", "route": "`POST /groups/{g}/merch-drafts`、`PATCH`・`DELETE /groups/{g}/merch-drafts/{draftId}`", "rule": "中身は品名、価格、属するツアーか公演、画像。画像は作るときも直すときも一時置き場のキーで送り、`api`が`drafts/<userId>/`の下にコピーして確定する（データモデルR13）。写真を替えたら、前の画像のキーを消す予定の表に入れる。直す・消すのは作った人だけ", "screens": ["S-14"], "stories": ["M-01"]}, {"id": "merch-03", "ctx": "merch", "name": "品目の下書き一覧", "route": "`GET /groups/{g}/merch-drafts`", "rule": "自分が作った下書きだけ", "screens": ["S-15"], "stories": []}, {"id": "merch-04", "ctx": "merch", "name": "品目の下書きを確定する", "route": "`POST /groups/{g}/merch-drafts/{draftId}/confirm`", "rule": "本文は`{ itemId }`。画像を`items/`の下にコピーし、品目を作って下書きを消す。下書きがもう無くても、`itemId`の品目がこのグループにあれば同じ応答を返す。公演の下書きと同じく、別の下書きから作った品目と区別しないことは受け入れる", "screens": ["S-14"], "stories": ["M-01"]}, {"id": "merch-05", "ctx": "merch", "name": "品目を直す・消す", "route": "`PATCH`・`DELETE /groups/{g}/merch-items/{itemId}`", "rule": "写真を替えるときも一時置き場のキーで送り、前の画像のキーは消す予定の表に入れる。品目を消すと画像も消す予定の表に入る", "screens": ["S-15"], "stories": []}, {"id": "merch-06", "ctx": "merch", "name": "グッズリストを見る", "route": "`GET /groups/{g}/concerts/{concertId}/merch-list`", "rule": "載せられる品目（公演の品目と、公演のツアーの品目）と`imageUrl`。品目ごとに、購入担当と印、メンバーごとの欲しい数", "screens": ["S-15"], "stories": ["M-02"]}, {"id": "merch-07", "ctx": "merch", "name": "欲しい数を入れる・消す", "route": "`PUT`・`DELETE /groups/{g}/concerts/{concertId}/merch-list/requests/{itemId}`", "rule": "本文は`{ quantity }`（1以上）。自分の分だけ。品目は、その公演かツアーのものだけ。グッズリストの行は最初の書き込みで作る", "screens": ["S-15"], "stories": ["M-02"]}, {"id": "merch-08", "ctx": "merch", "name": "購入担当を決める・外す", "route": "`PUT`・`DELETE /groups/{g}/concerts/{concertId}/merch-list/buyers/{itemId}`", "rule": "本文は`{ userId }`。担当は同じグループの有効なメンバー。担当を別の人に替えたら印は消える", "screens": ["S-15"], "stories": ["M-03"]}, {"id": "merch-09", "ctx": "merch", "name": "印を付ける", "route": "`PUT /groups/{g}/concerts/{concertId}/merch-list/buyers/{itemId}/purchase-status`", "rule": "本文は`{ purchaseStatus }`（`bought`・`sold_out`・`null`）。その品目の購入担当だけ。担当のいない品目は`not_found`", "screens": ["S-16"], "stories": ["M-06"]}, {"id": "merch-10", "ctx": "merch", "name": "自分が買う物", "route": "`GET /groups/{g}/concerts/{concertId}/merch-list/my-purchases`", "rule": "自分が購入担当の品目、数、頼んだ人ごとの数、合計金額、売り切れを除いた合計金額、価格の無い品目があるか", "screens": ["S-16"], "stories": ["M-04"]}, {"id": "merch-11", "ctx": "merch", "name": "自分が頼んだ物", "route": "`GET /groups/{g}/concerts/{concertId}/merch-list/my-requests`", "rule": "自分が欲しい数を入れた品目ごとに、数、購入担当、金額、印", "screens": ["S-17"], "stories": ["M-05"]}, {"id": "notification-01", "ctx": "notification", "name": "通知先一覧", "route": "`GET /me/push-subscriptions`", "rule": "端末ごとに登録日時と、最後に送れなかった日時", "screens": ["S-05", "S-23"], "stories": ["N-02", "N-04"]}, {"id": "notification-02", "ctx": "notification", "name": "通知先を登録する", "route": "`POST /me/push-subscriptions`", "rule": "本文はブラウザの`PushSubscription`の`endpoint`と鍵。同じ`endpoint`がすでに自分のものなら同じ行を返す。別の人のものなら、その行を消して自分のものにする（端末を譲った場合）", "screens": ["S-03", "S-23"], "stories": ["N-01"]}, {"id": "notification-03", "ctx": "notification", "name": "通知先を外す", "route": "`DELETE /me/push-subscriptions/{subscriptionId}`", "rule": "本人だけ。まだ送っていないリマインドは、ほかの端末に送る", "screens": ["S-23"], "stories": ["N-04"]}], "stories": [{"id": "G-01", "title": "招待リンクから参加する", "ctx": "group", "text": "招待された人として、招待リンクから最小限の登録でグループに参加したい。アプリの設定に時間をかけずに、仲間の公演情報を見られるようにするため。", "ac": ["有効期限を過ぎたリンク、利用回数の上限に達したリンク、解散を始めたグループのリンクでは参加できない。", "登録すると、ユーザーと、そのグループのメンバーと、本人の自分用グループができる。", "招待リンクを通らずにログインしただけでは、ユーザーは作られない。", "すでに登録しているユーザーがリンクを開いたら、登録はせずにメンバーにだけ加える。"], "screens": ["S-02", "S-03"], "apis": ["group-03", "group-04"], "apiRef": "招待を見る、招待から参加する"}, {"id": "G-02", "title": "招待リンクを発行する", "ctx": "group", "text": "オーナーとして、有効期限と利用回数の上限を付けた招待リンクを発行したい。リンクが意図しない人に渡っても、参加できる人を限るため。", "ac": ["発行できるのはオーナーだけ。", "自分用グループでは発行できない。"], "screens": ["S-21"], "apis": ["group-08"], "apiRef": "招待リンクを発行する"}, {"id": "G-03", "title": "仲間と使うグループを作る", "ctx": "group", "text": "メンバーとして、仲間と使うグループを新しく作りたい。いつもと違う仲間とも公演を共有するため。", "ac": ["作った人がオーナーになる。", "新しい人を入れるには招待リンクが要る。"], "screens": ["S-04"], "apis": ["group-05"], "apiRef": "グループを作る"}, {"id": "G-04", "title": "自分のグループを切り替える", "ctx": "group", "text": "ユーザーとして、自分が入っているグループの一覧から、見るグループを選びたい。グループごとに公演と準備を分けて見るため。", "ac": ["自分用グループは「自分用」として、仲間と使うグループと分けて見せる。"], "screens": ["S-04"], "apis": ["group-02"], "apiRef": "自分のグループ一覧"}, {"id": "G-05", "title": "退会する", "ctx": "group", "text": "ユーザーとして、yoinを退会したい。使わなくなったら、自分だけのデータを残さないため。", "ac": ["退会を受け付けたら「退会を受け付けました」と出し、すぐにサインアウトさせる。そのあとの操作はできない。", "消えるもの：アカウント、参戦と参戦記録と公演の写し、本人が申込者のチケット申込、頼まれ物、下書き、通知の予約と通知先、自分用グループ。", "残るもの：公演、セトリ、確定した品目と画像など、グループの全員のデータ。", "ほかの人の参戦記録で本人が同行者になっていたら、名前を人数表示に置き換える。分配先は空に、購入担当は担当なしに戻す。", "仲間と使うグループのオーナーなら、一番前から参加しているメンバーにオーナーを引き継ぐ。ほかにメンバーがいなければ、そのグループを解散する。", "途中で処理が止まっても、続きから最後まで進む。"], "screens": ["S-22"], "apis": ["group-13", "group-14"], "apiRef": "退会の確かめ、退会する"}, {"id": "G-06", "title": "グループを解散する", "ctx": "group", "text": "オーナーとして、グループを解散したい。もう使わない集まりのデータを片づけるため。", "ac": ["解散できるのはオーナーだけ。自分用グループは解散できない。", "解散を始めたら招待リンクは使えなくなり、そのあとの書き込みは断る。", "メンバー一覧、招待リンク、チケット申込、品目とグッズリストと画像、頼まれ物はすぐに消す。", "公演日が解散した日以前の参戦は、公演の写し（公演、アーティスト名、セトリ）を付けて各メンバーに残す。参戦記録がなくても残す。", "公演日が解散した日より後の参戦は消す。", "残った参戦記録の同行者は「同行者2名」のように人数表示に置き換える。", "解散の前に、何が消えて何が残るかを画面で示して確認する。"], "screens": ["S-20"], "apis": ["group-11", "group-12"], "apiRef": "解散の確かめ、解散する"}, {"id": "G-07", "title": "メンバーをグループから外す", "ctx": "group", "text": "オーナーとして、メンバーをグループから外したい。もう一緒に行かなくなった人に、これからの予定や準備を見せないため。", "ac": ["外せるのはオーナーだけ。自分用グループにはほかのメンバーがいないので、この操作はない。", "オーナーは自分自身を外せない。抜けるときは先にオーナーを引き継ぐ（G-08）。", "外す前に、外された人のデータのうち何が消えて何が残るかを画面で示して確認する。", "外された人は、そのグループの公演、チケット、グッズを見られず、書き込みもできなくなる。", "そのグループでの外された人の参戦は、解散と同じ扱いにする。公演日が外した日以前の参戦は公演の写しを付けて本人に残し、これからの予定は消す。", "外された人が申込者のチケット申込は消し、まだ届いていないリマインドを取り消す。", "外された人の頼まれ物と下書きは消す。購入担当だった品目は担当なしに、分配先だった割当は空に戻す。", "ほかのメンバーの参戦記録で外された人が同行者になっていたら、名前を人数表示に置き換える。", "外された人も、あとで招待リンクから入り直せる。", "途中で処理が止まっても、続きから最後まで進む。"], "screens": ["S-21"], "apis": ["group-09", "group-10"], "apiRef": "抜ける・外すの確かめ、メンバーを外す"}, {"id": "G-08", "title": "自分からグループを抜ける", "ctx": "group", "text": "メンバーとして、自分からグループを抜けたい。退会はせずに、使わなくなったグループだけをやめるため。", "ac": ["抜けたときに消えるものと残るものは、G-07で外されたときと同じ。", "オーナーが抜けるときは、一番前から参加しているメンバーにオーナーを引き継ぐ。ほかにメンバーがいなければ、抜けるかわりに解散を案内する。", "自分用グループは抜けられない。"], "screens": ["S-20"], "apis": ["group-09", "group-10"], "apiRef": "抜ける・外すの確かめ、メンバーを外す（自分）"}, {"id": "C-01", "title": "ツアーをまとめて登録する", "ctx": "catalog", "text": "メンバーとして、ツアーとその公演をまとめて登録したい。同じツアーの公演を1件ずつ入れ直す手間を省くため。", "ac": ["ツアーには、ツアー名、グッズの販売時間などの情報、公式サイトのURLを入れられる。", "公演には、日付、会場、開場時刻、開演時刻、公式サイトのURLを入れられる。", "登録した公演は、グループのメンバー全員に見える。"], "screens": ["S-08"], "apis": ["catalog-13", "catalog-14"], "apiRef": "公演の下書きを作る、公演の下書きを確定する"}, {"id": "C-02", "title": "単発の公演やフェスを登録する", "ctx": "catalog", "text": "メンバーとして、ツアーに属さない公演を、公演名と出演するアーティストを付けて登録したい。フェスや対バンも記録するため。", "ac": ["ツアーがない公演には公演名を必ず入れる。", "1つの公演に複数のアーティストを、出演順で付けられる。"], "screens": ["S-08"], "apis": ["catalog-13", "catalog-14"], "apiRef": "公演の下書きを作る、公演の下書きを確定する"}, {"id": "C-03", "title": "下書きを確かめてから公演を確定する", "ctx": "catalog", "text": "メンバーとして、公演の登録内容を下書きとして保存し、確かめてから確定したい。入力の途中で手を止めても、内容を失わないため。", "ac": ["会場やアーティストが決まっていなくても下書きにできる。", "確定するまで、公演一覧には出ない。", "下書きを作るのと同じ窓口を、MVP2の自動入力も使う。"], "screens": ["S-06", "S-08"], "apis": ["catalog-12", "catalog-13", "catalog-14"], "apiRef": "公演の下書き一覧、公演の下書きを作る・直す・消す・確定する"}, {"id": "C-04", "title": "登録した会場を選び直す", "ctx": "catalog", "text": "メンバーとして、一度登録した会場を、次の公演の登録で選びたい。最寄り駅やメモを毎回調べ直さないため。", "ac": ["会場には最寄り駅とメモを入れられる。", "公演で使っている会場は消せない。", "選べるのは同じグループの会場だけ。"], "screens": ["S-08", "S-09"], "apis": ["catalog-04", "catalog-05", "catalog-06"], "apiRef": "会場一覧、会場を作る・直す・消す"}, {"id": "C-05", "title": "登録したアーティストを選ぶ", "ctx": "catalog", "text": "メンバーとして、公演のアーティストを、登録済みのアーティストから選びたい。表記ゆれで同じアーティストが2つにならないようにするため。", "ac": ["正規化した名前が同じアーティストは、グループの中で2つ登録できない。", "公演で使っているアーティストは消せない。"], "screens": ["S-08", "S-09"], "apis": ["catalog-01", "catalog-02", "catalog-03"], "apiRef": "アーティスト一覧、アーティストを作る・直す・消す"}, {"id": "C-06", "title": "過去の公演をさかのぼって登録する", "ctx": "catalog", "text": "ユーザーとして、yoinを使い始める前に行った公演を登録したい。昔の参戦も同じ場所に残すため。", "ac": ["開場時刻と開演時刻は空でもよい。", "1人で行った公演は自分用グループに登録できる。"], "screens": ["S-08"], "apis": ["catalog-13", "catalog-14"], "apiRef": "公演の下書きを作る、公演の下書きを確定する（時刻は空でよい）"}, {"id": "C-07", "title": "公演の情報を確かめる", "ctx": "catalog", "text": "メンバーとして、公演の日付、会場と最寄り駅、開場・開演時刻、ツアーのグッズ販売時間、公式サイトのURLを1つの画面で見たい。当日までに毎回サイトを探さずに済むようにするため。", "ac": ["公演一覧は、これからの公演と過去の公演に分けて見せる。"], "screens": ["S-06", "S-07"], "apis": ["catalog-09", "catalog-10"], "apiRef": "公演一覧、公演を見る"}, {"id": "C-08", "title": "公演の情報を直す", "ctx": "catalog", "text": "メンバーとして、登録した公演の日時や会場を直したい。発表後に変わった情報に合わせるため。", "ac": ["グループのメンバーなら誰でも直せる。"], "screens": ["S-09"], "apis": ["catalog-11", "catalog-08"], "apiRef": "公演を直す、ツアーを直す"}, {"id": "C-09", "title": "セトリを入力する", "ctx": "catalog", "text": "メンバーとして、公演が終わったらセトリを曲順に入力したい。どの曲が演奏されたかを忘れないうちに残すため。", "ac": ["曲名は文字列で入れる。曲目ごとに「アンコール」などのメモを付けられる。", "フェスでは、曲目ごとにどのアーティストの曲かを選べる。", "グループの誰が入力しても、全員に同じセトリが見える。", "2人が同時に編集したとき、古い版からの保存は断り、上書きしない。"], "screens": ["S-10"], "apis": ["catalog-15", "catalog-16"], "apiRef": "セトリを見る、セトリを保存する"}, {"id": "A-01", "title": "公演に行く予定を登録する", "ctx": "attendance", "text": "メンバーとして、公演に「行く」と登録したい。グループの誰がどの公演に行くかを共有するため。", "ac": ["同じ公演に2回は登録できない。", "編集と取り消しは本人だけ。"], "screens": ["S-07"], "apis": ["attendance-02", "attendance-03"], "apiRef": "参戦する、参戦をやめる"}, {"id": "A-02", "title": "公演に誰が行くかを見る", "ctx": "attendance", "text": "メンバーとして、公演ごとにグループの誰が行くかを見たい。一緒に行く相手とチケットやグッズの相談をするため。", "ac": ["行った公演では、ほかのメンバーの参戦記録（座席、同行者、ひとこと）も見られる。"], "screens": ["S-07"], "apis": ["attendance-01"], "apiRef": "公演の参戦一覧"}, {"id": "A-03", "title": "参戦記録を残す", "ctx": "attendance", "text": "メンバーとして、公演のあとに座席、同行者、ひとことを残したい。どの席から誰と見たかをあとから思い出すため。", "ac": ["座席はブロック、列、番号などを自由に書ける。", "同行者は、グループのメンバーから選ぶか、yoinを使っていない人の名前を書く。", "参戦記録があれば「行った」として扱う。", "同じグループのほかのメンバーも読める。編集と削除は本人だけ。", "解散したグループや、抜けた・外されたグループの参戦記録は、本人だけが読める。"], "screens": ["S-11"], "apis": ["attendance-04", "attendance-05"], "apiRef": "参戦記録を保存する、参戦記録を消す"}, {"id": "A-04", "title": "自分の参戦を一覧で見る", "ctx": "attendance", "text": "ユーザーとして、グループをまたいで自分の参戦を、これからの予定と行った公演に分けて見たい。自分がいつどの公演に行ったかを1か所で見るため。", "ac": ["解散したグループの過去の参戦も、公演の写しで出す。題名、日付、会場、セトリが見られる。", "解散後の参戦は本人だけが見られる。同行者は人数で出す。", "行った公演は年代（2020年代など）でまとめ、その中を年ごとに区切って見られる。年を選んでその年だけに絞れる（2026-11-21、大関さんの要望）。"], "screens": ["S-18"], "apis": ["attendance-06", "attendance-07", "attendance-08"], "apiRef": "自分の参戦一覧、自分の参戦の年、自分の参戦を見る"}, {"id": "A-05", "title": "アーティストごとに参戦をまとめる", "ctx": "attendance", "text": "ユーザーとして、自分の参戦をアーティストごとにまとめて見たい。あるアーティストのライブに何回、いつ行ったかを知るため。", "ac": ["グループをまたいで、正規化した名前でまとめる。解散後の参戦も写しのアーティスト名でまとめる。", "改名、同じ名前の別のアーティスト、表記ゆれで集計がずれることは、MVP1では受け入れる。"], "screens": ["S-19"], "apis": ["attendance-09"], "apiRef": "アーティストごとの参戦"}, {"id": "T-01", "title": "チケット申込を登録する", "ctx": "ticket", "text": "メンバーとして、チケットを申し込んだら、その受付と期限を登録したい。複数の受付の状態と期限をまとめて管理するため。", "ac": ["受付名（「FC先行」など）、枚数、受取方法（コンビニ発券かスマチケ）、結果発表日時、入金期限、受取開始日時を入れられる。期限は分かっているものだけでよい。", "登録した人が申込者になる。", "選べるのは同じグループの公演だけ。", "編集と削除は申込者だけ。"], "screens": ["S-12", "S-13"], "apis": ["ticket-02", "ticket-04", "ticket-06"], "apiRef": "申込を作る、申込を直す、申込を消す"}, {"id": "T-02", "title": "申込の状態を進める", "ctx": "ticket", "text": "申込者として、当落、入金、受取に合わせて申込の状態を進めたい。次に何をすればよいかを見失わないため。", "ac": ["状態は「申込済み → 当選／落選 → 入金済み／期限切れ → 受取済み」の順に進む。先着の申込は当選から始めてよい。", "当選のまま入金期限を過ぎた申込は、自動で期限切れとして見せる。状態は保存せず、入金期限と今の時刻から計算する。", "入金したのに入金済みにし忘れていた場合に備えて、申込者は期限切れの申込を入金済みに直せる。", "受取できるかどうかは、受取開始日時と今の時刻から画面に出す。"], "screens": ["S-13"], "apis": ["ticket-05"], "apiRef": "申込の状態を変える"}, {"id": "T-03", "title": "期限のリマインドを受け取る", "ctx": "ticket", "text": "申込者として、結果発表、受取開始、入金期限を、間に合う時刻に通知で受け取りたい。発券や入金を忘れないため。", "ac": ["結果発表と受取開始は、その時刻に届く。受取開始の通知は入金済みにしたときに予約するので、期限切れの申込には届かない。", "入金期限は、前日の20時と締切の3時間前に届く。", "期限を直したら、届く時刻も直す。落選、申込の削除、解散では、まだ届いていない通知を取り消す。", "登録したときに届く時刻を過ぎていたら、期限の前なら次の送信で届け、期限を過ぎていれば届けない。", "リマインドは申込者だけに届く。", "まれに同じ通知が2回届くことは許す。届かないことは避ける。"], "screens": ["S-13"], "apis": ["ticket-02", "ticket-04", "ticket-05", "ticket-06"], "apiRef": "申込を作る・直す・状態を変える・消す（リマインドの予約はその中で行う）"}, {"id": "T-04", "title": "公演ごとの申込状況を見る", "ctx": "ticket", "text": "メンバーとして、公演ごとにグループの誰がどの受付に申し込み、今どの状態かを見たい。同じ受付に重ねて申し込んだり、取り損ねたりしないため。", "ac": [], "screens": ["S-12"], "apis": ["ticket-01"], "apiRef": "申込一覧（`concertId`）"}, {"id": "T-05", "title": "スマチケを分配する", "ctx": "ticket", "text": "申込者として、スマチケを1枚ずつ誰に渡すかを決め、渡し終えたら記録したい。当日に誰が何枚目を持っているかを分かるようにするため。", "ac": ["分配先は、同じグループのメンバーか、yoinを使っていない人の名前。", "枚数の分だけ、何枚目かを指定して割り当てる。", "分配先を決められるのは申込者だけ。"], "screens": ["S-13"], "apis": ["ticket-07"], "apiRef": "分配を保存する"}, {"id": "M-01", "title": "品目を写真付きで登録する", "ctx": "merch", "text": "メンバーとして、品名、価格、写真を付けてグッズの品目を登録したい。公式の一覧の写真と、買う物を結びつけるため。", "ac": ["写真はユーザーが撮った写真かスクショ。", "品目はツアーに属し、ツアーのない公演では公演に属する。", "下書きを作り、確かめてから確定する。", "写真は同じグループのメンバーだけが見られる。"], "screens": ["S-14"], "apis": ["merch-01", "merch-02", "merch-04"], "apiRef": "画像を上げる準備、品目の下書きを作る・直す・確定する"}, {"id": "M-02", "title": "欲しい物と数を入れる", "ctx": "merch", "text": "メンバーとして、公演のグッズリストで、欲しい品目と数を入れたい。誰が何をいくつ欲しいかを一覧にするため。", "ac": ["載せられるのは、その公演か、公演のツアーの品目だけ。", "自分の分も同じように入れる。購入担当が自分と違う行が「頼まれ物」になる。", "頼まれ物の編集と削除は、頼んだ本人だけ。"], "screens": ["S-15"], "apis": ["merch-06", "merch-07"], "apiRef": "グッズリストを見る、欲しい数を入れる・消す"}, {"id": "M-03", "title": "購入担当を決める", "ctx": "merch", "text": "メンバーとして、品目ごとに当日誰が買いに行くかを決めたい。同じ物を2人が買ったり、誰も買わなかったりしないようにするため。", "ac": ["担当にできるのは同じグループのメンバーだけ。", "グループのメンバーなら誰でも決められる。"], "screens": ["S-15"], "apis": ["merch-08"], "apiRef": "購入担当を決める・外す"}, {"id": "M-04", "title": "買う物と合計金額を見る", "ctx": "merch", "text": "購入担当として、自分が買う品目と数、そのうち誰に頼まれた物か、合計金額を見たい。物販の列で迷わずに買うため。", "ac": ["合計金額は品目の価格と数から計算する。価格がない品目は合計に入らないことを示す。", "精算と割り勘はしない。"], "screens": ["S-16"], "apis": ["merch-10"], "apiRef": "自分が買う物"}, {"id": "M-05", "title": "頼んだ物を確かめる", "ctx": "merch", "text": "頼んだ人として、自分が頼んだ品目、数、購入担当、金額を見たい。あとでいくら渡せばよいかを知るため。", "ac": [], "screens": ["S-17"], "apis": ["merch-11"], "apiRef": "自分が頼んだ物"}, {"id": "M-06", "title": "物販で買えた品目と売り切れの品目に印を付ける", "ctx": "merch", "text": "購入担当として、物販で買えた品目と売り切れだった品目に印を付けたい。買えたかどうかを頼んだ人にすぐ伝えるため。", "ac": ["購入担当は、品目ごとに「買えた」か「売り切れ」の印を付けられる。付けた印は外せる。", "頼んだ人は、自分の頼まれ物に付いた印を見られる（M-05）。", "合計金額は、売り切れの品目を除いた額も出す。", "精算と割り勘はしない。"], "screens": ["S-16"], "apis": ["merch-09"], "apiRef": "印を付ける"}, {"id": "N-01", "title": "通知を受け取る端末を登録する", "ctx": "notification", "text": "ユーザーとして、自分の端末でyoinの通知を受け取れるようにしたい。リマインドを見逃さないため。", "ac": ["初回の案内画面で、ホーム画面への追加と通知の許可を案内する。", "iPhoneは、ホーム画面に追加したときだけ登録できる。", "1人が複数の端末を登録できる。"], "screens": ["S-03", "S-23"], "apis": ["notification-02"], "apiRef": "通知先を登録する"}, {"id": "N-02", "title": "通知が届かない状態を知る", "ctx": "notification", "text": "ユーザーとして、通知が届かない状態になっていたら画面で知りたい。リマインドが来ないまま期限を過ぎないようにするため。", "ac": ["端末を登録していないとき、送れなかった端末があるときに、画面で示す。"], "screens": ["S-05", "S-23"], "apis": ["notification-01"], "apiRef": "通知先一覧"}, {"id": "N-03", "title": "通知から申込を開く", "ctx": "notification", "text": "申込者として、通知を押したら、その申込の画面を開きたい。すぐに入金や発券の確認をするため。", "ac": [], "screens": ["S-13"], "apis": ["ticket-03"], "apiRef": "申込を見る（リマインドの`url`で開く）"}, {"id": "N-04", "title": "通知を受け取る端末を外す", "ctx": "notification", "text": "ユーザーとして、登録した端末を通知先から外したい。手放した端末や使わなくなった端末に通知が届き続けないようにするため。", "ac": ["自分が登録した端末を一覧で見て、1台ずつ外せる。", "外した端末には、それ以降リマインドを送らない。", "退会したときは、すべての端末をまとめて外す（G-05）。"], "screens": ["S-23"], "apis": ["notification-01", "notification-03"], "apiRef": "通知先一覧、通知先を外す"}], "edges": [["S-02", "S-03", false], ["S-01", "S-05", false], ["S-03", "S-05", false], ["S-05", "S-04", false], ["S-04", "S-05", false], ["S-05", "S-06", false], ["S-06", "S-07", false], ["S-06", "S-08", false], ["S-08", "S-07", false], ["S-07", "S-09", false], ["S-07", "S-10", false], ["S-07", "S-11", false], ["S-07", "S-12", false], ["S-12", "S-13", false], ["S-07", "S-15", false], ["S-15", "S-14", false], ["S-15", "S-16", false], ["S-15", "S-17", false], ["S-05", "S-18", false], ["S-18", "S-19", false], ["S-05", "S-20", false], ["S-20", "S-21", false], ["S-05", "S-22", false], ["S-22", "S-23", false], ["push", "S-13", true]], "mermaid": "flowchart TD\n  invite[S-02 招待] --> onboard[S-03 初回の案内]\n  login[S-01 ログイン] --> home\n  onboard --> home[S-05 グループのホーム]\n  home --> switch[S-04 グループの切り替え]\n  switch --> home\n  home --> concerts[S-06 公演一覧]\n  concerts --> concert[S-07 公演]\n  concerts --> draft[S-08 公演の下書き]\n  draft --> concert\n  concert --> concertEdit[S-09 公演の編集]\n  concert --> setlist[S-10 セトリ]\n  concert --> record[S-11 参戦記録]\n  concert --> tickets[S-12 公演の申込]\n  tickets --> ticket[S-13 申込]\n  concert --> merchList[S-15 グッズリスト]\n  merchList --> merchDraft[S-14 品目の下書き]\n  merchList --> buy[S-16 買う物]\n  merchList --> asked[S-17 頼んだ物]\n  home --> mine[S-18 自分の参戦]\n  mine --> byArtist[S-19 アーティストごと]\n  home --> settings[S-20 グループの設定]\n  settings --> members[S-21 メンバーと招待]\n  home --> me[S-22 自分の設定]\n  me --> devices[S-23 通知先]\n  push((通知)) -.押す.-> ticket", "flowNotes": ["下の段の画面（公演・申込など）は、パスに`groupId`を含む画面のURLを持つ。通知を押したときは、リマインドの`url`（`/groups/<groupId>/ticket-applications/<id>`）で申込の画面を開く。", "ログインの方式（メールとパスワードか、メールに届くコードか）は最初の1本の要件で決める（論点の記録の「login」）。S-01はCognitoの画面か自前の画面かも、そこで決める。"], "errors": [["`invalid_input`", "422", "形・値の範囲が合わない。欄ごとの理由を`errors`に入れる"], ["`not_registered`", "403", "JWTはあるが`users`の行が無い（招待の2本のほか）"], ["`account_closing`", "403", "本人が退会を始めている"], ["`not_found`", "404", "行が無い、別グループの行、自分が外された・抜けている途中のグループ"], ["`forbidden`", "403", "メンバーだが、その操作をできる人ではない（申込者でない、オーナーでない、自分用グループで招待リンクを出す、など）"], ["`group_closing`", "409", "グループが解散を始めている。読むことはでき、書き込みだけを断る"], ["`id_conflict`", "409", "作成で送ったIDが、中身の違う行か別グループの行と重なる"], ["`already_exists`", "409", "一意の決まりにぶつかる（同じ公演への2回目の参戦、同じ名前のアーティスト）"], ["`in_use`", "409", "公演で使っている会場・アーティストを消そうとした"], ["`stale_version`", "409", "セトリを古い版から保存しようとした"], ["`invalid_transition`", "409", "申込の状態の移り方に無い変更（落選から入金済みなど）"], ["`invite_unusable`", "409", "招待リンクが期限切れ・上限・取り消し済み。どれかは区別しない"], ["`last_member`", "409", "ほかにメンバーがいないオーナーが抜けようとした。画面は解散を案内する"], ["`internal`", "500", "想定していない失敗。`detail`は付けない"]], "rules": [{"h": "つなぎ先と認証", "lines": ["", "- 画面はAPI GatewayのURLへ直接送る。CORSは画面のドメインだけを許す。ブラウザが本番の要求の前に送る`OPTIONS`（JWTを付けない事前確認）は、API GatewayのCORSの設定で答え、JWTの確かめとLambdaには回さない。", "- すべてのパスでCognitoのJWTが要る。JWTの無い要求はAPI Gatewayが401で断るので、Lambda `api`には届かない。", "- `api`は、JWTの`sub`に結びつく`users`の行が`active`かを毎回確かめる。行が無ければ`not_registered`、`withdrawing`なら`account_closing`で断る。", "- 例外は招待の2本（`GET /invites/{token}`と`POST /invites/{token}/accept`）。ここだけは`users`の行が無いJWTも受ける。招待リンクを通らずにユーザーを作らない決まり（データモデル「退会の手順」）を守るため、APIで行を作るのは`accept`だけにする。最初のオーナーは、デプロイの流れで流す初期データの手順で作る（APIは作らない。2026-11-21に大関さんが決めた）。", ""]}, {"h": "パスの形", "lines": ["", "- グループの中の資源は、`/groups/{groupId}/...`の下に置く。公開関数には、パスのグループIDとJWTのユーザーをそのまま渡す。最初の`FOR SHARE`のロックは、このグループIDで取る。グループの外の書き込み（グループを作る、通知先の登録と削除）は、操作した人の`users`の行を`FOR SHARE`でロックして`active`かを確かめてから書く。退会の開始と重なっても、退会が通ったあとに行ができない（データモデル「書き込みの順番」）。", "- パスの資源のIDが、パスのグループのものでなければ`not_found`にする。別グループの行があることも、中身も返さない。本文で送るID（申込の`concertId`、同行者・購入担当・分配の`userId`、下書きの会場とアーティスト、品目の属するツアーと公演）と、`/me`の下の他人の行のIDも同じで、無いときと同じ`not_found`にする。", "- グループをまたぐもの（自分の参戦の一覧、通知先、退会）は`/me/...`に置く。", "- 版の番号はパスに付けない。APIは外部に公開せず、画面と同時にデプロイするため。Service Workerが古い画面を持っているあいだに互換を壊す変更を出すときは、前の形の要求も受ける期間を、その変更の設計書に書く。", ""]}, {"h": "中身の形", "lines": ["", "- 要求と応答の中身はJSONで、キーはキャメルケース（`concertId`）にする。", "- 公演の日は`YYYY-MM-DD`、開場・開演時刻は`HH:mm`（どちらも日本時間）。チケットの期限など`timestamptz`の値は、時差を付けたISO 8601（`2027-01-10T20:00:00+09:00`）で受け、応答は時差`+09:00`で返す。", "- 入力はZodで確かめ、知らないキーがあれば`invalid_input`で断る。", "- 部分更新（`PATCH`）では、送らなかった欄は変えず、`null`を送った欄は空にする（`.claude/rules/coding-standards.md`）。", "- 一覧はページを分けない。公演と参戦の一覧は、`when=upcoming|past`と`year`で絞れる。", ""]}, {"h": "作成を2回送ったとき", "lines": ["", "公演会場の近くでは電波が弱く、返事が届かずに同じ作成を送り直すことがある。作成のAPIは次のように扱う。", "", "- 画面がUUIDv7のIDを作り、本文の`id`で送る。サーバーはUUIDの版が7でなければ`invalid_input`にする。", "- 同じIDの行がパスのグループにあり、中身も同じなら、1回目と同じ応答を状態コード200で返す。1回目は201。", "- 同じIDの行があって中身が違う場合と、同じIDの行が別のグループにある場合は、`id_conflict`で断る。どちらも行の中身は返さない。", "- 作成のほかの操作は、2回送っても結果が同じになる形にする。状態を進める操作は「どの状態にするか」を送り、すでにその状態なら何もせず200を返す。一覧を丸ごと置き換える操作は`PUT`にする。", "- 消す操作（`DELETE`）は、行がもう無くても204を返す。1回目と2回目を同じ応答にするため。行が別のグループにあるときも同じ204にし、あることを知らせない。行があってその人が消せないとき（申込者でないなど）だけ`forbidden`にする。", "- 比べる「中身」は、サーバーが値を直したあとの形で比べる。例えば画像は、一時置き場のキーをコピー先のキーに直してから比べる。コピー先のキーは、下書きIDと一時置き場のキーから決まる形（`groups/<groupId>/drafts/<userId>/<draftId>/<一時置き場のキーの末尾>`）にする。", "", "2本の要求が重なったときは、次のように扱う。グループの行の`FOR SHARE`は書き込み同士を待たせないので、行ごとに決める。", "", "- 作成は`INSERT ... ON CONFLICT DO NOTHING`で書き、書けなかったら読み直して、上の決まりで比べる。一意の決まりにぶつかって500にしない。グッズリストの行も同じ形で、最初の書き込みで作る。", "- 招待から参加するときは招待リンクの行を、下書きを直す・消す・確定するときは下書きの行を、申込を直す・状態を変える・消すときは申込の行を、`FOR UPDATE`でロックしてから確かめる。上限の最後の1回に2人が同時に参加しても、1人だけが入る。", "- セトリは`UPDATE ... WHERE version = <送った版>`で比べて書く。まだ行の無いセトリの最初の保存が2本重なったら、あとのほうを`stale_version`にする。", "", "IDを画面で作らないものが4つある。", "", "| 操作 | 2回送ったときに同じ結果になる理由 |", "|---|---|", "| 招待リンクから参加する | 1人のCognitoのユーザーに`users`の行は1つだけで、すでにメンバーなら、リンクの状態を見る前に200を返す |", "| 通知先を登録する | `endpoint`が一意なので、同じ端末の2回目は同じ行を返す |", "| 頼まれ物・購入担当・印 | 品目と頼んだ人（または品目）の組で1行なので、`PUT`で置き換える |", "| 画像を上げる準備 | 行を作らない。2回目は別のキーとURLを返し、使われなかった一時置き場の画像は1日で消える |", ""]}, {"h": "エラーの形", "lines": ["", "エラーはRFC 9457の`application/problem+json`で返し、`code`を足す。画面は`code`だけを見て文言を出し分ける。", "", "```json", "{", "  \"type\": \"about:blank\",", "  \"title\": \"Unprocessable Content\",", "  \"status\": 422,", "  \"code\": \"invalid_input\",", "  \"errors\": [{ \"path\": \"quantity\", \"code\": \"too_small\" }]", "}", "```", "", "`errors`は`invalid_input`のときだけ付ける。`detail`には個人の情報を書かない（データモデル「退会で消す範囲」のログの方針と同じ）。", "", "| `code` | 状態コード | いつ |", "|---|---|---|", "| `invalid_input` | 422 | 形・値の範囲が合わない。欄ごとの理由を`errors`に入れる |", "| `not_registered` | 403 | JWTはあるが`users`の行が無い（招待の2本のほか） |", "| `account_closing` | 403 | 本人が退会を始めている |", "| `not_found` | 404 | 行が無い、別グループの行、自分が外された・抜けている途中のグループ |", "| `forbidden` | 403 | メンバーだが、その操作をできる人ではない（申込者でない、オーナーでない、自分用グループで招待リンクを出す、など） |", "| `group_closing` | 409 | グループが解散を始めている。読むことはでき、書き込みだけを断る |", "| `id_conflict` | 409 | 作成で送ったIDが、中身の違う行か別グループの行と重なる |", "| `already_exists` | 409 | 一意の決まりにぶつかる（同じ公演への2回目の参戦、同じ名前のアーティスト） |", "| `in_use` | 409 | 公演で使っている会場・アーティストを消そうとした |", "| `stale_version` | 409 | セトリを古い版から保存しようとした |", "| `invalid_transition` | 409 | 申込の状態の移り方に無い変更（落選から入金済みなど） |", "| `invite_unusable` | 409 | 招待リンクが期限切れ・上限・取り消し済み。どれかは区別しない |", "| `last_member` | 409 | ほかにメンバーがいないオーナーが抜けようとした。画面は解散を案内する |", "| `internal` | 500 | 想定していない失敗。`detail`は付けない |", ""]}, {"h": "時間のかかる操作", "lines": ["", "解散・退会・メンバーを外す・抜けるは、受け付けたら202を返し、続きは`erasure-worker`が進める（データモデル「解散と退会」）。応答の本文は`{ \"accepted\": true }`だけにする。2回目の送信も202にする。この4本だけは、同じ対象の終わっていないジョブ（`erasure_jobs`）があれば、`account_closing`・`not_found`・`group_closing`の確かめより先に202を返す。", ""]}, {"h": "画像", "lines": ["", "- 上げるときは、`POST /groups/{groupId}/image-uploads`で一時置き場（`uploads/`）へのアップロード用URLとキーを受け取り、端末がS3へ上げる。そのあと下書きを作るか直す要求でキーを送ると、`api`がロックを持ったままS3の中でコピーして確定する（データモデルR13）。", "- 見るときは、品目を返す応答に有効期限5分の取得用URL（`imageUrl`）を入れて返す。画面は期限が切れたら一覧を取り直す（データモデルR12）。", ""]}, {"h": "型を画面と共有する", "lines": ["", "- Honoのルートは、文脈ごとのファイルを`src/functions/api/`でつなぎ、つないだ型`AppType`を出す。画面は`hono/client`の`hc<AppType>`で呼び、`import type`だけで型を受け取る（ADR-0004の追記）。", "- 入力のZodのスキーマは`src/functions/api/`の文脈ごとのファイルに置き、公開関数（`src/contexts/<文脈>/index.ts`）には確かめたあとの値を渡す。", ""]}], "remindText": ["申込を作る・直す・状態を変える・消すの4つの操作は、どれも同じ1つの関数でリマインドを合わせる。関数は、申込の今の状態と期限から「あるべき予約」を計算し、今ある予約との差だけを作る・時刻を直す・取り消す。差は、状態と期限の値で見る。状態も期限の値も変わっていない予約（もう送ったものを含む）は、送信時刻を計算し直さず、そのままにする。受付名だけを直しても、期限を過ぎてから1分後に入れた予約は先送りされず、送った予約が作り直されることもない。", "送信時刻を過ぎた予約の扱いは、データモデル「届ける時刻」のとおり（期限の前なら1分後、過ぎていれば作らない）。当選してから入金期限を入れたときも、この関数で入金期限の予約ができる。"], "remindTable": [["`applied`", "結果発表日時があれば、結果発表（`ticket:<申込ID>:result`）"], ["`won`（期限切れを含む）", "入金期限があれば、前日20時と締切の3時間前の2回"], ["`paid`", "受取開始日時があれば、受取開始"], ["`lost`・`picked_up`・消した申込", "なし"]], "notifNote": ["VAPIDの公開鍵は画面のビルドの設定に入れ、APIでは出さない。リマインドを作る・取り消すAPIは無い。チケットの公開関数が、同じトランザクションの中で通知の公開関数を呼ぶ。Schedulerの予約を作る・時刻を直すのはコミットの前、消すのはコミットのあとにする（ADR-0003の決定4）。"], "people": [["招待された人", "なし", "招待リンクを受け取り、まだ登録していない人"], ["ユーザー", "`User`", "yoinに登録した人。登録すると自分用グループ（`PersonalGroup`）を持つ"], ["メンバー", "`Member`", "グループに参加しているユーザー"], ["オーナー", "`Owner`", "グループを管理するメンバー"], ["申込者", "`Applicant`", "チケット申込をしたメンバー"], ["購入担当", "`Buyer`", "品目を当日買いに行くメンバー"], ["頼んだ人", "なし", "頼まれ物（`MerchRequest`）を出したメンバー"]], "ctxs": [["group", "グループ"], ["catalog", "公演カタログ"], ["attendance", "参戦記録"], ["ticket", "チケット"], ["merch", "グッズ"], ["notification", "通知"]], "db": {"tables": [{"id": "groups.users", "schema": "groups", "name": "users", "ja": "ユーザー", "entity": "User", "desc": "yoinに登録した人。Cognitoの言葉はこのテーブルの`cognito_sub`で止める", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "cognito_sub", "type": "text", "desc": "一意。Cognitoのユーザーを指す"}, {"name": "display_name", "type": "text", "desc": "グループ内で見える名前"}, {"name": "status", "type": "text", "desc": "`active` / `withdrawing`。退会を始めたら`withdrawing`にし、以後の操作を断る（F2・F4）"}, {"name": "created_at", "type": "timestamptz", "desc": ""}]}, {"id": "groups.groups", "schema": "groups", "name": "groups", "ja": "グループ", "entity": "Group", "desc": "いつもの仲間の集まり", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "name", "type": "text", "desc": ""}, {"name": "owner_user_id", "type": "uuid", "desc": "オーナー`Owner`。users.id（RESTRICT。退会では先に引き継ぐ）"}, {"name": "kind", "type": "text", "desc": "`shared`（仲間と使う）/ `personal`（自分用）。自分用はユーザー登録のときに1つだけ自動で作る（Q9）。招待リンクは出せず、解散もできない。退会のときに消す"}, {"name": "status", "type": "text", "desc": "`active` / `disbanding`。解散の処理を始めたら`disbanding`にして、途中で失敗しても再開できるようにする"}, {"name": "created_at", "type": "timestamptz", "desc": ""}]}, {"id": "groups.members", "schema": "groups", "name": "members", "ja": "メンバー", "entity": "Member", "desc": "グループに参加しているユーザー", "cols": [{"name": "group_id", "type": "uuid", "desc": "PK・groups.id"}, {"name": "user_id", "type": "uuid", "desc": "PK・users.id"}, {"name": "joined_at", "type": "timestamptz", "desc": "オーナー退会時の引き継ぎ先を選ぶ順番にも使う（Q4）"}, {"name": "status", "type": "text", "desc": "`active` / `leaving`。外す・抜けるを始めたら`leaving`にし、そのグループでの操作を断る（R10）"}]}, {"id": "groups.invite_links", "schema": "groups", "name": "invite_links", "ja": "招待リンク", "entity": "InviteLink", "desc": "", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "group_id", "type": "uuid", "desc": "groups.id"}, {"name": "token_hash", "type": "text", "desc": "一意。URLのトークンはハッシュだけを保存する"}, {"name": "expires_at", "type": "timestamptz", "desc": "有効期限"}, {"name": "max_uses", "type": "smallint", "desc": "利用回数の上限"}, {"name": "used_count", "type": "smallint", "desc": ""}, {"name": "revoked_at", "type": "timestamptz", "desc": "null可。解散の1段階目でここに時刻を入れる"}]}, {"id": "groups.erasure_jobs", "schema": "groups", "name": "erasure_jobs", "ja": "解散・退会の進み具合", "entity": "", "desc": "解散と退会を途中から再開するための記録。専用の関数`erasure-worker`が読む（F3・Q5）", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "kind", "type": "text", "desc": "`disband`（解散）/ `withdraw`（退会）/ `leave`（メンバーを外す・自分から抜ける）"}, {"name": "group_id", "type": "uuid", "desc": "null可。解散と`leave`の対象グループ"}, {"name": "user_id", "type": "uuid", "desc": "null可。退会と`leave`の対象ユーザー。(kind, group_id, user_id)は、終わっていない記録（`status`が`done`でないもの）の中で一意にする（部分一意インデックス、NULLS NOT DISTINCT）。抜けた人がまた入って、もう一度抜けられるようにするため"}, {"name": "step", "type": "text", "desc": "終わった段階（例：`attendance`）。次の段階から再開する"}, {"name": "status", "type": "text", "desc": "`running` / `done` / `failed`"}, {"name": "attempts", "type": "smallint", "desc": "失敗した回数"}, {"name": "last_error", "type": "text", "desc": "null可"}, {"name": "created_at", "type": "timestamptz", "desc": ""}, {"name": "updated_at", "type": "timestamptz", "desc": ""}, {"name": "watchdog_at", "type": "timestamptz", "desc": "null可。止まったときに再開させる1回限りの予約の時刻（R11）。終わったら予約を消してnullにする"}]}, {"id": "catalog.artists", "schema": "catalog", "name": "artists", "ja": "アーティスト", "entity": "Artist", "desc": "グループごとに登録する", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "group_id", "type": "uuid", "desc": "groups.groups.id（RESTRICT）"}, {"name": "name", "type": "text", "desc": "入力されたままの名前"}, {"name": "name_key", "type": "text", "desc": "名前を正規化した値（NFKC、小文字、空白を除く）。(group_id, name_key)で一意。グループをまたぐまとめにも使う（Q1）"}]}, {"id": "catalog.venues", "schema": "catalog", "name": "venues", "ja": "会場", "entity": "Venue", "desc": "", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "group_id", "type": "uuid", "desc": ""}, {"name": "name", "type": "text", "desc": ""}, {"name": "nearest_station", "type": "text", "desc": "null可"}, {"name": "memo", "type": "text", "desc": "null可"}]}, {"id": "catalog.tours", "schema": "catalog", "name": "tours", "ja": "ツアー", "entity": "Tour", "desc": "公演に共通する情報", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "group_id", "type": "uuid", "desc": ""}, {"name": "name", "type": "text", "desc": ""}, {"name": "merch_sales_info", "type": "text", "desc": "null可。グッズの販売時間など"}, {"name": "official_url", "type": "text", "desc": "null可"}]}, {"id": "catalog.concerts", "schema": "catalog", "name": "concerts", "ja": "公演", "entity": "Concert", "desc": "1回のライブ。確定した公演だけを入れる（Q3）", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "group_id", "type": "uuid", "desc": ""}, {"name": "tour_id", "type": "uuid", "desc": "null可。(group_id, tour_id)でtoursを指す（RESTRICT）。単発の公演やフェスはnull"}, {"name": "venue_id", "type": "uuid", "desc": "(group_id, venue_id)でvenuesを指す（RESTRICT）。別グループの会場は結べない"}, {"name": "title", "type": "text", "desc": "null可。単発の公演名やフェス名。tour_idかtitleのどちらかは必ず入れる（CHECK。F6）"}, {"name": "date", "type": "date", "desc": "公演日（日本時間）"}, {"name": "doors_open_at", "type": "time", "desc": "null可。開場時刻。過去の公演は空でもよい"}, {"name": "starts_at", "type": "time", "desc": "null可。開演時刻"}, {"name": "official_url", "type": "text", "desc": "null可"}]}, {"id": "catalog.concert_artists", "schema": "catalog", "name": "concert_artists", "ja": "公演とアーティストの対応", "entity": "", "desc": "1つの公演に複数のアーティスト（フェス、対バン）を持たせる（Q1）", "cols": [{"name": "concert_id", "type": "uuid", "desc": "PK・concerts.id"}, {"name": "artist_id", "type": "uuid", "desc": "PK・artists.id（RESTRICT）"}, {"name": "position", "type": "smallint", "desc": "出演順。ワンマンは1件だけ"}]}, {"id": "catalog.setlists", "schema": "catalog", "name": "setlists", "ja": "セトリ", "entity": "Setlist", "desc": "公演ごとに1つ。同時に編集したときの上書きを防ぐ版番号を持つ", "cols": [{"name": "concert_id", "type": "uuid", "desc": "PK・concerts.id"}, {"name": "version", "type": "int", "desc": "保存のたびに1増やす。古い版からの保存は断る"}, {"name": "updated_by", "type": "uuid", "desc": "null可。最後に保存したユーザー。退会でnull"}, {"name": "updated_at", "type": "timestamptz", "desc": ""}]}, {"id": "catalog.setlist_items", "schema": "catalog", "name": "setlist_items", "ja": "曲目", "entity": "SetlistItem", "desc": "", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "concert_id", "type": "uuid", "desc": "setlists.concert_id"}, {"name": "position", "type": "smallint", "desc": "(concert_id, position)で一意"}, {"name": "title", "type": "text", "desc": "曲名の文字列（MVP1）"}, {"name": "artist_id", "type": "uuid", "desc": "null可。フェスでどのアーティストの曲かを示す（SET NULL）"}, {"name": "note", "type": "text", "desc": "null可。「アンコール」など"}]}, {"id": "catalog.drafts", "schema": "catalog", "name": "drafts", "ja": "下書き", "entity": "Draft", "desc": "確定前の公演。中身はJSONで持ち、確定したらconcertsなどの行を作って消す（Q3）", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "group_id", "type": "uuid", "desc": ""}, {"name": "created_by", "type": "uuid", "desc": "users.id。退会で本人の下書きを消す"}, {"name": "source", "type": "text", "desc": "`manual` / `autofill`（MVP2）"}, {"name": "payload", "type": "jsonb", "desc": "ツアー名、公演の日付と会場名、アーティスト名など。会場やアーティストがまだ決まっていなくてもよい"}, {"name": "created_at", "type": "timestamptz", "desc": ""}]}, {"id": "attendance.attendances", "schema": "attendance", "name": "attendances", "ja": "参戦", "entity": "Attendance", "desc": "誰がどの公演に行くか。解散後も本人に残る", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "user_id", "type": "uuid", "desc": "参戦する本人（Q2）"}, {"name": "group_id", "type": "uuid", "desc": "null可。解散でnullにする。nullの参戦は本人だけが読める"}, {"name": "concert_id", "type": "uuid", "desc": "null可。catalog.concerts.id（RESTRICT）。解散で写しを作るのと同時にnullにする。(user_id, concert_id)で一意"}, {"name": "created_at", "type": "timestamptz", "desc": ""}]}, {"id": "attendance.attendance_records", "schema": "attendance", "name": "attendance_records", "ja": "参戦記録", "entity": "AttendanceRecord", "desc": "行が1つあれば「行った」。参戦と1対1", "cols": [{"name": "attendance_id", "type": "uuid", "desc": "PK・attendances.id"}, {"name": "seat", "type": "text", "desc": "null可。座席`Seat`。ブロック、列、番号を自由に書く"}, {"name": "comment", "type": "text", "desc": "null可。ひとこと"}, {"name": "hidden_companion_count", "type": "smallint", "desc": "人数表示に置き換えた同行者の数。初期値0"}, {"name": "recorded_at", "type": "timestamptz", "desc": ""}]}, {"id": "attendance.companions", "schema": "attendance", "name": "companions", "ja": "同行者", "entity": "Companion", "desc": "メンバーか、yoinを使っていない人の名前のどちらか一方を持つ", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "attendance_id", "type": "uuid", "desc": "attendance_records.attendance_id"}, {"name": "user_id", "type": "uuid", "desc": "null可。メンバーのとき"}, {"name": "name", "type": "text", "desc": "null可。yoinを使っていない人のとき"}]}, {"id": "attendance.concert_snapshots", "schema": "attendance", "name": "concert_snapshots", "ja": "公演の写し", "entity": "ConcertSnapshot", "desc": "解散のときに参戦ごとに作る。あとから変わらない", "cols": [{"name": "attendance_id", "type": "uuid", "desc": "PK・attendances.id"}, {"name": "title", "type": "text", "desc": "公演のtitle、なければツアー名"}, {"name": "date", "type": "date", "desc": ""}, {"name": "venue_name", "type": "text", "desc": ""}, {"name": "artist_names", "type": "text[]", "desc": "出演順の名前。未登録なら空の配列"}, {"name": "artist_name_keys", "type": "text[]", "desc": "artists.name_keyと同じ正規化。アーティストごとのまとめに使う"}, {"name": "setlist", "type": "jsonb", "desc": "曲名、順番、アーティスト名、メモの配列。セトリ未登録なら空の配列"}, {"name": "taken_at", "type": "timestamptz", "desc": ""}]}, {"id": "ticket.ticket_applications", "schema": "ticket", "name": "ticket_applications", "ja": "チケット申込", "entity": "TicketApplication", "desc": "1回の申込と、その状態と期限", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "group_id", "type": "uuid", "desc": ""}, {"name": "concert_id", "type": "uuid", "desc": "catalog.concerts.id（RESTRICT）。同じグループの公演だけ"}, {"name": "applicant_user_id", "type": "uuid", "desc": "申込者`Applicant`。リマインドの宛先。申込を編集・削除できるのは申込者だけ"}, {"name": "sale_name", "type": "text", "desc": "null可。「FC先行」など、どの受付か"}, {"name": "quantity", "type": "smallint", "desc": "枚数"}, {"name": "pickup_method", "type": "text", "desc": "受取方法`PickupMethod`：`convenience`（コンビニ発券）/ `smart`（スマチケ）"}, {"name": "status", "type": "text", "desc": "`applied` → `won` / `lost`（当落`LotteryResult`）→ `paid` → `picked_up`。先着の申込は`won`から始めてよい。期限切れは保存せず、`won`のまま入金期限を過ぎたら「期限切れ」と計算する（R9）"}, {"name": "result_announced_at", "type": "timestamptz", "desc": "null可。結果発表日時"}, {"name": "payment_deadline", "type": "timestamptz", "desc": "null可。入金期限`PaymentDeadline`。過ぎても`won`なら期限切れ。期限切れでも申込者は`paid`に直せる"}, {"name": "pickup_starts_at", "type": "timestamptz", "desc": "null可。受取開始日時`PickupStartsAt`。受取できるかは保存せず計算する"}, {"name": "updated_at", "type": "timestamptz", "desc": ""}]}, {"id": "ticket.distributions", "schema": "ticket", "name": "distributions", "ja": "分配", "entity": "Distribution", "desc": "スマチケの1枚ごとの渡し先", "cols": [{"name": "ticket_application_id", "type": "uuid", "desc": "PK・ticket_applications.id"}, {"name": "seq", "type": "smallint", "desc": "PK。何枚目か（1〜枚数）"}, {"name": "user_id", "type": "uuid", "desc": "null可。同じグループのメンバーに渡すとき"}, {"name": "guest_name", "type": "text", "desc": "null可。yoinを使っていない人に渡すとき（Q5）"}, {"name": "distributed_at", "type": "timestamptz", "desc": "null可。渡し終えた時刻"}]}, {"id": "merch.merch_items", "schema": "merch", "name": "merch_items", "ja": "グッズ", "entity": "MerchItem", "desc": "ツアーに属し、ツアーがない公演では公演に属する", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "group_id", "type": "uuid", "desc": ""}, {"name": "tour_id", "type": "uuid", "desc": "null可"}, {"name": "concert_id", "type": "uuid", "desc": "null可。tour_idとconcert_idはどちらか一方だけ入れる。どちらも同じグループのもの"}, {"name": "name", "type": "text", "desc": "品名"}, {"name": "price", "type": "int", "desc": "null可。円"}, {"name": "image_key", "type": "text", "desc": "null可。S3のオブジェクトキー（`groups/<group_id>/items/`の下）。下書きを確定したら、下書きの画像をここにコピーして引き継ぐ"}, {"name": "position", "type": "smallint", "desc": "一覧の並び順"}]}, {"id": "merch.merch_lists", "schema": "merch", "name": "merch_lists", "ja": "グッズリスト", "entity": "MerchList", "desc": "公演ごとに1つ", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "group_id", "type": "uuid", "desc": ""}, {"name": "concert_id", "type": "uuid", "desc": "一意"}]}, {"id": "merch.buyers", "schema": "merch", "name": "buyers", "ja": "購入担当", "entity": "Buyer", "desc": "リストの品目ごとに、当日買いに行くメンバー", "cols": [{"name": "merch_list_id", "type": "uuid", "desc": "PK・merch_lists.id"}, {"name": "merch_item_id", "type": "uuid", "desc": "PK・merch_items.id。リストの公演か、そのツアーの品目だけ"}, {"name": "user_id", "type": "uuid", "desc": "同じグループのメンバー"}, {"name": "purchase_status", "type": "text", "desc": "null可。`bought`（買えた） / `sold_out`（売り切れ）。nullはまだ印を付けていない。購入担当を別の人に替えたらnullに戻す（R14）"}]}, {"id": "merch.merch_requests", "schema": "merch", "name": "merch_requests", "ja": "頼まれ物", "entity": "MerchRequest", "desc": "誰がどの品目をいくつ欲しいか。自分の分も1行で持ち、頼んだ人と購入担当が違う行を「頼まれ物」として見せる", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "merch_list_id", "type": "uuid", "desc": "merch_lists.id"}, {"name": "merch_item_id", "type": "uuid", "desc": "merch_items.id"}, {"name": "requested_by", "type": "uuid", "desc": "頼んだ人。(merch_list_id, merch_item_id, requested_by)で一意"}, {"name": "quantity", "type": "smallint", "desc": "1以上"}]}, {"id": "merch.drafts", "schema": "merch", "name": "drafts", "ja": "下書き", "entity": "Draft", "desc": "確定前の品目。公演カタログの下書きとは別のテーブル", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "group_id", "type": "uuid", "desc": ""}, {"name": "created_by", "type": "uuid", "desc": ""}, {"name": "source", "type": "text", "desc": "`manual` / `autofill`（MVP2）"}, {"name": "payload", "type": "jsonb", "desc": "品名、価格、属するツアーか公演、画像のキー"}, {"name": "created_at", "type": "timestamptz", "desc": ""}]}, {"id": "merch.object_deletions", "schema": "merch", "name": "object_deletions", "ja": "消す予定の画像", "entity": "", "desc": "品目や下書きを消すのと同じトランザクションで画像のキーを書き、S3から消せたら行を消す（F3）", "cols": [{"name": "object_key", "type": "text", "desc": "PK"}, {"name": "requested_at", "type": "timestamptz", "desc": ""}, {"name": "attempts", "type": "smallint", "desc": "失敗した回数"}]}, {"id": "notification.reminders", "schema": "notification", "name": "reminders", "ja": "リマインド", "entity": "Reminder", "desc": "「この人に、この日に、この文面を届ける」予約。チケットの言葉は持たない", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "user_id", "type": "uuid", "desc": "宛先"}, {"name": "dedupe_key", "type": "text", "desc": "一意。呼ぶ側が決める文字列（例：`ticket:<申込ID>:payment_deadline`）。同じキーで予約し直すと上書きし、キーで取り消せる"}, {"name": "send_at", "type": "timestamptz", "desc": "届ける時刻。期限の種類ごとに呼ぶ側が決める（Q3）。この時刻にEventBridge Schedulerの1回限りの予約を作る（R11）"}, {"name": "schedule_name", "type": "text", "desc": "一意。Schedulerの予約の名前（`reminder-<id>`）。送ったら予約は自動で消える"}, {"name": "title", "type": "text", "desc": ""}, {"name": "body", "type": "text", "desc": ""}, {"name": "url", "type": "text", "desc": "null可。通知を押したときに開く画面"}, {"name": "status", "type": "text", "desc": "`scheduled` → `sending` → `sent`、または`canceled`。取り消せるのは`scheduled`だけ（F5）"}, {"name": "claimed_at", "type": "timestamptz", "desc": "null可。送信の関数が引き受けた時刻。1回の送信を終えて、送れていない端末が残っていればnullに戻す"}, {"name": "sent_at", "type": "timestamptz", "desc": "null可"}]}, {"id": "notification.push_subscriptions", "schema": "notification", "name": "push_subscriptions", "ja": "通知先", "entity": "PushSubscription", "desc": "Web Pushを受け取る端末", "cols": [{"name": "id", "type": "uuid", "desc": "PK"}, {"name": "user_id", "type": "uuid", "desc": ""}, {"name": "endpoint", "type": "text", "desc": "一意"}, {"name": "p256dh", "type": "text", "desc": "Web Pushの鍵"}, {"name": "auth", "type": "text", "desc": ""}, {"name": "created_at", "type": "timestamptz", "desc": ""}, {"name": "last_failed_at", "type": "timestamptz", "desc": "null可。送れなかった端末を画面で示すため"}]}, {"id": "notification.reminder_deliveries", "schema": "notification", "name": "reminder_deliveries", "ja": "端末ごとの送信結果", "entity": "", "desc": "送れていない端末だけをやり直すため（F5・Q4）", "cols": [{"name": "reminder_id", "type": "uuid", "desc": "PK・reminders.id"}, {"name": "push_subscription_id", "type": "uuid", "desc": "PK・push_subscriptions.id"}, {"name": "status", "type": "text", "desc": "`sent` / `failed` / `gone`（端末が登録を消していた）"}, {"name": "attempted_at", "type": "timestamptz", "desc": ""}]}], "fks": [["groups.groups", "owner_user_id", "groups.users"], ["groups.members", "group_id", "groups.groups"], ["groups.members", "user_id", "groups.users"], ["groups.invite_links", "group_id", "groups.groups"], ["catalog.concert_artists", "concert_id", "catalog.concerts"], ["catalog.concert_artists", "artist_id", "catalog.artists"], ["catalog.setlists", "concert_id", "catalog.concerts"], ["catalog.drafts", "created_by", "groups.users"], ["attendance.attendance_records", "attendance_id", "attendance.attendances"], ["attendance.concert_snapshots", "attendance_id", "attendance.attendances"], ["ticket.distributions", "ticket_application_id", "ticket.ticket_applications"], ["merch.buyers", "merch_list_id", "merch.merch_lists"], ["merch.buyers", "merch_item_id", "merch.merch_items"], ["merch.merch_requests", "merch_list_id", "merch.merch_lists"], ["merch.merch_requests", "merch_item_id", "merch.merch_items"], ["notification.reminder_deliveries", "reminder_id", "notification.reminders"], ["notification.reminder_deliveries", "push_subscription_id", "notification.push_subscriptions"]], "ondel": [["CASCADE（親に従って消える）", "members・invite_links → groups、setlists・setlist_items・concert_artists → concerts、attendance_records・companions・concert_snapshots → attendances、distributions → ticket_applications、buyers・merch_requests → merch_listsとmerch_items、reminder_deliveries → remindersとpush_subscriptions"], ["RESTRICT（使われていれば消せない）", "concerts.venue_id、concerts.tour_id、concert_artists.artist_id、groups.owner_user_id"], ["SET NULL", "setlist_items.artist_id"]], "sections": {"全体の決まり": ["", "- IDはUUIDv7をアプリで作る。", "- テーブル名は用語集の英語名を複数形のスネークケースにする（`TicketApplication` → `ticket_applications`）。列もスネークケース。", "- スキーマ名はモジュール名と同じ。`group`だけはSQLの予約語なので`groups`にする。", "- 状態は`text`とCHECK制約で持つ。値は英語の小文字。", "- 公演の日と開場・開演時刻は日本時間の`date`と`time`。チケットの期限とリマインドの送信時刻は`timestamptz`。", "- 合計金額、受取できるか、行ったかどうかは保存せず、その場で計算する。", "- ほかの文脈がメンバーを指すときは、`user_id`と`group_id`で持つ。", "- 特に書いていない列はnull不可。", ""], "外部キーと、消したときの動き": ["", "外部キーごとに、親に従って消えるか、使われていれば消せないかを決める（YADR-07）。", "", "| 動き | 外部キー |", "|---|---|", "| CASCADE（親に従って消える） | members・invite_links → groups、setlists・setlist_items・concert_artists → concerts、attendance_records・companions・concert_snapshots → attendances、distributions → ticket_applications、buyers・merch_requests → merch_listsとmerch_items、reminder_deliveries → remindersとpush_subscriptions |", "| RESTRICT（使われていれば消せない） | concerts.venue_id、concerts.tour_id、concert_artists.artist_id、groups.owner_user_id |", "| SET NULL | setlist_items.artist_id |", "", "- 同じスキーマの中で別の行を指すときは、`(group_id, venue_id)`のように所属を含む複合外部キーにする。参照される側に`(group_id, id)`の一意制約を付ける。別グループの会場や品目は結べない。", "- 文脈をまたぐID（公演ID、ツアーID、グループID、ユーザーID）には、RESTRICTの外部キーだけを張る。CASCADEは使わない。消す順番はコードが決め、順番を間違えたときにDBが断る。", "- このため、マイグレーションはgroups → catalog → attendance・ticket・merch・notificationの順に流す。", ""], "グループの所属と権限（YADR-01）": ["", "- 操作した人のIDは、リクエストの中身ではなくJWTから取る。", "- 各文脈の公開関数は「操作した人」と「グループID」を受け取り、対象の行と、指定されたID（公演、会場、品目、メンバーなど）がすべて同じグループのものかを確かめる。違えば、存在しないときと同じ「見つからない」を返し、参照先の中身も返さない。", "- グッズリストに載せる品目は、そのリストの公演か、公演のツアーのものに限る。", "", "| 操作 | できる人 |", "|---|---|", "| アーティスト、ツアー、公演、会場、セトリ、品目の登録・編集 | グループのメンバー全員 |", "| チケット申込の編集・削除、分配先の指定 | 申込者だけ |", "| 購入担当の指定 | グループのメンバー全員。担当にできるのは同じグループのメンバー |", "| 頼まれ物の編集・削除 | 頼んだ本人だけ |", "| 買えた・売り切れの印を付ける・外す | その品目の購入担当だけ（R14） |", "| 参戦と参戦記録（座席、同行者、ひとこと）を見る | グループのメンバー全員。解散や外されたあとに本人に残った参戦は本人だけ（R8） |", "| 参戦と参戦記録の編集・削除 | 本人だけ |", "| 招待リンクの発行、解散 | オーナーだけ（自分用グループではできない） |", "| メンバーを外す | オーナーだけ。自分自身は外せない（R10） |", "| グループを抜ける | メンバー本人。オーナーは一番前から参加しているメンバーに引き継いでから抜ける。ほかにメンバーがいなければ解散を案内する。自分用グループは抜けられない（R10） |", ""], "書き込みの順番（YADR-02）": ["", "- 書き込みはすべて1つのDBトランザクションの中で行う。最初にグループの文脈の公開関数で、グループ（`groups.status = active`）と操作した人（`users.status = active`、`members.status = active`）を確かめ、その行を`FOR SHARE`でロックする。保存が終わるまでロックを持つ。", "- 解散、退会、メンバーを外す・抜けるの開始は、同じ行を`disbanding` / `withdrawing` / `leaving`に更新する。更新は実行中の書き込みが終わるのを待ってから確定し、そのあとの書き込みは断られる。", "- 同行者や分配先に別のメンバーを指定するときは、指定されたユーザーの行も同じようにロックして`active`かを確かめる。", "- ほかの文脈のテーブルを読むことにはならない。グループの公開関数が同じトランザクションに参加するだけ。", "- LambdaからNeonへの接続は、トランザクションの途中で判断を挟める方式にする（HTTPで1回ずつ送る方式は使わない）。道具は工程4で決める。", ""], "グループは1人でもよい": ["", "- 1人で行く公演も記録できるように、メンバーが1人だけのグループを認める。`groups.kind`で、仲間と使うグループ（`shared`）と自分用グループ（`personal`）を分ける。", "- ユーザー登録のときに、自分用グループを1つだけ自動で作る。招待リンクは出せず、解散もできない。グループ一覧では「自分用」として分けて見せる。", "- メンバーなら誰でも、仲間と使うグループを新しく作れる。新しい人の登録には、今までどおり招待リンクが要る。", ""], "アーティストごとのまとめ方": ["", "- アーティストはグループごとに登録する。公演とアーティストは`catalog.concert_artists`で多対多にし、フェスと対バンを1件の公演で表す。", "- `artists.name_key`に名前を正規化した値（NFKC、小文字、空白を除く）を持ち、グループの中で一意にする。", "- 本人の参戦をアーティストごとにまとめるときは、グループをまたいで`name_key`でまとめる。解散後の参戦は`concert_snapshots.artist_name_keys`を使う。", "- セトリの曲目に`artist_id`を持たせ、フェスでどのアーティストの曲かを示す。", "- ツアーにはアーティストを持たせず、ツアーの公演に付いたアーティストから表示する。", "", "名前でまとめるので、次の誤差が出る。MVP1ではこれを受け入れる（2026-11-07、YADR-09）。まとめ直す機能はMVP2で曲マスタと一緒に考える。", "", "| 場合 | 例 | 集計 |", "|---|---|---|", "| 改名 | 「ネオン・パレード」が「NEON PARADE」に改名し、グループで名前を直した。改名前に解散したグループの写しは旧名のまま | 旧名と新名が別の行に出る |", "| 同じ名前の別のアーティスト | 2つのグループに、別人の「ミナト」がいる | 1つの行に合算される |", "| 表記ゆれ | 「ネオン・パレード」と「ネオンパレード」 | 正規化で「・」は消えないので別の行に出る。グループの中では、登録済みのアーティストを選ぶ画面で防ぐ |", ""]}, "erase": [["グループ", "最初に`groups.status`を`disbanding`にし、招待リンクに`revoked_at`を入れる。最後にmembers、invite_links、groupsを消す", "最初に`users.status`を`withdrawing`にする。membersの行を消す。最後にusersの行を消す"], ["参戦記録", "過去の公演の参戦は写しを作って`concert_id`と`group_id`をnullにし、companionsを消してその数を`hidden_companion_count`に足す。これからの公演の参戦は消す", "本人のattendancesを消す（記録、同行者、写しも消える）。ほかの人のcompanionsで本人を指す行は消して、人数に足す"], ["チケット", "ticket_applicationsを消し（distributionsも消える）、同じトランザクションで通知の予約を取り消す", "本人が申込者の申込を消し、予約を取り消す。ほかの人の申込で本人に分配した行は、渡し先を空に戻す"], ["グッズ", "画像のキーをobject_deletionsに書いてから、merch_items、merch_lists、draftsを消す。そのあとS3の画像を消す", "本人のmerch_requestsとdraftsを消す（下書きの画像はobject_deletionsへ）。本人が購入担当のbuyersの行を消す"], ["公演カタログ", "グループの行をすべて消す", "本人のdraftsを消す。setlistsの`updated_by`をnullにする"], ["通知", "（チケットからの取り消しで済む）", "本人のreminders、reminder_deliveries、push_subscriptionsを消す"]], "decisions": [["Q1", "参戦記録をアーティストごとにまとめる方法", "公演に複数のアーティストを持たせ、グループをまたぐときは名前でまとめる"], ["Q2", "ほかの文脈がメンバーを指す方法", "ユーザーIDとグループIDで持つ"], ["Q3", "下書きをどう持つか", "別テーブルにJSONで持つ"], ["Q4", "オーナーが退会したときの扱い", "一番前から参加しているメンバーに引き継ぐ。ほかにいなければ解散"], ["Q5", "スマチケの分配先にyoinを使っていない人を入れられるか", "名前で入れられる"], ["Q6", "文脈をまたぐIDに外部キーを張るか", "張らない（11-07にR6で変更）"], ["Q7", "Lambdaの関数をどう分けるか", "APIで1つ、通知の送信で1つ（11-07にR5で変更）"], ["Q8", "グループの文脈のスキーマ名", "`groups`"], ["Q9", "1人で行く公演を記録するグループをどう作るか", "登録したときに自分用グループを自動で作る"], ["R1", "退会で消す「本人のデータ」の範囲", "本人だけのデータを消し、共有データは残す"], ["R2", "解散したとき、どの参戦を本人に残すか", "過去の公演は残し、これからの予定は消す"], ["R3", "リマインドをいつ届けるか", "期限の種類ごとに時刻を決める"], ["R4", "通知の重複と取りこぼしのどちらを避けるか", "取りこぼしを避け、まれな重複は許す"], ["R5", "解散と退会の処理をどこで動かすか", "専用の関数を足して裏で処理する"], ["R6", "文脈をまたぐIDに外部キーを張るか", "RESTRICTだけ張る"], ["R7", "名前でまとめることの誤差を受け入れるか", "MVP1では受け入れる"], ["R8", "参戦記録の座席とひとことを、同じグループのほかのメンバーも見られるか", "見られる。編集と削除は本人だけ"], ["R9", "入金期限を過ぎても入金済みにしていない申込を、自動で期限切れにするか", "自動で期限切れにする。期限切れは保存せず計算する。申込者は入金済みに直せる"], ["R10", "メンバーを外す機能をMVP1に入れるか", "入れる。自分から抜けるも入れる。その人のデータは解散と同じ扱い"], ["R11", "リマインドを1件ずつ予約するか、定期的に起動してまとめて送るか", "1件ずつSchedulerの1回限りの予約を作る。Neonの無料枠の計算時間を、定期の起動で使い切らないため。解散・退会の再開も、定期の起動をやめて見張りの予約にする"], ["R12", "グループを抜けた人が、手元に残った画像の取得用URLで画像を見られる時間", "取得用URLの有効期限を5分にし、その間は見られる例外として認める。見るたびに確かめるには画像をLambdaに通す必要があり、費用と作りが重くなるため"], ["R13", "解散や削除のあとに、遅れて届いたアップロードで画像ができないようにする方法", "一時置き場に上げてから、APIがグループの状態を確かめて確定する。確定されなかった画像は1日で自動で消える"], ["R14", "物販で買えた・売り切れの印をどこに持つか", "`merch.buyers`に`purchase_status`を足す。印は公演ごと・品目ごとに1つで、付けられるのは購入担当だけ。購入担当を替えたら印は消える。担当なしの品目には印を付けられない。売り切れを除いた合計金額は保存せず計算する。新しい表にしないのは、印を付ける人も単位も購入担当と同じため"]], "tests": [["YADR-01", "Aだけのメンバーと、AとBの両方のメンバーで、Aの画面からBの公演・会場・品目を指定する。A内で別のツアーの品目をリストに載せる", "取得も更新も「見つからない」で断る。Bの中身は返さない"], ["YADR-02", "書き込みを所属の確認の直後で止め、別のセッションで解散・退会を始める。逆の順番も試す", "先に確定した書き込みは削除・写しの対象に入る。開始後の書き込みは断る。孤児の行は0件"], ["YADR-03", "DB更新の直後、S3の応答前、一部の画像の削除に失敗した時点で止め、ジョブを再開する", "通知の取り消し漏れと画像の残りが0件。同行者は1回分だけ人数に足される。止まっても`erasure_jobs`で状態がわかる"], ["YADR-04", "期限内のJWTを持ったまま退会し、手順の途中で止める", "古いJWTで操作も登録もできない。再開後、R1の範囲がすべて消える"], ["YADR-05", "同じ起動を2回渡す。引き受けの前と後に取り消す。2端末のうち1端末だけ送れた直後に止める", "取り消しが先なら送らない。2回目の起動では送らない。送れていない端末だけに送る"], ["YADR-06", "予定・記録なしの過去公演・記録ありの過去公演を同じグループに入れ、セトリ未登録とツアー名だけの公演も含めて解散する", "過去の公演の参戦だけが残り、本人だけが読める。題名とセトリ未登録の表示が出る"], ["YADR-07", "使用中の会場を消す。オーナーが退会する", "会場は消せない。引き継いだグループとほかのメンバーのデータは残る"], ["YADR-08", "日本時間9時締切の入金期限、送信時刻を過ぎてからの予約、日付をまたぐ再試行", "前日20時と6時に届く。締切前なら次の起動で送り、締切後は送らない"], ["R9", "当選のまま入金期限を過ぎる。その後、入金済みに直す", "期限を過ぎたら期限切れと表示され、受取開始の通知は届かない。入金済みに直すと受取開始の予約ができる"], ["R10", "書き込みの途中でメンバーを外す。過去の参戦・予定・申込・頼まれ物・購入担当・ほかの人の記録の同行者を持つメンバーで試す", "外し始めたあとの書き込みは断る。過去の参戦だけが本人に残り、ほかは消えるか空に戻る。同行者は人数になる"], ["YADR-09", "改名の前後、同じ名前の別人、解散の前後で集計する", "上の「アーティストごとのまとめ方」の表のとおりになる"], ["R14", "購入担当が印を付けてから外す。担当でないメンバーが印を付ける。印が付いた状態で担当を別の人に替える。印が付いた状態で担当が抜ける。それぞれ、頼んだ人（担当とは別のメンバー）の画面でも確かめる", "担当だけが付けられ、ほかの人は断られる。頼んだ人には付けた印が見え、外したら見えなくなる。担当を替えたり抜けたりすると印は消える。売り切れの品目を除いた合計金額が出る"]], "schemaCtx": {"groups": "group", "catalog": "catalog", "attendance": "attendance", "ticket": "ticket", "merch": "merch", "notification": "notification"}}, "aws": {"nodes": {"device": "利用者の端末 PWA・Service Worker", "cf": "CloudFront + S3 画面のファイル", "cognito": "Cognito ユーザープール", "apigw": "API Gateway HTTP API", "api": "Lambda api", "worker": "Lambda erasure-worker", "sender": "Lambda notification-sender", "sched": "EventBridge Scheduler", "img": "S3 グッズの画像", "ssm": "SSM Parameter Store 接続文字列・VAPID鍵", "logs": "CloudWatch Logs", "neon": "Neon Postgres AWS外", "push": "Web Pushの配信サービス Apple・Google など"}, "edges": [["device", "cf", "画面を開く"], ["device", "cognito", "ログイン"], ["device", "apigw", "操作 JWT付き"], ["device", "img", "画像 署名付きURL"], ["apigw", "api", "JWTを検証"], ["api", "worker", "非同期で起動"], ["api", "sched", "予約を作る・消す"], ["sched", "worker", "止まったときだけ"], ["sched", "sender", "送信時刻に1件ずつ"], ["api", "neon", ""], ["worker", "neon", ""], ["sender", "neon", ""], ["worker", "img", "画像を消す"], ["worker", "cognito", "アカウントを無効化・削除"], ["sender", "push", ""], ["push", "device", "通知"]], "flows": [["ログイン", "端末 → Cognito。招待リンクから登録したときだけ`users`の行を作る"], ["画面の操作", "端末 → API Gateway（CognitoのJWTを検証）→ Lambda `api` → Neon。`api`は毎回`users`が有効かも確かめる"], ["グッズの画像", "端末が`api`に頼むと、`api`はグループのメンバーかを確かめてから、S3の署名付きURLを返す。端末はそのURLでS3と直接やりとりする。バケットは公開しない。上げるときは一時置き場（`uploads/`）へのアップロード用URLを出し、端末が上げ終わったら`api`がグループの状態を確かめて、S3の中で本来の場所にコピーする。確定されなかった画像は、S3のライフサイクルの設定で1日後に消える。見るときは有効期限5分の取得用URLを出す（データモデルR12・R13）"], ["解散・退会・外す", "`api`が受け付けて`erasure_jobs`に書き、`erasure-worker`を非同期で起動する。`erasure-worker`はNeon、S3、Cognitoを順に片づける。ジョブを書くときに、止まったら再開させる1回限りの予約もSchedulerに作る。定期的には起動しない"], ["リマインド", "`api`がリマインドを作るときに、送信時刻に1回だけ動くSchedulerの予約を作る。その時刻に`notification-sender`が起動し、そのリマインドを引き受けてWeb Pushの配信サービスへ送る。Neonが起きるのは送るときだけ"]], "parts": [["画面", "PWA。CloudFront + S3に置く", "静的ファイルだけなので、サーバーが要らない。CloudFrontでHTTPSにする", "このページ（B-1）"], ["認証", "Cognitoユーザープール", "PR/FAQで決めた。グループの文脈が腐敗防止層になる", "PR/FAQ、ADR-0001"], ["API", "API Gateway HTTP APIとLambda `api`", "REST APIより安く、JWTの検証を組み込みで使える", "ADR-0002"], ["解散・退会・外す", "Lambda `erasure-worker`", "HTTP APIの30秒の打ち切りを避け、本人がいなくても最後まで進めるため", "ADR-0002"], ["通知", "EventBridge SchedulerとLambda `notification-sender`、Web Push", "PR/FAQで決めた。リマインド1件ごとに1回限りの予約を作る（2026-11-07）", "ADR-0002、データモデル"], ["データベース", "Neon（Postgres）。AWSの外にある", "PR/FAQで決めた。途中で判断を挟めるトランザクションで接続する", "ADR-0002"], ["画像", "S3（非公開のバケット）と署名付きURL", "グループのメンバーだけが見られる、という非機能要件のため", "このページ（B-2）"], ["設定と秘密", "SSM Parameter Store（SecureString）", "Neonの接続文字列とWeb PushのVAPID鍵を置く。標準のパラメーターは無料", "このページ（C-1）"], ["失敗の知らせ", "SQSのキュー、CloudWatchのアラーム、メール", "リマインドと削除の処理の失敗を見落とさないため", "このページ（C-4）"], ["ログ", "CloudWatch Logs。保存は7日", "個人の情報は書かない。保存期間を短く決める", "データモデル（ログの方針）、期間はこのページ（C-3）"]], "decisions": [["A-1", "Lambdaはどれも呼ばれたときだけ動き、Neonにはその都度つないで、終わったら切る。定期的に動く関数は置かない", "使われていない間はNeonの計算資源が止まり、無料の計算時間に収まる見込みのため", "常駐のサーバー（ECS Fargateなど）。月の固定費がかかり、Neonも起きたままになる"], ["A-2", "LambdaはVPCに入れない", "NeonはインターネットごしにTLSでつなぐので、VPCが要らない。NATゲートウェイの月の固定費がかからない", "VPCに入れてNATを置く"], ["B-1", "画面はCloudFront + S3に置く", "IaCで全体を同じ形で書けるため", "Amplify Hosting（設定がIaCの外に分かれる）、AWSの外（Vercelなど）"], ["B-2", "画像は署名付きURLで、端末とS3が直接やりとりする。URLは`api`がメンバーかを確かめてから出す。アップロードは一時置き場を通して`api`が確定する。取得用URLの期限は5分で、グループを抜けた人もその間は見られる例外を認める（2026-11-13、Codexのレビューを受けて大関さんが決定）", "画像のデータがLambdaを通らないので、実行時間と費用を抑えられる", "Lambdaを通して受け渡す"], ["C-1", "Neonの接続文字列とWeb PushのVAPID鍵は、SSM Parameter Store（SecureString）に置く", "標準のパラメーターは無料のため", "Secrets Manager（1つごとに月額がかかる）"], ["C-2", "リージョンは東京（ap-northeast-1）。Neonのリージョンは、東京に近いものを工程6で公式の一覧から選ぶ", "利用者が日本にいるため", "大阪（ap-northeast-3）"], ["C-3", "CloudWatch Logsの保存期間は7日にする", "個人で作るアプリなので7日で足りると判断し、費用も抑えるため（大関さんの判断。お勧めは14日）", "14日、30日"], ["C-4", "Schedulerが起動できなかったときと、Lambda（`notification-sender`と`erasure-worker`）が再試行を使い切ったときの送り先を、同じSQSのキューにする。再送を3回しても届かない端末が残ったときも、`notification-sender`がこのキューに入れる。キューに1件でも入ったら、CloudWatchのアラームからメールで知らせる。Lambdaの自動の再試行は既定の2回のままにし、1時間を過ぎた再試行は捨てる。見張りの予約は、リマインドを予約するときに一緒に作る（2026-11-21）", "リマインドが知らないうちに失敗すると、発券忘れを防ぐ目的が成り立たないため。関数の失敗と、関数は終わったが届かなかったことの両方を見る", "CloudWatch Logsを見に行ったときだけ気づく"], ["C-5", "通知の中身はDeclarative Web Pushの形にする。Service Workerは対応していない環境のために残し、同じ中身を読んで表示する（2026-11-21）", "iOSでService Workerが通知を出し損ねると、購読ごと取り消されることがあるため", "今の形のまま、Service Workerがすべて表示する"], ["C-6", "ログはPowertools for AWS LambdaのLoggerで書く。Idempotencyの機能は使わない（2026-11-21）", "二重送信はNeonの行の引き受けで防いでいて、記録用の表を増やさずに済むため", "Idempotencyも使う（DynamoDBなどの表が増える）"]], "cost": ["Lambda、EventBridge Scheduler、CloudFront、SSM Parameter Store（標準）、Cognitoは、無料の範囲に収まる見込み。", "API Gateway HTTP APIは、無料枠が新規アカウントの12か月に限られる見込み。それ以降も、この量なら月に数円程度と推測する。", "S3は画像の量に応じて少額がかかる可能性がある（PR/FAQの内部FAQのとおり）。", "NATゲートウェイとVPCエンドポイントは置かないので、固定費は出ない。"], "costLead": ["利用者は10人以下なので、どのサービスも小さな量で済む見込みである。ただし、次の点は公式の料金ページで確かめていない。工程6でAWSとNeonの料金ページをもとに試算して確定する。"], "undecided": ["IaCの道具（CDK、Terraformなど）、ORM、Neonへの接続の道具（工程4）", "独自ドメインを使うか（公開前）", "C-4のほかの監視（Neonの計算時間の残り、費用の通知など）（工程6）", "リージョン。Neonに東京は無く、近いのはシンガポール。AWSごとシンガポールに移す案を、工程6でADRにする。NeonとCognitoのリージョンは作ったあと変えられないので、Devinに土台を渡す前に決める（2026-11-21。論点の記録の「neon-region」）"]}};
+const CTX = Object.fromEntries(D.ctxs);
+const S = Object.fromEntries(D.screens.map(x=>[x.id,x]));
+const A = Object.fromEntries(D.apis.map(x=>[x.id,x]));
+const ST = Object.fromEntries(D.stories.map(x=>[x.id,x]));
+const ERR = Object.fromEntries(D.errors.map(r=>[r[0].replace(/`/g,''),r]));
+const SCREEN_GROUPS = [
+  ["入口","group",["S-01","S-02","S-03"]],
+  ["グループのホーム","group",["S-04","S-05"]],
+  ["公演","catalog",["S-06","S-07","S-08","S-09","S-10"]],
+  ["参戦記録","attendance",["S-11","S-18","S-19"]],
+  ["チケット","ticket",["S-12","S-13"]],
+  ["グッズ","merch",["S-14","S-15","S-16","S-17"]],
+  ["設定と通知","notification",["S-20","S-21","S-22","S-23"]],
+];
+const SCTX = {}; SCREEN_GROUPS.forEach(([,c,ids])=>ids.forEach(i=>SCTX[i]=c));
+SCTX["S-20"]="group"; SCTX["S-21"]="group"; SCTX["S-22"]="group";
+
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const inl = s => esc(s).replace(/`([^`]+)`/g,(_,c)=>`<code>${c}</code>`).replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>").replace(/\[([^\]]+)\]\(([^)]+)\)/g,"$1");
+const cc = c => `--cc:var(--c-${c||'none'})`;
+const methods = r => [...new Set((r.match(/\b(GET|POST|PUT|PATCH|DELETE)\b/g)||[]))];
+const paths = r => (r.match(/`[^`]*\/[^`]*`/g)||[]).map(x=>x.replace(/`/g,'').replace(/^(GET|POST|PUT|PATCH|DELETE)(・(GET|POST|PUT|PATCH|DELETE))*\s*/,''));
+const sentences = t => t.split(/(?<=。)/).map(x=>x.trim()).filter(Boolean);
+const errCodes = t => [...new Set((t.match(/`([a-z_]+)`/g)||[]).map(x=>x.replace(/`/g,'')).filter(x=>ERR[x]))];
+
+function boardLink(board, id){
+  if(board===BOARD) return `#${id}`;
+  return URLS[board] ? `${URLS[board]}#${id}` : null;
+}
+function chip(board, id, label, ctx){
+  const href = boardLink(board,id);
+  const inner = `<b>${esc(id)}</b>${esc(label)}`;
+  if(board===BOARD) return `<a class="chip" style="${cc(ctx)}" href="#${id}">${inner}</a>`;
+  return href ? `<a class="chip" style="${cc(ctx)}" href="${href}" target="_blank" rel="noopener">${inner}<span class="ext" aria-hidden="true">↗</span></a>` : `<span class="chip" style="${cc(ctx)}">${inner}</span>`;
+}
+const screenChip = id => chip("screens", id, S[id].title, SCTX[id]);
+const storyChip = id => chip("stories", id, ST[id].title, ST[id].ctx);
+function apiCard(id, open, pin){
+  const a = A[id];
+  const ms = methods(a.route).map(m=>`<span class="m ${m}">${m}</span>`).join("");
+  const link = boardLink("apis", id);
+  const more = BOARD!=="apis" && link ? `<p><a href="${link}" target="_blank" rel="noopener">APIボードで開く ↗</a></p>` : (BOARD==="apis" ? `<p><a href="#${id}">このAPIのタブへ</a></p>`:"");
+  return `<details class="api" style="${cc(a.ctx)}"${open?" open":""}><summary><span class="methods">${pin?`<span class="pin m ${ms.length?methods(a.route)[0]:""}">${pin}</span>`:""}${ms}</span><span class="nm">${esc(a.name)}</span><span class="rt">${paths(a.route).map(esc).join("<br>")}</span></summary>
+  <div class="body">${a.rule?`<p>${inl(a.rule)}</p>`:`<p class="empty">決まりの書き込みはありません。</p>`}${more}</div></details>`;
+}
+const check = `<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x=".75" y=".75" width="12.5" height="12.5" rx="3" fill="none" stroke="currentColor" opacity=".5"/><path d="M3.5 7.2l2.3 2.3 4.7-5" fill="none" stroke="var(--cc)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+/* ---------- 画面の移り方の図 ---------- */
+function layoutFlow(){
+  const roots=["S-01","S-02"], depth={}, q=[...roots];
+  roots.forEach(r=>depth[r]=0);
+  while(q.length){const n=q.shift(); D.edges.filter(e=>e[0]===n).forEach(([,b])=>{ if(depth[b]===undefined){depth[b]=depth[n]+1;q.push(b);} });}
+  depth["push"]=depth[D.edges.find(e=>e[0]==="push")[1]]-1;
+  const cols={}; Object.entries(depth).forEach(([n,d])=>(cols[d]=cols[d]||[]).push(n));
+  const order={};
+  Object.keys(cols).sort((a,b)=>a-b).forEach(d=>{
+    cols[d].sort((x,y)=>{
+      const px=D.edges.filter(e=>e[1]===x).map(e=>order[e[0]]??99), py=D.edges.filter(e=>e[1]===y).map(e=>order[e[0]]??99);
+      return (Math.min(...px,99)-Math.min(...py,99)) || x.localeCompare(y);
+    });
+    cols[d].forEach((n,i)=>order[n]=i);
+  });
+  return {depth,cols};
+}
+function flowSVG(cur){
+  const {depth,cols}=layoutFlow();
+  const W=150,H=44,GX=48,GY=14,P=12;
+  const maxRows=Math.max(...Object.values(cols).map(c=>c.length));
+  const pos={};
+  Object.entries(cols).forEach(([d,ns])=>{ const off=(maxRows-ns.length)*(H+GY)/2; ns.forEach((n,i)=>pos[n]={x:P+d*(W+GX),y:P+off+i*(H+GY)}); });
+  const width=P*2+Object.keys(cols).length*(W+GX)-GX, height=P*2+maxRows*(H+GY)-GY;
+  const near=new Set(cur?[cur,...D.edges.filter(e=>e[0]===cur||e[1]===cur).flatMap(e=>[e[0],e[1]])]:[]);
+  let es="";
+  D.edges.forEach(([a,b,dot])=>{
+    const p=pos[a],r=pos[b]; let d;
+    if(depth[a]<depth[b]) d=`M${p.x+W} ${p.y+H/2} C${p.x+W+GX/2} ${p.y+H/2},${r.x-GX/2} ${r.y+H/2},${r.x} ${r.y+H/2}`;
+    else if(depth[a]===depth[b]) { const up=p.y>r.y; d=`M${p.x+W} ${p.y+H/2} C${p.x+W+30} ${p.y+H/2},${r.x+W+30} ${r.y+H/2},${r.x+W} ${r.y+H/2}`; }
+    else d=`M${p.x+W/2} ${p.y} C${p.x+W/2} ${p.y-30},${r.x+W/2} ${r.y+H+30},${r.x+W/2} ${r.y+H}`;
+    const hi = cur && (a===cur||b===cur);
+    es+=`<path class="edge${dot?" dot":""}${hi?" hi":""}" d="${d}" marker-end="url(#ar${hi?"h":""})"/>`;
+  });
+  let ns="";
+  Object.entries(pos).forEach(([n,p])=>{
+    const isPush=n==="push", t=isPush?"通知":S[n].title, id=isPush?"Web Push":n;
+    const cls=["node"]; if(n===cur)cls.push("cur"); else if(!isPush)cls.push("link"); if(cur&&!near.has(n))cls.push("dim");
+    ns+=`<g class="${cls.join(" ")}" ${!isPush&&n!==cur?`data-go="${n}" tabindex="0" role="link" aria-label="${n} ${esc(t)}"`:""} transform="translate(${p.x},${p.y})"><rect width="${W}" height="${H}" rx="${isPush?22:8}"/><text class="nid" x="10" y="16">${id}</text><text x="10" y="34">${esc(t)}</text></g>`;
+  });
+  return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="画面の移り方"><defs>
+   <marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker>
+   <marker id="arh" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--accent)"/></marker></defs>${es}${ns}</svg>`;
+}
+
+function localSVG(id){
+  const L=D.edges.filter(e=>e[1]===id).map(e=>e[0]), R=D.edges.filter(e=>e[0]===id).map(e=>e[1]);
+  const W=140,H=44,GX=44,GY=10,P=8, rows=Math.max(L.length,R.length,1);
+  const height=P*2+rows*(H+GY)-GY, width=P*2+3*W+2*GX;
+  const col=(arr,x)=>arr.map((n,i)=>({n,x,y:P+(rows-arr.length)*(H+GY)/2+i*(H+GY)}));
+  const left=col(L,P), right=col(R,P+2*(W+GX)), mid={n:id,x:P+W+GX,y:P+(rows-1)*(H+GY)/2};
+  const box=(o,c)=>{const push=o.n==="push";const t=push?"通知":S[o.n].title;return `<g class="node ${c}" ${c==="link"?`data-go="${o.n}" tabindex="0" role="link" aria-label="${o.n} ${esc(t)}"`:""} transform="translate(${o.x},${o.y})"><rect width="${W}" height="${H}" rx="${push?22:8}"/><text class="nid" x="10" y="16">${push?"Web Push":o.n}</text><text x="10" y="34">${esc(t)}</text></g>`;};
+  const cv=(a,b,dot)=>`<path class="edge hi${dot?" dot":""}" d="M${a.x+W} ${a.y+H/2} C${a.x+W+GX/2} ${a.y+H/2},${b.x-GX/2} ${b.y+H/2},${b.x} ${b.y+H/2}" marker-end="url(#lh)"/>`;
+  return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${id}の前後の画面"><defs><marker id="lh" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--accent)"/></marker></defs>
+  ${left.map(o=>cv(o,mid,o.n==="push")).join("")}${right.map(o=>cv(mid,o,false)).join("")}${left.map(o=>box(o,o.n==="push"?"":"link")).join("")}${box(mid,"cur")}${right.map(o=>box(o,"link")).join("")}</svg>`;
+}
+
+/* ---------- 軽いMarkdown ---------- */
+function md(lines){
+  let h="",i=0;
+  while(i<lines.length){
+    const l=lines[i];
+    if(!l.trim()){i++;continue;}
+    if(l.startsWith("```")){let b=[];i++;while(i<lines.length&&!lines[i].startsWith("```"))b.push(lines[i++]);i++;h+=`<pre>${esc(b.join("\n"))}</pre>`;continue;}
+    if(l.startsWith("|")){let rows=[];while(i<lines.length&&lines[i].startsWith("|"))rows.push(lines[i++]);
+      const cells=r=>r.replace(/\\\|/g,"\u0000").trim().replace(/^\||\|$/g,"").split("|").map(c=>c.trim().replace(/\u0000/g,"|"));
+      h+=`<div class="scroll"><table><thead><tr>${cells(rows[0]).map(c=>`<th>${inl(c)}</th>`).join("")}</tr></thead><tbody>${rows.slice(2).map(r=>`<tr>${cells(r).map(c=>`<td>${inl(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;continue;}
+    if(l.startsWith("- ")){let b=[];while(i<lines.length&&lines[i].startsWith("- "))b.push(lines[i++].slice(2));h+=`<ul>${b.map(x=>`<li>${inl(x)}</li>`).join("")}</ul>`;continue;}
+    if(l.startsWith("#### ")){h+=`<h5>${inl(l.slice(5))}</h5>`;i++;continue;}
+    h+=`<p>${inl(l)}</p>`;i++;
+  }
+  return h;
+}
+
+/* ---------- タブの中身 ---------- */
+const BOARDS = {
+  screens:{name:"画面", title:"画面ボード", sub:`画面23と移り方。画面ごとに、中身・前後の画面・呼ぶAPI・満たすストーリーを見る。`},
+  apis:{name:"API", title:"APIボード", sub:`APIの一覧${D.apis.length}件（パスとメソッドの組でなく、設計資料の表の行ごと）。APIごとに、決まり・返しうるエラー・呼ぶ画面・ストーリーを見る。`},
+  stories:{name:"ストーリー", title:"ストーリーボード", sub:`MVP1のユーザーストーリー37本。ストーリーごとに、受け入れ条件と、それを満たす画面とAPIを見る。`},
+  db:{name:"DB", title:"DBボード", sub:`データモデルの6スキーマ28テーブル。テーブルごとに、列・指す先と指すもの・消したときの動き・解散と退会で起きることを見る。`},
+  aws:{name:"AWS", title:"AWSボード", sub:`AWSアーキテクチャの部品と処理の流れ。部品ごとに役目・つながり・決めたことを、流れごとに通る道を見る。`},
+};
+
+function groupsFor(){
+  if(BOARD==="screens") return SCREEN_GROUPS.map(([h,c,ids])=>({h,c,items:ids.map(i=>({id:i,label:S[i].title,c:SCTX[i]}))}));
+  if(BOARD==="apis") return D.ctxs.map(([k,ja])=>({h:`${ja}（${k}）`,c:k,items:D.apis.filter(a=>a.ctx===k).map(a=>({id:a.id,label:a.name,c:k,short:methods(a.route).join("・")}))}));
+  if(BOARD==="db") return Object.keys(SCH_JA).map(s=>({h:`${SCH_JA[s]}（${s}）`,c:SC(s),items:DB.tables.filter(t=>t.schema===s).map(t=>({id:TID(t),label:t.ja,c:SC(s),short:t.name}))}));
+  if(BOARD==="aws") return [{h:"部品",c:null,items:Object.keys(APOS).map(k=>({id:ANID(k),label:AL(k),c:null,short:AKIND_JA[AKIND[k]]}))},{h:"処理の流れ",c:null,items:AW.flows.map((f,i)=>({id:FID(i),label:f[0],c:null,short:"流れ"}))}];
+  return D.ctxs.map(([k,ja])=>({h:`${ja}（${k}）`,c:k,items:D.stories.filter(s=>s.ctx===k).map(s=>({id:s.id,label:s.title,c:k}))}));
+}
+
+/* ---------- ワイヤーフレーム ---------- */
+const MCOL = id => methods(A[id].route)[0];
+function pinsOf(el){ return el.filter(x=>x&&typeof x==="object"&&!Array.isArray(x)&&x.a).map(x=>x.a); }
+function wf(sid, o={}){
+  const els = WF[sid]||[]; const s=S[sid];
+  const num = id => s.apis.indexOf(id)+1;
+  const pin = el => o.pins===false?"":pinsOf(el).filter(a=>s.apis.includes(a)).map(a=>`<span class="pin m ${MCOL(a)}" title="${esc(A[a].name)}">${num(a)}</span>`).join("");
+  const hl = el => o.hl && pinsOf(el).includes(o.hl) ? " hl" : "";
+  const T = x => typeof x==="string"?esc(x):"";
+  const part = el => {
+    const [k,a,b,c,d,e]=el; const P=pin(el), H=hl(el);
+    switch(k){
+      case "logo": return `<div class="w-logo${H}">${T(a)}</div>`;
+      case "title": return `<div class="w-title${H}">${T(a)}${P}</div>`;
+      case "back": return `<div class="w-back${H}"><span>‹</span>${T(a)}${typeof b==="string"?`<em>${T(b)}</em>`:""}${P}</div>`;
+      case "bar": return `<div class="w-back${H}"><b>${T(a)}</b><em>${T(b)}</em>${P}</div>`;
+      case "hero": return `<div class="w-hero${H}"><b>${T(a)}</b><span>${T(b)}</span>${P}</div>`;
+      case "input": return `<div class="w-in${H}"><label>${T(a)}</label><div>${T(b)}</div>${P}</div>`;
+      case "area": return `<div class="w-in${H}"><label>${T(a)}</label><div style="min-height:3.2em">${T(b)}</div>${P}</div>`;
+      case "select": return `<div class="w-in${H}"><label>${T(a)}</label><div class="sel">${T(b)}<i>▾</i></div>${P}</div>`;
+      case "btn": return `<div class="w-btn${b===1?" pri":""}${H}">${T(a)}${P}</div>`;
+      case "btns": return `<div class="w-btns${H}"><div class="w-btn">${T(a)}</div><div class="w-btn pri">${T(b)}</div>${P}</div>`;
+      case "danger": return `<div class="w-btn dng${H}">${T(a)}${P}</div>`;
+      case "link": return `<div class="w-link${H}">${T(a)}${P}</div>`;
+      case "note": return `<div class="w-note${H}">${T(a)}${P}</div>`;
+      case "warn": return `<div class="w-warn${H}">${T(a)}${P}</div>`;
+      case "sec": return `<div class="w-sec${H}">${T(a)}${P}</div>`;
+      case "row": return `<div class="w-row${H}"><div><b>${T(a)}</b><span>${T(b)}</span></div><em>${T(c)}</em>${P}</div>`;
+      case "todo": return `<div class="w-row todo${H}"><i>${T(a)}</i><div><b>${T(b)}</b></div><em>${T(c)}</em>${P}</div>`;
+      case "tabs": case "seg": return `<div class="w-tabs${H}">${a.map((t,i)=>`<span class="${i===b?"on":""}">${esc(t)}</span>`).join("")}${P}</div>`;
+      case "kv": return `<div class="w-kv${H}">${a.map(([x,y])=>`<span>${esc(x)}</span><b>${esc(y)}</b>`).join("")}${P}</div>`;
+      case "avatars": return `<div class="w-av${H}">${a.map(x=>`<i>${esc(x)}</i>`).join("")}<span>3人が行く</span>${P}</div>`;
+      case "chips": return `<div class="w-chips${H}"><label>同行者</label>${a.map(x=>`<i>${esc(x)}</i>`).join("")}${P}</div>`;
+      case "chips2": return `<div class="w-pills${H}">${a.map((t,i)=>`<i class="${i===b?"on":""}">${esc(t)}</i>`).join("")}${P}</div>`;
+      case "grid": return `<div class="w-grid${H}">${a.map(x=>`<span>${esc(x)}</span>`).join("")}${P}</div>`;
+      case "step": return `<div class="w-step${H}"><i>${T(a)}</i><div><b>${T(b)}</b><span>${T(c)}</span></div>${P}</div>`;
+      case "song": return `<div class="w-song${H}"><i>${T(a)}</i><div><b>${T(b)}</b><span>${T(c)}</span></div><em>≡</em>${P}</div>`;
+      case "app": return `<div class="w-row${H}"><div><b>${T(a)}</b><span>${T(b)}</span></div><em class="st ${{"当選":"won","落選":"lost"}[c]||""}">${T(c)}</em>${P}</div>`;
+      case "status": return `<div class="w-status${H}">${a.map((t,i)=>`<span class="${i<b?"done":i===b?"on":""}">${esc(t)}</span>`).join("")}${P}</div>`;
+      case "photo": return `<div class="w-photo${H}"><svg width="28" height="22" viewBox="0 0 28 22" aria-hidden="true"><rect x="1" y="1" width="26" height="20" rx="3" fill="none" stroke="currentColor"/><circle cx="9" cy="8" r="3" fill="none" stroke="currentColor"/><path d="M3 19l7-7 5 5 4-4 7 6" fill="none" stroke="currentColor"/></svg>${T(a)}${P}</div>`;
+      case "item": return `<div class="w-item${H}"><div class="ph"></div><div><b>${T(a)}</b><span>${T(b)}・${T(c)}</span><span class="req">欲しい数：${T(d)}　<u>＋1</u></span></div>${P}</div>`;
+      case "buy": return `<div class="w-row${H}"><div><b>${T(a)}</b><span>${T(b)}</span></div><em>${T(c)}${d?`<br><small class="st ${d==="買えた"?"won":"lost"}">${T(d)}</small>`:""}</em>${P}</div>`;
+      case "total": return `<div class="w-total${H}"><span>${T(a)}</span><b>${T(b)}</b>${P}</div>`;
+      case "bars": return `<div class="w-bars${H}">${a.map(([n,v])=>`<span>${esc(n)}</span><div><i style="width:${v/7*100}%"></i></div><b>${v}</b>`).join("")}${P}</div>`;
+      case "preview": return `<div class="w-prev${H}"><b>${T(a)}</b><span>${T(b)}</span>${P}</div>`;
+      case "copy": return `<div class="w-in${H}"><div class="sel">${T(a)}<i>コピー</i></div>${P}</div>`;
+      case "dev": return `<div class="w-row${H}"><div><b>${T(a)}</b><span>${T(b)}</span></div><em>${typeof d==="string"&&d?`<small class="st lost">${T(d)}</small><br>`:""}<u>外す</u></em>${P}</div>`;
+      case "fab": return `<div class="w-fab${H}">${T(a)}</div>`;
+      case "nav": return `<div class="w-nav${H}"><span class="on">ホーム</span><span>公演</span><span>自分</span><span>設定</span></div>`;
+    }
+    return "";
+  };
+  return `<div class="phone wf${o.sm?" sm":""}" style="${cc(SCTX[sid])}"><div class="notch"></div><div class="scr">${els.map(part).join("")}</div></div>`;
+}
+
+/* ---------- JSONの色づけ ---------- */
+function jsonHL(v){
+  if(v===null) return '<span class="j-n">（本文なし）</span>';
+  return esc(JSON.stringify(v,null,2)).replace(/(&quot;[^&]*?&quot;)(\s*:)?|\b(-?\d+(?:\.\d+)?)\b|\b(true|false|null)\b/g,(m,s,colon,n,lit)=>{
+    if(s) return colon?`<span class="j-k">${s}</span>${colon}`:`<span class="j-s">${s}</span>`;
+    if(n) return `<span class="j-num">${n}</span>`;
+    return `<span class="j-n">${lit}</span>`;
+  });
+}
+
+/* ---------- APIの通り道 ---------- */
+const ROWLOCK = {"group-04":"招待リンクの行","catalog-13":"下書きの行","catalog-14":"下書きの行","merch-02":"下書きの行","merch-04":"下書きの行","ticket-04":"申込の行","ticket-05":"申込の行","ticket-06":"申込の行","catalog-16":"セトリの版を比べて書く"};
+const ASYNC = ["group-10","group-12","group-14"];
+const SCHED = ["ticket-02","ticket-04","ticket-05","ticket-06"];
+const S3 = {"merch-01":"アップロード用URLを作る","merch-02":"一時置き場からコピー","merch-04":"items/へコピー","merch-05":"コピーと消す予定","merch-06":"取得用URL（5分）"};
+function flags(id){
+  const a=A[id], ms=methods(a.route), write=ms.some(m=>m!=="GET"), inv=id==="group-03"||id==="group-04";
+  const inGroup=/\/groups\/\{g\}/.test(a.route), me=/`(GET|POST|PUT|PATCH|DELETE)[^`]*\/me/.test(a.route)||id==="group-05";
+  return {write, inv, lock: write&&!ASYNC.includes(id) ? (inGroup?"グループの行を FOR SHARE":(me||id==="group-05")?"自分の users の行を FOR SHARE":null):null,
+    row: ROWLOCK[id]||null, async: ASYNC.includes(id), sched: SCHED.includes(id), s3: S3[id]||null};
+}
+function pipeline(id){
+  const f=flags(id), ex=EX[id]||{}, code=ex.res?ex.res[0]:200;
+  const steps=[
+    ["画面","hono/client で呼ぶ",true],
+    ["API Gateway",f.inv?"JWT を確かめる（users の行が無くてもよい）":"Cognito の JWT を確かめる。無ければ 401",true],
+    ["Lambda api",f.inv?"招待の2本だけ users の行を問わない":"users の行が active か。無ければ not_registered",true],
+    ["ロック",[f.lock,f.row&&(f.row.includes("比べ")?f.row:f.row+"を FOR UPDATE")].filter(Boolean).join("、")||(f.async?"終わっていないジョブがあれば先に 202":"読むだけ"),!!(f.lock||f.row||f.async)],
+    ["Neon",f.write?"1つのトランザクションで書く":"読む",true],
+  ];
+  const side = f.async?["erasure-worker","受け付けたあと、消す処理を続きから最後まで進める"]:f.sched?["EventBridge Scheduler","リマインドの予約を作る・直すのはコミットの前、消すのはあと"]:f.s3?["S3",f.s3]:null;
+  const W=114,H=84,G=18,P=6, n=steps.length+(side?1:0)+1;
+  const width=P*2+n*W+(n-1)*G, height=H+P*2;
+  let x=P, h="";
+  const node=(t,sub,on,cls="")=>{const r=`<g class="pn ${on?"on":"off"} ${cls}" transform="translate(${x},${P})"><rect width="${W}" height="${H}" rx="10"/><text class="pt" x="10" y="20">${esc(t)}</text><foreignObject x="6" y="26" width="${W-12}" height="${H-30}"><div xmlns="http://www.w3.org/1999/xhtml" class="ps">${esc(sub)}</div></foreignObject></g>`; x+=W+G; return r;};
+  const arrow=()=>`<path class="pa" d="M${x-G+2} ${P+H/2}h${G-6}" marker-end="url(#pa)"/>`;
+  steps.forEach((s,i)=>{ if(i) h+=arrow(); h+=node(...s); });
+  if(side){ h+=arrow(); h+=node(side[0],side[1],true,"side"); }
+  h+=arrow(); h+=node(`応答 ${code}`, code===202?"続きは裏で進む":code===204?"行がもう無くても 204":code===201?"2回目は同じ中身で 200":"", true, "resp s"+code);
+  return `<div class="pipe"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="要求が通る順番"><defs><marker id="pa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker></defs>${h}</svg></div>`;
+}
+function exampleBlock(id){
+  const a=A[id], ex=EX[id]; if(!ex) return "";
+  const ms=methods(a.route), ps=paths(a.route);
+  const m = ex.req? (ms.find(x=>x!=="GET"&&x!=="DELETE")||ms[0]) : (ms.includes("GET")?"GET":ms[ms.length-1]);
+  const p = (ms.length>1 && ps.length>1 ? ps[1] : ps[0]).replace(/\?.*$/,"")+(ex.q||"");
+  const errRow = ex.err && ERR[ex.err] ? `<div class="exerr"><span class="err">${ex.err}<i>${ERR[ex.err][1]}</i></span><span>${inl(ERR[ex.err][2])}</span></div>`:"";
+  return `<div class="ex">
+    <div class="exh"><span class="m ${m}">${m}</span><code>${esc(p)}</code></div>
+    <div class="excols">
+      <div><div class="exl">要求の本文</div><pre class="json">${ex.req?jsonHL(ex.req):'<span class="j-n">（本文なし）</span>'}</pre></div>
+      <div><div class="exl">応答 <span class="code c${ex.res[0]}">${ex.res[0]}</span></div><pre class="json">${jsonHL(ex.res[1])}</pre></div>
+    </div>${errRow}
+    <p class="exnote">設計資料の「中身と決まり」から組み立てた例。値は架空で、欄の名前の一部（<code>merchSalesInfo</code>など）は資料に無く、このボードで仮に付けた。</p>
+  </div>`;
+}
+
+/* ---------- 進み具合 ---------- */
+const STAGES=[["ストーリー","2026-11-07に書き、11-21にMVP1を37本にした","done"],["画面とAPI","工程5。PR #17でレビュー中","now"],["要件と設計書","最初の1本の設計で書く","todo"],["実装","Devinに渡す","todo"],["E2E","2人をブラウザ2つで動かす","todo"]];
+function progress(){
+  return `<ol class="prog">${STAGES.map(([t,s,k])=>`<li class="${k}"><i>${k==="done"?"✓":k==="now"?"●":""}</i><b>${t}</b><span>${s}</span></li>`).join("")}</ol>`;
+}
+
+/* ---------- タブの中身 ---------- */
+function renderScreen(id){
+  const s=S[id], c=SCTX[id];
+  const from=s.from, to=s.to;
+  return `<div class="pane" style="${cc(c)}">
+  <div class="head"><span class="bid">${id}</span><h2>${esc(s.title)}</h2></div>
+  <p class="lead">${inl(s.body)}。</p>
+  <div class="grid2">
+    <div>${wf(id)}<p class="cap2">ワイヤーフレームはイメージ。見た目と配置は最初の1本の設計で決める。番号の印は、下のAPIを呼ぶ場所。</p></div>
+    <div style="min-width:0">
+      <section class="blk" style="margin-top:0"><h4>呼ぶAPI <span class="n">${s.apis.length}件</span></h4>
+        ${s.apis.length?`<div class="apis">${s.apis.map((a,i)=>apiCard(a,false,i+1)).join("")}</div>`:`<p class="empty">APIは呼ばない（${inl(s.calls)}）。</p>`}
+      </section>
+      <section class="blk"><h4>前後の画面</h4><div class="mini">${localSVG(id)}</div></section>
+      <section class="blk"><h4>満たすストーリー <span class="n">${s.stories.length}本</span></h4>
+        ${s.stories.length?`<div class="chips">${s.stories.map(storyChip).join("")}</div>`:'<p class="empty">この画面を挙げたストーリーはない。</p>'}
+      </section>
+    </div>
+  </div></div>`;
+}
+function renderApi(id){
+  const a=A[id];
+  const ms=methods(a.route); const ps=paths(a.route);
+  const fmt=p=>esc(p).replace(/\{([^}]+)\}/g,'<span class="p">{$1}</span>').replace(/(\?.*)$/,'<span class="q">$1</span>');
+  const lines = ps.length===1 ? [`<div class="line"><span class="methods">${ms.map(m=>`<span class="m ${m}">${m}</span>`).join("")}</span><span>${fmt(ps[0])}</span></div>`]
+     : ps.map((p,i)=>`<div class="line"><span class="methods">${(i===0?[ms[0]]:ms.slice(1)).map(m=>`<span class="m ${m}">${m}</span>`).join("")}</span><span>${fmt(p)}</span></div>`);
+  const errs=errCodes(a.rule), f=flags(id);
+  const remind = SCHED.includes(id);
+  const sn = sentences(a.rule.replace(/\\\|/g,"|"));
+  const tags=[f.write?["書く","w"]:["読むだけ","r"], /できる人|だけ/.test(a.rule)&&/(オーナー|申込者|本人|作った人|購入担当)だけ/.test(a.rule)?[a.rule.match(/(オーナー|申込者|本人|作った人|購入担当)だけ/)[1]+"だけ","o"]:["メンバー全員","r"], f.async?["202で受けて裏で進む","a"]:null, f.sched?["リマインドを合わせる","n"]:null, f.s3?["画像（S3）","n"]:null, /`id`|\{ id/.test(a.rule)?["IDは画面が作る（UUIDv7）","r"]:null].filter(Boolean);
+  return `<div class="pane" style="${cc(a.ctx)}">
+  <div class="head"><span class="ctxlabel"><span class="dot"></span>${CTX[a.ctx]}（${a.ctx}）</span></div>
+  <div class="head"><h2>${esc(a.name)}</h2></div>
+  <div class="route" style="margin-top:10px">${lines.join("")}</div>
+  <div class="tags">${tags.map(([t,k])=>`<span class="tag ${k}">${t}</span>`).join("")}</div>
+  <section class="blk"><h4>要求が通る順番</h4>${pipeline(id)}</section>
+  <section class="blk"><h4>要求と応答の例</h4>${exampleBlock(id)}</section>
+  <section class="blk"><h4>中身と決まり</h4>
+    ${sn.length?`<ul class="sentences">${sn.map(x=>`<li>${inl(x)}</li>`).join("")}</ul>`:'<p class="empty">設計資料の表に書き込みはない。グループのメンバー全員が呼べる。</p>'}
+  </section>
+  ${remind?`<section class="blk"><h4>リマインドの合わせ方</h4><div class="box" style="${cc('notification')}">${md(D.remindText.slice(0,1))}${md(["| 申込の状態 | あるべき予約 |","|---|---|",...D.remindTable.map(r=>`| ${r[0]} | ${r[1]} |`)])}<p class="empty" style="margin:0">${inl(D.remindText.slice(1).join(""))}</p></div></section>`:""}
+  ${errs.length?`<section class="blk"><h4>この決まりに出てくるエラー</h4><div class="errs">${errs.map(e=>`<div><span class="err">${e}<i>${ERR[e][1]}</i></span><span>${inl(ERR[e][2])}</span></div>`).join("")}</div></section>`:""}
+  <section class="blk"><h4>呼ぶ画面 <span class="n">${a.screens.length}</span></h4>
+    <div class="wfrow">${a.screens.map(sid=>{const href=boardLink("screens",sid);return `<a class="wfcell" ${href?`href="${href}" target="_blank" rel="noopener"`:""}><div class="wfcap"><b>${sid}</b>${esc(S[sid].title)}${href?' ↗':''}</div>${wf(sid,{sm:1,hl:id})}</a>`;}).join("")}</div>
+    <p class="empty" style="margin-top:6px">枠で囲んだところが、このAPIを呼ぶ場所。</p></section>
+  <section class="blk"><h4>関わるストーリー <span class="n">${a.stories.length}</span></h4>${a.stories.length?`<div class="chips">${a.stories.map(storyChip).join("")}</div>`:'<p class="empty">ストーリーとの対応の表には名前が無い（画面の表だけに出てくる）。</p>'}</section>
+  </div>`;
+}
+function renderStory(id){
+  const s=ST[id];
+  const steps=s.screens.map(sid=>({sid, apis:s.apis.filter(a=>S[sid].apis.includes(a))}));
+  const unplaced=s.apis.filter(a=>!steps.some(x=>x.apis.includes(a)));
+  const who=(s.text.match(/^(.+?)として/)||[])[1]||"";
+  const what=(s.text.match(/として、(.+?)。/)||[])[1]||"";
+  const why=(s.text.match(/。(.+)$/)||[])[1]||"";
+  return `<div class="pane" style="${cc(s.ctx)}">
+  <div class="head"><span class="ctxlabel"><span class="dot"></span>${CTX[s.ctx]}（${s.ctx}）</span></div>
+  <div class="head"><span class="bid">${id}</span><h2>${esc(s.title)}</h2></div>
+  <div class="card3"><div><span>誰が</span><b>${inl(who)}</b></div><div><span>何をしたい</span><b>${inl(what)}</b></div><div><span>なぜ</span><b>${inl(why)}</b></div></div>
+  <section class="blk"><h4>進み具合</h4>${progress()}</section>
+  <section class="blk"><h4>画面をたどる流れ</h4>
+    <div class="journey">${steps.map((x,i)=>{const href=boardLink("screens",x.sid);return `${i?'<div class="jarrow" aria-hidden="true">→</div>':""}<div class="jstep"><a class="wfcap" ${href?`href="${href}" target="_blank" rel="noopener"`:""}><b>${x.sid}</b>${esc(S[x.sid].title)}${href?" ↗":""}</a>${wf(x.sid,{sm:1,hl:x.apis[0]})}<div class="japis">${x.apis.map(a=>{const h=boardLink("apis",a);return `<a class="ja" ${h?`href="${h}" target="_blank" rel="noopener"`:""}><span class="m ${MCOL(a)}">${MCOL(a)}</span>${esc(A[a].name)}</a>`;}).join("")}</div></div>`;}).join("")}</div>
+    ${unplaced.length?`<p class="empty">画面の表に名前が無いAPI：${unplaced.map(a=>esc(A[a].name)).join("、")}</p>`:""}
+  </section>
+  <section class="blk"><h4>受け入れ条件 <span class="n">${s.ac.length}</span></h4><ul class="ac">${s.ac.map(x=>`<li>${check}<span>${inl(x)}</span></li>`).join("")}</ul></section>
+  <section class="blk"><h4>使うAPI <span class="n">${s.apis.length}</span></h4><div class="apis">${s.apis.map(a=>apiCard(a)).join("")}</div>
+  ${/（/.test(s.apiRef)?`<p class="empty" style="margin-top:8px">設計資料の書き方では「${inl(s.apiRef)}」。</p>`:""}</section>
+  </div>`;
+}
+
+function renderOverview(){
+  if(BOARD==="screens"){
+    return `<div class="pane"><div class="head"><h2>画面の一覧と移り方</h2></div>
+    <div class="stats"><div class="stat"><span class="v">23</span><span class="k">画面</span></div><div class="stat"><span class="v">${D.edges.length}</span><span class="k">移り方</span></div><div class="stat"><span class="v">${D.apis.length}</span><span class="k">API</span></div></div>
+    <section class="blk"><h4>移り方の図</h4><p class="lead" style="margin-bottom:8px">箱を押すと、その画面のタブを開く。点線は、通知を押して申込の画面を開く移り方。</p>
+    <div class="mini scroll" style="padding:6px">${flowSVG(null)}</div>
+    <div class="md" style="margin-top:12px">${md(D.flowNotes.map(x=>"- "+x))}</div></section>
+    <section class="blk"><h4>23画面のワイヤーフレーム</h4><div class="gallery">${SCREEN_GROUPS.flatMap(g=>g[2]).map(sid=>`<a class="wfcell" href="#${sid}"><div class="wfcap"><b>${sid}</b>${esc(S[sid].title)}<span class="n">API ${S[sid].apis.length}</span></div>${wf(sid,{sm:1})}</a>`).join("")}</div></section></div>`;
+  }
+  if(BOARD==="apis"){
+    const cnt={}; D.apis.forEach(a=>methods(a.route).forEach(m=>cnt[m]=(cnt[m]||0)+1));
+    return `<div class="pane"><div class="head"><h2>APIの全体の決まり</h2></div>
+    <div class="stats"><div class="stat"><span class="v">${D.apis.length}</span><span class="k">API（表の行）</span></div>${Object.entries(cnt).map(([m,n])=>`<div class="stat"><span class="m ${m}">${m}</span><span class="v" style="font-size:24px">${n}</span></div>`).join("")}<div class="stat"><span class="v">${D.errors.length}</span><span class="k">エラーの<code>code</code></span></div></div>
+    <section class="blk"><h4>文脈ごとのAPIの地図</h4><div class="apimap">${D.ctxs.map(([k,ja])=>`<div class="amcol" style="${cc(k)}"><h5><span class="dot"></span>${ja}</h5>${D.apis.filter(a=>a.ctx===k).map(a=>`<a href="#${a.id}" class="amrow"><span class="methods">${methods(a.route).map(m=>`<span class="m ${m}">${m[0]}</span>`).join("")}</span>${esc(a.name)}</a>`).join("")}</div>`).join("")}</div></section>
+    <section class="blk"><h4>要求が通る順番（例：申込の状態を変える）</h4>${pipeline("ticket-05")}</section>
+    <section class="blk"><h4>エラーの形</h4><pre class="json">${jsonHL({type:"about:blank",title:"Unprocessable Content",status:422,code:"invalid_input",errors:[{path:"quantity",code:"too_small"}]})}</pre>
+      <div class="errgrid">${D.errors.map(r=>`<div class="eg s${String(r[1]).trim()[0]}"><b>${inl(r[0])}</b><i>${r[1]}</i><span>${inl(r[2])}</span></div>`).join("")}</div></section>
+    <section class="blk"><h4>全体の決まり（設計資料から）</h4><div class="md">${D.rules.filter(r=>r.h!=="エラーの形").map(r=>`<h5>${inl(r.h)}</h5>${md(r.lines)}`).join("")}
+    <h5>通知</h5>${md(D.notifNote)}</div></section></div>`;
+  }
+  const scr=D.screens.map(s=>s.id);
+  return `<div class="pane"><div class="head"><h2>ストーリーの全体</h2></div>
+  <div class="stats"><div class="stat"><span class="v">${D.stories.length}</span><span class="k">ストーリー</span></div><div class="stat"><span class="v">${D.stories.reduce((n,s)=>n+s.ac.length,0)}</span><span class="k">受け入れ条件</span></div><div class="stat"><span class="v">${new Set(D.stories.flatMap(s=>s.screens)).size}</span><span class="k">挙がっている画面（23のうち）</span></div></div>
+  <section class="blk"><h4>進み具合（37本とも同じ段階）</h4>${progress()}</section>
+  <section class="blk"><h4>文脈ごとのストーリー</h4><div class="kanban">${D.ctxs.map(([k,ja])=>`<div class="kcol" style="${cc(k)}"><h5><span class="dot"></span>${ja}<span class="n">${D.stories.filter(s=>s.ctx===k).length}</span></h5>${D.stories.filter(s=>s.ctx===k).map(s=>`<a class="kcard" href="#${s.id}"><b>${s.id}</b><span>${esc(s.title)}</span><small>画面 ${s.screens.join("・")}　API ${s.apis.length}　条件 ${s.ac.length}</small></a>`).join("")}</div>`).join("")}</div></section>
+  <section class="blk"><h4>ストーリーと画面の対応</h4><p class="lead" style="margin-bottom:8px">色の付いたマスは、そのストーリーを満たす画面。</p>
+  <div class="scroll"><table class="matrix"><thead><tr><th class="rowh"></th>${scr.map(x=>`<th class="colh" title="${esc(S[x].title)}">${x}</th>`).join("")}</tr></thead>
+  <tbody>${D.stories.map(s=>`<tr style="${cc(s.ctx)}"><th class="rowh"><button data-go="${s.id}">${s.id} <span style="font-family:var(--body)">${esc(s.title)}</span></button></th>${scr.map(x=>`<td class="${s.screens.includes(x)?"on":""}"${s.screens.includes(x)?` title="${s.id} → ${x} ${esc(S[x].title)}"`:""}></td>`).join("")}</tr>`).join("")}</tbody></table></div>
+  <p class="empty" style="margin-top:8px">どのストーリーにも挙がっていない画面：${scr.filter(x=>!D.stories.some(s=>s.screens.includes(x))).map(x=>`${x} ${esc(S[x].title)}`).join("、")}。</p></section>
+  <section class="blk"><h4>登場する人</h4><div class="md">${md(["| 人 | 用語集での名前 | 説明 |","|---|---|---|",...D.people.map(r=>`| ${r.join(" | ")} |`)])}</div></section></div>`;
+}
+
+/* ================= DBボード ================= */
+const DB = D.db || {tables:[]};
+const TID = t => t.schema+"--"+t.name.replace(/_/g,"-");
+const TB = Object.fromEntries(DB.tables.map(t=>[TID(t),t]));
+const TBN = Object.fromEntries(DB.tables.map(t=>[t.id,t]));
+const SCH_JA = {groups:"グループ",catalog:"公演カタログ",attendance:"参戦記録",ticket:"チケット",merch:"グッズ",notification:"通知"};
+const SC = s => DB.schemaCtx[s];
+const COLREF = {group_id:"groups.groups",user_id:"groups.users",applicant_user_id:"groups.users",created_by:"groups.users",updated_by:"groups.users",owner_user_id:"groups.users",concert_id:"catalog.concerts",tour_id:"catalog.tours",venue_id:"catalog.venues",artist_id:"catalog.artists",attendance_id:"attendance.attendances",ticket_application_id:"ticket.ticket_applications",merch_list_id:"merch.merch_lists",merch_item_id:"merch.merch_items",reminder_id:"notification.reminders",push_subscription_id:"notification.push_subscriptions"};
+const CASCADE_CHILD = ["groups.members","groups.invite_links","catalog.setlists","catalog.setlist_items","catalog.concert_artists","attendance.attendance_records","attendance.companions","attendance.concert_snapshots","ticket.distributions","merch.buyers","merch.merch_requests","notification.reminder_deliveries"];
+function refsOf(t){
+  const out=[];
+  t.cols.forEach(c=>{
+    let tgt=COLREF[c.name]; if(!tgt) return;
+    if(t.id==="catalog.setlist_items"&&c.name==="concert_id") tgt="catalog.setlists";
+    if(t.id==="attendance.companions"&&c.name==="attendance_id") tgt="attendance.attendance_records";
+    if(t.id===tgt) return;
+    const cross = tgt.split(".")[0]!==t.schema;
+    let rule;
+    if(/SET NULL/.test(c.desc)) rule="SET NULL";
+    else if(/RESTRICT/.test(c.desc)) rule="RESTRICT";
+    else if(t.id==="groups.erasure_jobs") rule="IDだけ";
+    else if(cross) rule="RESTRICT";
+    else if(CASCADE_CHILD.includes(t.id)) rule="CASCADE";
+    else rule="RESTRICT";
+    out.push({col:c.name,to:tgt,cross,rule,nullable:/null可/.test(c.desc)});
+  });
+  return out;
+}
+DB.tables.forEach(t=>t.refs=refsOf(t));
+const childrenOf = id => DB.tables.flatMap(t=>t.refs.filter(r=>r.to===id).map(r=>({from:t.id,...r})));
+const isPK = c => /PK/.test(c.desc);
+const valuesOf = c => (c.desc.match(/`([a-z_]+)`/g)||[]).map(x=>x.replace(/`/g,"")).filter(x=>!/_id$|^[a-z]+_[a-z_]+_id$/.test(x)&&!COLREF[x]&&!DB.tables.some(t=>t.name===x));
+const tableLink = id => { const t=TBN[id]; return `<a class="chip" style="${cc(SC(t.schema))}" href="${boardLink("db",TID(t))||"#"}"${BOARD==="db"?"":' target="_blank" rel="noopener"'}><b>${esc(t.schema)}</b>${esc(t.name)}</a>`; };
+
+/* ER図の配置 */
+const ER_COLS = [["groups","notification"],["catalog"],["attendance","ticket","merch"]];
+function erLayout(){
+  const W=232,RH=30,HH=34,GX=110,GY=26,P=14, pos={}, boxes=[];
+  let maxH=0;
+  ER_COLS.forEach((col,ci)=>{
+    let y=P; const x=P+ci*(W+GX);
+    col.forEach(s=>{
+      const ts=DB.tables.filter(t=>t.schema===s);
+      const h=HH+ts.length*RH+8;
+      boxes.push({s,x,y,w:W,h});
+      ts.forEach((t,i)=>pos[t.id]={x:x+6,y:y+HH+i*RH,w:W-12,h:RH-4});
+      y+=h+GY;
+    });
+    maxH=Math.max(maxH,y);
+  });
+  return {pos,boxes,width:P*2+3*W+2*GX,height:maxH};
+}
+function erSVG(cur, showCommon){
+  const {pos,boxes,width,height}=erLayout();
+  const near=new Set();
+  if(cur){ near.add(cur); TBN[cur].refs.forEach(r=>near.add(r.to)); childrenOf(cur).forEach(r=>near.add(r.from)); }
+  let lines="";
+  DB.tables.forEach(t=>t.refs.forEach(r=>{
+    const common = r.to==="groups.groups"||r.to==="groups.users";
+    const hi = cur && (t.id===cur||r.to===cur);
+    if(common && !showCommon && !hi) return;
+    const a=pos[t.id], b=pos[r.to];
+    let d;
+    const ax=a.x, bx=b.x;
+    if(Math.abs(ax-bx)<5){ const x=a.x+a.w; const off=24+Math.abs(a.y-b.y)/14; d=`M${x} ${a.y+a.h/2} C${x+off} ${a.y+a.h/2},${x+off} ${b.y+b.h/2},${x} ${b.y+b.h/2}`; }
+    else if(ax>bx){ d=`M${a.x} ${a.y+a.h/2} C${a.x-55} ${a.y+a.h/2},${b.x+b.w+55} ${b.y+b.h/2},${b.x+b.w} ${b.y+b.h/2}`; }
+    else { d=`M${a.x+a.w} ${a.y+a.h/2} C${a.x+a.w+55} ${a.y+a.h/2},${b.x-55} ${b.y+b.h/2},${b.x} ${b.y+b.h/2}`; }
+    lines+=`<path class="fk ${r.rule.replace(/\s/g,"")}${hi?" hi":""}${common?" common":""}${cur&&!hi?" dim":""}" d="${d}" marker-end="url(#fk${hi?"h":""})"><title>${t.id}.${r.col} → ${r.to}（${r.rule}）</title></path>`;
+  }));
+  let bx="";
+  boxes.forEach(b=>{ bx+=`<g style="${cc(SC(b.s))}"><rect class="sbox" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="10"/><text class="sname" x="${b.x+12}" y="${b.y+22}">${b.s}</text><text class="sja" x="${b.x+b.w-12}" y="${b.y+22}" text-anchor="end">${SCH_JA[b.s]}</text></g>`; });
+  let tb="";
+  DB.tables.forEach(t=>{ const p=pos[t.id]; const id=TID(t); const c=t.id===cur;
+    tb+=`<g class="tnode${c?" cur":""}${cur&&!near.has(t.id)?" dim":""}" style="${cc(SC(t.schema))}" data-go="${id}" tabindex="0" role="link" aria-label="${t.id}" transform="translate(${p.x},${p.y})"><rect width="${p.w}" height="${p.h}" rx="6"/><text x="9" y="17">${t.name}</text>${t.name.length<16?`<text class="tja" x="${p.w-8}" y="17" text-anchor="end">${esc(t.ja.length>8?t.ja.slice(0,7)+"…":t.ja)}</text>`:""}</g>`; });
+  return `<svg class="er" width="${width}" height="${height}" style="width:100%;min-width:760px;height:auto" viewBox="0 0 ${width} ${height}" role="img" aria-label="テーブルのつながり"><defs>
+  <marker id="fk" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker>
+  <marker id="fkh" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--accent)"/></marker></defs>${bx}${lines}${tb}</svg>`;
+}
+const RULE_TIP = {"CASCADE":"親を消すと一緒に消える","RESTRICT":"使われていれば親を消せない","SET NULL":"親を消すと空になる","IDだけ":"外部キーは資料に書いていない"};
+function renderTable(id){
+  const t=TB[id], c=SC(t.schema);
+  const kids=childrenOf(t.id);
+  const ctxRow = DB.erase.find(r=>r[0]===({groups:"グループ",catalog:"公演カタログ",attendance:"参戦記録",ticket:"チケット",merch:"グッズ",notification:"通知"})[t.schema]);
+  const decs = DB.decisions.filter(d=>(d[1]+d[2]).includes(t.name)||(t.entity&&(d[1]+d[2]).includes(t.entity)));
+  const tests = DB.tests.filter(r=>(r[1]+r[2]).includes(t.name));
+  const apis = D.apis.filter(a=>a.ctx===c);
+  const refsHtml = t.refs.map(r=>`<div class="rel"><code>${r.col}</code><span class="arrow">→</span>${tableLink(r.to)}<span class="rule ${r.rule.replace(/\s/g,"")}" title="${RULE_TIP[r.rule]}">${r.rule}</span>${r.cross?'<span class="xc">文脈をまたぐ</span>':""}</div>`).join("");
+  const kidsHtml = kids.map(r=>`<div class="rel">${tableLink(r.from)}<span class="arrow">の</span><code>${r.col}</code><span class="arrow">が指す</span><span class="rule ${r.rule.replace(/\s/g,"")}" title="${RULE_TIP[r.rule]}">${r.rule}</span></div>`).join("");
+  return `<div class="pane" style="${cc(c)}">
+  <div class="head"><span class="ctxlabel"><span class="dot"></span>スキーマ ${t.schema}（${SCH_JA[t.schema]}）</span></div>
+  <div class="head"><h2>${esc(t.ja)}</h2><code class="big">${t.id}</code>${t.entity?`<span class="ent">${t.entity}</span>`:""}</div>
+  ${t.desc?`<p class="lead">${inl(t.desc)}</p>`:""}
+  <div class="grid2 wide">
+    <div style="min-width:0">
+      <div class="tcard"><div class="tcard-h"><span>${t.name}</span><em>${t.cols.length}列</em></div>
+      ${t.cols.map(col=>{const ref=t.refs.find(r=>r.col===col.name);const vals=/^(status|kind|step|pickup_method|purchase_status)$/.test(col.name)?valuesOf(col):[];
+        return `<div class="trow"><span class="key">${isPK(col)?'<i class="pk" title="主キー">PK</i>':""}${ref?`<i class="fki" title="${ref.to}を指す">FK</i>`:""}</span><span class="cn">${esc(col.name)}${/null可/.test(col.desc)?'<em class="nl">null可</em>':""}</span><span class="ty">${esc(col.type)}</span>${col.desc||vals.length?`<span class="cd">${vals.length?`<span class="vals">${vals.map(v=>`<i>${v}</i>`).join("")}</span>`:""}${inl(col.desc.replace(/^PK・?/,""))}</span>`:""}</div>`;}).join("")}
+      </div>
+    </div>
+    <div style="min-width:0">
+      <section class="blk" style="margin-top:0"><h4>このテーブルが指す先 <span class="n">${t.refs.length}</span></h4>${refsHtml||'<p class="empty">ほかのテーブルを指していない。</p>'}</section>
+      <section class="blk"><h4>このテーブルを指すもの <span class="n">${kids.length}</span></h4>${kidsHtml||'<p class="empty">指しているテーブルは無い。</p>'}</section>
+      ${ctxRow?`<section class="blk"><h4>解散と退会で起きること（${ctxRow[0]}の文脈）</h4><div class="split2"><div class="box" style="${cc('attendance')}"><p><b>解散</b></p><p>${inl(ctxRow[1])}</p></div><div class="box" style="${cc('group')}"><p><b>退会</b></p><p>${inl(ctxRow[2])}</p></div></div></section>`:""}
+    </div>
+  </div>
+  <section class="blk"><h4>つながりの図</h4><div class="scroll er-wrap">${erSVG(t.id,false)}</div><p class="empty" style="margin-top:6px">このテーブルにつながる線だけを色で出した。箱を押すとそのテーブルを開く。</p></section>
+  ${decs.length?`<section class="blk"><h4>このテーブルに関わる決定</h4><div class="decs">${decs.map(d=>`<div class="dec"><b>${d[0]}</b><span>${inl(d[1])}</span><p>${inl(d[2])}</p></div>`).join("")}</div></section>`:""}
+  ${tests.length?`<section class="blk"><h4>このテーブルに関わる試験</h4><div class="decs">${tests.map(r=>`<div class="dec"><b>${r[0]}</b><span>${inl(r[1])}</span><p>${inl(r[2])}</p></div>`).join("")}</div></section>`:""}
+  <section class="blk"><h4>同じ文脈のAPI <span class="n">${apis.length}</span></h4><div class="chips">${apis.map(a=>{const h=boardLink("apis",a.id);return `<a class="chip" style="${cc(a.ctx)}" ${h?`href="${h}" target="_blank" rel="noopener"`:""}><b class="m ${MCOL(a.id)}" style="color:var(--surface)">${MCOL(a.id)}</b>${esc(a.name)}</a>`;}).join("")}</div><p class="empty" style="margin-top:6px">APIとテーブルの1対1の対応は設計資料に無いので、同じ文脈のAPIを並べた。</p></section>
+  </div>`;
+}
+function renderDbOverview(){
+  const S=DB.sections;
+  const nCross=DB.tables.reduce((n,t)=>n+t.refs.filter(r=>r.cross).length,0);
+  return `<div class="pane"><div class="head"><h2>DBの全体図</h2></div>
+  <div class="stats"><div class="stat"><span class="v">6</span><span class="k">スキーマ</span></div><div class="stat"><span class="v">${DB.tables.length}</span><span class="k">テーブル</span></div><div class="stat"><span class="v">${DB.tables.reduce((n,t)=>n+t.cols.length,0)}</span><span class="k">列</span></div><div class="stat"><span class="v">${nCross}</span><span class="k">文脈をまたぐ参照</span></div></div>
+  <p class="lead">Neon（Postgres）の1つのデータベースを、文脈ごとのスキーマに分けている。箱を押すとそのテーブルを開く。</p>
+  <div class="ertools"><label><input type="checkbox" id="common"> グループとユーザーへの線も出す</label><span class="lg"><i class="CASCADE"></i>CASCADE</span><span class="lg"><i class="RESTRICT"></i>RESTRICT</span><span class="lg"><i class="SETNULL"></i>SET NULL</span><span class="lg"><i class="IDだけ"></i>IDだけ</span></div>
+  <div class="scroll er-wrap" id="erbox">${erSVG(null,false)}</div>
+  <section class="blk"><h4>マイグレーションを流す順番</h4><div class="order">${["groups","catalog","attendance・ticket・merch・notification"].map((s,i)=>`${i?'<span class="arrow">→</span>':""}<span class="ostep">${s}</span>`).join("")}</div><p class="empty" style="margin-top:6px">文脈をまたぐIDにRESTRICTの外部キーを張るので、この順でないと流せない。</p></section>
+  <section class="blk"><h4>書き込みの順番</h4><div class="lockflow">
+    <div><b>1</b><span>トランザクションを始める</span></div><div><b>2</b><span><code>groups</code>と<code>users</code>と<code>members</code>が<code>active</code>かを確かめ、<code>FOR SHARE</code>でロック</span></div><div><b>3</b><span>文脈の表に書く（同行者や分配先も相手の行をロック）</span></div><div><b>4</b><span>コミット。解散・退会・外すの開始は、ここまで待ってから状態を変える</span></div></div></section>
+  <section class="blk"><h4>解散と退会で、文脈ごとに起きること</h4><div class="md">${md(["| 文脈 | 解散のとき | 退会のとき |","|---|---|---|",...DB.erase.map(r=>`| ${r.join(" | ")} |`)])}</div></section>
+  <section class="blk"><h4>全体の決まり（設計資料から）</h4><div class="md">${Object.entries(S).map(([h,l])=>`<h5>${inl(h)}</h5>${md(l)}`).join("")}</div></section>
+  <section class="blk"><h4>決めたこと <span class="n">${DB.decisions.length}件</span></h4><div class="decs">${DB.decisions.map(d=>`<div class="dec"><b>${d[0]}</b><span>${inl(d[1])}</span><p>${inl(d[2])}</p></div>`).join("")}</div></section>
+  </div>`;
+}
+
+/* ================= AWSボード ================= */
+const AW = D.aws || {nodes:{},edges:[]};
+const AN = Object.assign({}, AW.nodes, {sqs:"SQS＋アラーム 失敗の知らせ（メール）"});
+const AEDGES = AW.edges.concat([["sched","sqs","起動できなかった"],["worker","sqs","再試行を使い切った"],["sender","sqs","再試行切れ・届かない端末"]]);
+const ADDED = new Set(["sched>sqs","worker>sqs","sender>sqs"]);
+const ALABEL = {device:["利用者の端末","PWA・Service Worker"],cf:["CloudFront","＋S3 画面のファイル"],cognito:["Cognito","ユーザープール"],apigw:["API Gateway","HTTP API"],api:["api","Lambda"],worker:["erasure-worker","Lambda"],sender:["notification-sender","Lambda"],sched:["EventBridge","Scheduler"],img:["S3","グッズの画像"],ssm:["SSM","Parameter Store"],logs:["CloudWatch","Logs（保存7日）"],sqs:["SQS＋アラーム","失敗をメールで知らせる"],neon:["Neon","Postgres・AWSの外"],push:["Web Push","Apple・Googleの配信"]};
+const AL = k => ALABEL[k][0]+(["api","worker","sender"].includes(k)?"（Lambda）":"");
+const APOS = {device:[20,300],cf:[240,46],cognito:[240,160],apigw:[240,300],img:[240,470],ssm:[470,46],logs:[700,46],api:[470,300],worker:[700,190],sched:[470,470],sender:[700,470],sqs:[700,600],neon:[940,300],push:[940,470]};
+const AKIND = {device:"client",neon:"ext",push:"ext",cf:"edge",cognito:"sec",apigw:"edge",api:"fn",worker:"fn",sender:"fn",sched:"int",img:"store",ssm:"sec",logs:"ops",sqs:"ops"};
+const AKIND_JA = {client:"端末",ext:"AWSの外",edge:"入口",sec:"認証と秘密",fn:"Lambda",int:"予約",store:"保存",ops:"見張り"};
+const NODE_PART = {device:["画面"],cf:["画面"],cognito:["認証"],apigw:["API"],api:["API"],worker:["解散・退会・外す"],sender:["通知"],sched:["通知"],push:["通知"],neon:["データベース"],img:["画像"],ssm:["設定と秘密"],logs:["ログ"],sqs:["失敗の知らせ"]};
+const NODE_DEC = {device:["C-5"],cf:["B-1"],cognito:[],apigw:["A-1"],api:["A-1","A-2","C-6"],worker:["A-1","A-2","C-4","C-6"],sender:["A-1","A-2","C-4","C-5","C-6"],sched:["C-4"],push:["C-5"],neon:["A-1","A-2","C-2"],img:["B-2"],ssm:["C-1"],logs:["C-3","C-6"],sqs:["C-4"]};
+const FLOW_EDGES = [
+  ["device>cognito"],
+  ["device>apigw","apigw>api","api>neon"],
+  ["device>apigw","apigw>api","api>neon","device>img"],
+  ["device>apigw","apigw>api","api>neon","api>worker","api>sched","sched>worker","worker>neon","worker>img","worker>cognito","worker>sqs"],
+  ["api>sched","sched>sender","sender>neon","sender>push","push>device","sched>sqs","sender>sqs"],
+];
+const FID = i => "flow-"+(i+1);
+const ANID = k => "aws-"+k;
+function awsSVG(o={}){
+  const W=176,H=58;
+  const hiE = new Set(o.edges||[]), hiN=new Set(o.node?[o.node]:[]);
+  if(o.edges) o.edges.forEach(e=>e.split(">").forEach(n=>hiN.add(n)));
+  if(o.node) AEDGES.forEach(([a,b])=>{ if(a===o.node||b===o.node) {hiE.add(a+">"+b); hiN.add(a); hiN.add(b);} });
+  const focus = hiE.size>0;
+  const c = k => ({x:APOS[k][0]+W/2,y:APOS[k][1]+H/2});
+  let es="", ls="";
+  AEDGES.forEach(([a,b,l],i)=>{
+    const k=a+">"+b, A0=APOS[a], B0=APOS[b]; let d, lx, ly;
+    if(k==="push>device"){ d=`M${B0[0]+W/2} ${A0[1]+H} C${A0[0]+W/2} ${A0[1]+H+140},${B0[0]+W/2} ${A0[1]+H+140},${B0[0]+W/2} ${B0[1]+H}`; d=`M${A0[0]+W/2} ${A0[1]+H} C${A0[0]+W/2} 720,${B0[0]+W/2} 720,${B0[0]+W/2} ${B0[1]+H}`; lx=(A0[0]+B0[0])/2+W/2; ly=690; }
+    else {
+      const ca=c(a), cb=c(b), dx=cb.x-ca.x, dy=cb.y-ca.y;
+      let p,q;
+      if(Math.abs(dx)>=Math.abs(dy)*0.9){ p={x:ca.x+Math.sign(dx)*W/2,y:ca.y}; q={x:cb.x-Math.sign(dx)*W/2,y:cb.y}; const m=(q.x-p.x)/2; d=`M${p.x} ${p.y} C${p.x+m} ${p.y},${q.x-m} ${q.y},${q.x} ${q.y}`; }
+      else { p={x:ca.x,y:ca.y+Math.sign(dy)*H/2}; q={x:cb.x,y:cb.y-Math.sign(dy)*H/2}; const m=(q.y-p.y)/2; d=`M${p.x} ${p.y} C${p.x} ${p.y+m},${q.x} ${q.y-m},${q.x} ${q.y}`; }
+      lx=(p.x+q.x)/2; ly=(p.y+q.y)/2;
+    }
+    const hi=hiE.has(k), cls=`ae${hi?" hi":""}${focus&&!hi?" dim":""}${ADDED.has(k)?" added":""}`;
+    es+=`<path class="${cls}" d="${d}" marker-end="url(#am${hi?"h":""})"/>`;
+    if(l && (!focus||hi)) ls+=`<g class="al${hi?" hi":""}"><rect x="${lx-l.length*5.6-6}" y="${ly-10}" width="${l.length*11.2+12}" height="20" rx="10"/><text x="${lx}" y="${ly+4}" text-anchor="middle">${esc(l)}</text></g>`;
+  });
+  let ns="";
+  Object.keys(APOS).forEach(k=>{
+    const [x,y]=APOS[k]; const [t1,t2]=ALABEL[k];
+    const cls=`an ${AKIND[k]}${o.node===k?" cur":""}${focus&&!hiN.has(k)?" dim":""}`;
+    ns+=`<g class="${cls}" data-go="${ANID(k)}" tabindex="0" role="link" aria-label="${esc(AN[k])}" transform="translate(${x},${y})"><rect width="${W}" height="${H}" rx="${k==="neon"?18:10}"/>${awsIcon(k)}<text class="t1" x="44" y="25">${esc(t1)}</text><text class="t2" x="44" y="43">${esc(t2)}</text></g>`;
+  });
+  return `<svg class="awsd" width="1140" height="740" style="width:100%;min-width:780px;height:auto" viewBox="0 0 1140 740" role="img" aria-label="AWS構成図"><defs>
+   <marker id="am" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker>
+   <marker id="amh" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--accent)"/></marker></defs>
+   <rect class="frame" x="220" y="14" width="690" height="666" rx="16"/><text class="frame-t" x="236" y="36">AWS 東京リージョン（ap-northeast-1）</text>
+   ${es}${ls}${ns}</svg>`;
+}
+function awsIcon(k){
+  const g={client:'<rect x="4" y="2" width="12" height="20" rx="3"/><path d="M8 18h4"/>',fn:'<path d="M3 20L10 4h3l7 16M7 12h8"/>',ext:'<ellipse cx="10" cy="5" rx="8" ry="3"/><path d="M2 5v12c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/>',edge:'<circle cx="11" cy="11" r="8"/><path d="M3 11h16M11 3c3 3 3 13 0 16M11 3c-3 3-3 13 0 16"/>',sec:'<rect x="4" y="9" width="14" height="11" rx="2"/><path d="M7 9V6a4 4 0 018 0v3"/>',int:'<circle cx="11" cy="11" r="8"/><path d="M11 6v5l3 3"/>',store:'<path d="M3 6h16l-2 14H5z"/><ellipse cx="11" cy="6" rx="8" ry="2.5"/>',ops:'<path d="M2 12h4l3-7 4 14 3-7h4"/>'}[AKIND[k]];
+  return `<g class="ic" transform="translate(13,18)" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${g}</g>`;
+}
+function flowsOfNode(k){ return AW.flows.map((f,i)=>({f,i})).filter(({i})=>FLOW_EDGES[i].some(e=>e.split(">").includes(k))); }
+function renderAwsNode(k){
+  const parts = AW.parts.filter(p=>(NODE_PART[k]||[]).includes(p[0]));
+  const decs = AW.decisions.filter(d=>(NODE_DEC[k]||[]).includes(d[0]));
+  const ins = AEDGES.filter(e=>e[1]===k), outs=AEDGES.filter(e=>e[0]===k);
+  const kind=AKIND[k];
+  const nm=AN[k];
+  const extra = k==="neon" ? `<section class="blk"><h4>中にあるスキーマ</h4><div class="chips">${Object.keys(SCH_JA).map(s=>{const h=boardLink("db",""); return `<a class="chip" style="${cc(SC(s))}" ${URLS.db?`href="${URLS.db}" target="_blank" rel="noopener"`:""}><b>${s}</b>${SCH_JA[s]}</a>`;}).join("")}</div></section><div class="box" style="--cc:var(--c-ticket);margin-top:14px"><p><b>まだ決めていないこと</b></p><p>${inl(AW.undecided.find(x=>x.startsWith("リージョン"))||"")}</p></div>`
+    : k==="api" ? `<section class="blk"><h4>受け持つAPI</h4><p>${URLS.apis?`<a href="${URLS.apis}" target="_blank" rel="noopener">APIボードの${D.apis.length}件 ↗</a>`:`${D.apis.length}件`}。全部を1つのLambdaで受け、Honoで文脈ごとのルートにつなぐ。</p></section>`
+    : k==="ssm"||k==="logs" ? `<p class="empty">設計資料の図では、ほかの部品とのあいだに線を引いていない。</p>` : k==="sqs" ? `<p class="empty">設計資料の図（mermaid）にはまだ無い。2026-11-21のC-4で足したので、このボードでは点線で描いた。</p>`:"";
+  return `<div class="pane" style="--cc:var(--k-${kind})">
+  <div class="head"><span class="ctxlabel"><span class="dot"></span>${AKIND_JA[kind]}</span></div>
+  <div class="head"><h2>${esc(ALABEL[k][0])}</h2><span class="ent" style="--cc:var(--muted)">${esc(ALABEL[k][1])}</span></div>
+  <div class="scroll" style="padding:6px;margin-top:10px">${awsSVG({node:k})}</div>
+  ${parts.length?`<section class="blk"><h4>役目と選んだ理由</h4><div class="decs">${parts.map(p=>`<div class="dec"><b>${esc(p[0])}</b><span>${inl(p[1])}</span><p>${inl(p[2])}</p><small>決めた場所：${inl(p[3])}</small></div>`).join("")}</div></section>`:""}
+  <section class="blk"><h4>つながり</h4><div class="split2">
+    <div><p class="exl" style="padding:0 0 6px">入ってくる</p>${ins.length?ins.map(e=>`<div class="rel"><a class="chip" href="#${ANID(e[0])}"><b>${AKIND_JA[AKIND[e[0]]]}</b>${esc(AL(e[0]))}</a><span class="arrow">${esc(e[2]||"→")}</span></div>`).join(""):'<p class="empty">なし</p>'}</div>
+    <div><p class="exl" style="padding:0 0 6px">出ていく</p>${outs.length?outs.map(e=>`<div class="rel"><span class="arrow">${esc(e[2]||"→")}</span><a class="chip" href="#${ANID(e[1])}"><b>${AKIND_JA[AKIND[e[1]]]}</b>${esc(AL(e[1]))}</a></div>`).join(""):'<p class="empty">なし</p>'}</div></div></section>
+  ${extra}
+  ${flowsOfNode(k).length?`<section class="blk"><h4>通る処理の流れ</h4><div class="chips">${flowsOfNode(k).map(({f,i})=>`<a class="chip" href="#${FID(i)}"><b>流れ</b>${esc(f[0])}</a>`).join("")}</div></section>`:""}
+  ${decs.length?`<section class="blk"><h4>関わる決定</h4><div class="decs">${decs.map(d=>`<div class="dec"><b>${d[0]}</b><span>${inl(d[1])}</span><p>${inl(d[2])}</p>${d[3]?`<small>選ばなかった案：${inl(d[3])}</small>`:""}</div>`).join("")}</div></section>`:""}
+  </div>`;
+}
+function renderFlow(i){
+  const f=AW.flows[i]; const steps=sentences(f[1]);
+  return `<div class="pane" style="--cc:var(--accent)">
+  <div class="head"><span class="ctxlabel"><span class="dot"></span>処理の流れ</span></div>
+  <div class="head"><h2>${esc(f[0])}</h2></div>
+  <div class="scroll" style="padding:6px;margin-top:10px">${awsSVG({edges:FLOW_EDGES[i],anim:1})}</div>
+  <p class="empty" style="margin-top:6px">色の付いた線がこの流れで通る道。${FLOW_EDGES[i].some(e=>ADDED.has(e))?"点線は失敗したときだけ通る。":""}</p>
+  <section class="blk"><h4>順に起きること</h4><ol class="steps">${steps.map(s=>`<li>${inl(s)}</li>`).join("")}</ol></section>
+  </div>`;
+}
+function renderAwsOverview(){
+  return `<div class="pane"><div class="head"><h2>AWSアーキテクチャ</h2></div>
+  <div class="stats"><div class="stat"><span class="v">3</span><span class="k">Lambda</span></div><div class="stat"><span class="v">0</span><span class="k">常に動くサーバー</span></div><div class="stat"><span class="v">0</span><span class="k">VPC・NAT</span></div><div class="stat"><span class="v">${AW.decisions.length}</span><span class="k">決めたこと</span></div></div>
+  <p class="lead">部品を押すとそのタブを開く。下の流れのボタンを押すと、その流れで通る線を光らせる。</p>
+  <div class="flowbtns">${AW.flows.map((f,i)=>`<button class="fb" data-flow="${i}">${esc(f[0])}</button>`).join("")}<button class="fb" data-flow="-1">すべて</button></div>
+  <div class="scroll" style="padding:6px" id="awsbox">${awsSVG({})}</div>
+  <div class="legend">${Object.entries(AKIND_JA).map(([k,v])=>`<span style="--cc:var(--k-${k})"><i></i>${v}</span>`).join("")}<span><i class="dash"></i>失敗したときだけ（C-4）</span></div>
+  <div class="box" style="--cc:var(--c-ticket);margin-top:18px"><p><b>リージョンはまだ動く可能性がある</b></p><p>${inl(AW.undecided.find(x=>x.startsWith("リージョン"))||"")}</p></div>
+  <section class="blk"><h4>決めたこと <span class="n">${AW.decisions.length}件</span></h4><div class="decs">${AW.decisions.map(d=>`<div class="dec"><b>${d[0]}</b><span>${inl(d[1])}</span><p>${inl(d[2])}</p><small>選ばなかった案：${inl(d[3])}</small></div>`).join("")}</div></section>
+  <section class="blk"><h4>費用の見込み（推測。工程6で公式の料金から試算する）</h4><ul class="sentences" style="--cc:var(--c-catalog)">${AW.cost.map(x=>`<li>${inl(x)}</li>`).join("")}</ul></section>
+  <section class="blk"><h4>決めないこと</h4><ul class="sentences" style="--cc:var(--muted)">${AW.undecided.map(x=>`<li>${inl(x)}</li>`).join("")}</ul></section>
+  </div>`;
+}
+
+
+/* ---------- 組み立て ---------- */
+const B=BOARDS[BOARD];
+document.getElementById("h1").textContent=B.title;
+document.getElementById("sub").textContent=B.sub;
+document.getElementById("src").innerHTML=`元の資料：GitHubのPR #17（レビュー中）のブランチにある${BOARD==="db"?"<code>docs/data-model.md</code>":BOARD==="aws"?"<code>docs/architecture.md</code>":"<code>docs/api.md</code>と<code>docs/user-stories.md</code>"}（コミット 6526db2、2026-11-21）。PRの直しで中身が変わることがある。`;
+document.getElementById("boards").innerHTML=Object.entries(BOARDS).map(([k,v])=>k===BOARD?`<span class="cur" aria-current="page">${v.name}</span>`:(URLS[k]?`<a href="${URLS[k]}" target="_blank" rel="noopener">${v.name}<span aria-hidden="true">↗</span></a>`:`<span>${v.name}</span>`)).join("");
+const G=groupsFor();
+const ALL=["overview",...G.flatMap(g=>g.items.map(i=>i.id))];
+function drawTabs(filter){
+  const f=(filter||"").trim().toLowerCase();
+  const match=i=>!f||(i.id+i.label+(i.short||"")).toLowerCase().includes(f)||(BOARD==="apis"&&A[i.id].route.toLowerCase().includes(f));
+  let h=`<button class="tab" role="tab" data-id="overview"><span class="tid">全体</span><span class="tname">${({screens:"画面の一覧と移り方",apis:"全体の決まりとエラー",stories:"進み具合と対応の表",db:"全体図",aws:"構成図と決めたこと"})[BOARD]}</span></button>`;
+  G.forEach(g=>{const items=g.items.filter(match); if(!items.length)return;
+    h+=`<h3 style="${cc(g.c)}"><span class="dot"></span>${esc(g.h)}</h3>`+items.map(i=>`<button class="tab" role="tab" data-id="${i.id}" style="${cc(i.c)}"><span class="tid">${["apis","aws"].includes(BOARD)?esc(i.short):BOARD==="db"?"":i.id}</span><span class="tname">${esc(i.label)}${BOARD==="db"?`<small>${esc(i.short)}</small>`:""}</span></button>`).join("");});
+  document.getElementById("tabs").innerHTML=h;
+  mark();
+}
+function cur(){const h=decodeURIComponent(location.hash.slice(1));return ALL.includes(h)?h:"overview";}
+function mark(){const c=cur();document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-selected",t.dataset.id===c?"true":"false"));}
+function show(){
+  const c=cur(); const m=document.getElementById("main");
+  m.innerHTML = c==="overview"?(BOARD==="db"?renderDbOverview():BOARD==="aws"?renderAwsOverview():renderOverview()):BOARD==="screens"?renderScreen(c):BOARD==="apis"?renderApi(c):BOARD==="db"?renderTable(c):BOARD==="aws"?(c.startsWith("flow-")?renderFlow(+c.slice(5)-1):renderAwsNode(c.slice(4))):renderStory(c);
+  mark();
+  const sel=document.querySelector(`.tab[data-id="${c}"]`); if(sel&&window.innerWidth>820) sel.scrollIntoView({block:"nearest"});
+}
+document.getElementById("tabs").addEventListener("click",e=>{const t=e.target.closest(".tab");if(!t)return;location.hash=t.dataset.id;if(window.innerWidth<=820){document.getElementById("rail").classList.add("closed");document.getElementById("toggle").setAttribute("aria-expanded","false");document.getElementById("main").scrollIntoView({block:"start"});}});
+document.getElementById("tabs").addEventListener("keydown",e=>{if(!["ArrowDown","ArrowUp"].includes(e.key))return;const ts=[...document.querySelectorAll(".tab")];const i=ts.indexOf(document.activeElement);if(i<0)return;e.preventDefault();const n=ts[(i+(e.key==="ArrowDown"?1:-1)+ts.length)%ts.length];n.focus();location.hash=n.dataset.id;});
+document.getElementById("main").addEventListener("click",e=>{
+  const fb=e.target.closest("[data-flow]");
+  if(fb){const i=+fb.dataset.flow;document.getElementById("awsbox").innerHTML=awsSVG(i<0?{}:{edges:FLOW_EDGES[i]});document.querySelectorAll(".fb").forEach(b=>b.classList.toggle("on",b===fb));return;}
+  const g=e.target.closest("[data-go]");if(g)location.hash=g.dataset.go;});
+document.getElementById("main").addEventListener("change",e=>{if(e.target.id==="common")document.getElementById("erbox").innerHTML=erSVG(null,e.target.checked);});
+document.getElementById("main").addEventListener("keydown",e=>{const g=e.target.closest("[data-go]");if(g&&(e.key==="Enter"||e.key===" ")){e.preventDefault();location.hash=g.dataset.go;}});
+document.getElementById("q").addEventListener("input",e=>drawTabs(e.target.value));
+document.getElementById("toggle").addEventListener("click",()=>{const r=document.getElementById("rail");const c=r.classList.toggle("closed");document.getElementById("toggle").setAttribute("aria-expanded",c?"false":"true");});
+document.getElementById("cnt").textContent=`（${ALL.length-1}件）`;
+window.addEventListener("hashchange",show);
+drawTabs(""); show();
+if(window.innerWidth<=820&&cur()!=="overview"){document.getElementById("rail").classList.add("closed");document.getElementById("toggle").setAttribute("aria-expanded","false");}
+</script>
