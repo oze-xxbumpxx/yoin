@@ -22,8 +22,8 @@
 
 | 動き | 外部キー |
 |---|---|
-| CASCADE（親に従って消える） | members・invite_links → groups、setlists・setlist_items・concert_artists → concerts、attendance_records・companions・concert_snapshots → attendances、distributions → ticket_applications、buyers・merch_requests → merch_listsとmerch_items、reminder_deliveries → remindersとpush_subscriptions |
-| RESTRICT（使われていれば消せない） | concerts.venue_id、concerts.tour_id、concert_artists.artist_id、groups.owner_user_id |
+| CASCADE（親に従って消える） | members・invite_links → groups、setlists・concert_artists → concerts、setlist_items → setlists、attendance_records・concert_snapshots → attendances、companions → attendance_records、distributions → ticket_applications、buyers・merch_requests → merch_listsとmerch_items、reminder_deliveries → remindersとpush_subscriptions |
+| RESTRICT（使われていれば消せない） | concerts.venue_id、concerts.tour_id、concert_artists.artist_id、groups.owner_user_id、members.user_id（退会ではmembersを消してからusersを消す） |
 | SET NULL | setlist_items.artist_id |
 
 - 同じスキーマの中で別の行を指すときは、`(group_id, venue_id)`のように所属を含む複合外部キーにする。参照される側に`(group_id, id)`の一意制約を付ける。別グループの会場や品目は結べない。
@@ -434,6 +434,7 @@ Web Pushを受け取る端末
 | `endpoint` | text | 一意 |
 | `p256dh` | text | Web Pushの鍵 |
 | `auth` | text |  |
+| `label` | text | 端末の名前。登録したときのブラウザと端末の種類から作る（例「iPhone Safari」）。通知先の一覧で見分けるため（2026-11-21） |
 | `created_at` | timestamptz |  |
 | `last_failed_at` | timestamptz | null可。送れなかった端末を画面で示すため |
 
@@ -536,7 +537,7 @@ Web Pushを受け取る端末
 - 時刻を直すとき：Schedulerの予約と見張りの予約を新しい時刻に更新してから、DBの`send_at`を直す。予約がもう無いとき（起動して自動で消えたあと）は、新しい時刻で作り直してからDBを直す（2026-11-21）。起動した時刻がDBの`send_at`より前なら、送らずに`send_at`で予約を作り直す。
 - 予約したときに送信時刻を過ぎていたら、期限前なら1分後に予約し、期限を過ぎていれば予約しない。
 - 送れなかった端末があれば、5分後に1回限りの再送の予約を作る（3回まで）。3回やっても送れない端末が残ったら、送信の関数がAWS構成のC-4のキューに1件入れ、メールで知らせる。関数が正常に終わっても、届いていないことを見落とさないため（2026-11-21）。
-- 予約は送ったあと自動で消える設定にする。Schedulerの予約の作成と削除はAPIから呼ぶので、`api`と`erasure-worker`にその権限を与える。
+- 予約は送ったあと自動で消える設定にする。Schedulerの予約の作成と削除はAPIから呼ぶので、`api`と`erasure-worker`にその権限を与える。`notification-sender`も見張りと再送の予約を作る・動かす・消すので、同じ権限を与える（2026-11-21）。
 - 予約は自動で消えるので、取り消すときに予約がもう無くても、失敗と扱わない（2026-11-21）。
 - Schedulerの予約から起動したLambdaの自動の再試行は、既定の2回のままにする。引き受けは条件つきの更新なので、再試行や見張りと重なっても2本同時には送らない。1時間を過ぎた再試行は捨てる。起動できなかったときと、再試行を使い切ったか捨てたときは、AWS構成のC-4のキューに入り、メールで知らせる（2026-11-21）。
 
