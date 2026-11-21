@@ -1,6 +1,6 @@
 # ADR-0004開発の道具
 
-- 状態：提案（2026-11-17）。道具は2026-11-17に大関が問いのページで選んだ。承認はこのPRのマージで残す
+- 状態：承認（2026-11-21、PR #9のマージ）。道具は2026-11-17に大関が問いのページで選んだ
 - 決めた人：大関
 - 関連：[ADR-0002](ADR-0002-schema-and-functions.md)、[ADR-0003](ADR-0003-layers-in-contexts.md)、[AWS構成](../architecture.md)、[論点の記録](../discussions/dev-tools.md)
 
