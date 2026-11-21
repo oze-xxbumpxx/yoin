@@ -1,0 +1,32 @@
+{
+  "feature": "cost-and-region",
+  "title": "工程6 費用の試算とリージョン",
+  "level": "L2",
+  "page": "https://claude.ai/artifact/Y8M6nQqf4KMBoH75RmHJtV",
+  "round": 1,
+  "stages": {
+    "requirements": {
+      "state": "skipped",
+      "reason": "L2なので要件定義書は作らない"
+    },
+    "design": {
+      "state": "waiting"
+    },
+    "plan": {
+      "state": "pending"
+    },
+    "implement": {
+      "state": "pending"
+    },
+    "review": {
+      "state": "pending"
+    },
+    "merge": {
+      "state": "pending"
+    },
+    "reflect": {
+      "state": "pending"
+    }
+  },
+  "updated_at": "2026-11-21T13:35:22.199Z"
+}
