@@ -147,7 +147,7 @@ yoinに登録した人。Cognitoの言葉はこのテーブルの`cognito_sub`�
 | `last_error` | text | null可。段の名前とエラーの種類だけを書き、個人の情報（名前、メールアドレス、内容）は書かない（2026-11-21） |
 | `created_at` | timestamptz |  |
 | `updated_at` | timestamptz |  |
-| `watchdog_at` | timestamptz | null可。止まったときに再開させる1回限りの予約の時刻（R11）。終わったら予約を消してnullにする |
+| `watchdog_at` | timestamptz | null可。止まったときに再開させる1回限りの予約の時刻（R11）。終わったら、行を消す前に予約を消す（R17） |
 
 終わった記録は残さない。`erasure-worker`は最後の段で、見張りの予約を消してから、この行を消す（2026-11-21）。
 
