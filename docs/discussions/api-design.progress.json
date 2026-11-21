@@ -10,7 +10,7 @@
       "reason": "L2なので要件定義書は作らない"
     },
     "design": {
-      "state": "waiting"
+      "state": "approval"
     },
     "plan": {
       "state": "pending"
@@ -28,5 +28,5 @@
       "state": "pending"
     }
   },
-  "updated_at": "2026-11-21T01:44:37.177Z"
+  "updated_at": "2026-11-21T05:02:07.275Z"
 }

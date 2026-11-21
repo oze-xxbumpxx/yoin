@@ -1,6 +1,6 @@
 # データモデル
 
-状態：確定（2026-11-06）。2026-11-07にレビューの指摘10件（YADR-01〜10）と、ユーザーストーリーで決まった3点（R8〜R10）を反映。2026-11-21に、ユーザーストーリーM-06に合わせて購入担当に購入の状態を足した（R14）。スキーマとLambdaの分け方は[ADR-0002](decisions/ADR-0002-schema-and-functions.md)（2026-11-12承認）。
+状態：確定（2026-11-06）。2026-11-07にレビューの指摘10件（YADR-01〜10）と、ユーザーストーリーで決まった3点（R8〜R10）を反映。2026-11-21に、ユーザーストーリーM-06に合わせて購入担当に購入の状態を足した（R14）。同日、API設計のレビューを受けてR15〜R18を足した。スキーマとLambdaの分け方は[ADR-0002](decisions/ADR-0002-schema-and-functions.md)（2026-11-12承認）。
 
 - 関連：[文脈マップ](context-map.md)、[用語集](glossary.md)、[ADR-0001](decisions/ADR-0001-bounded-contexts.md)、[PR/FAQ](prfaq.md)
 - データベース：Neon（Postgres）の1つのデータベース。文脈ごとにスキーマを分ける
@@ -22,8 +22,8 @@
 
 | 動き | 外部キー |
 |---|---|
-| CASCADE（親に従って消える） | members・invite_links → groups、setlists・setlist_items・concert_artists → concerts、attendance_records・companions・concert_snapshots → attendances、distributions → ticket_applications、buyers・merch_requests → merch_listsとmerch_items、reminder_deliveries → remindersとpush_subscriptions |
-| RESTRICT（使われていれば消せない） | concerts.venue_id、concerts.tour_id、concert_artists.artist_id、groups.owner_user_id |
+| CASCADE（親に従って消える） | members・invite_links → groups、setlists・concert_artists → concerts、setlist_items → setlists、attendance_records・concert_snapshots → attendances、companions → attendance_records、distributions → ticket_applications、buyers・merch_requests → merch_listsとmerch_items、reminder_deliveries → remindersとpush_subscriptions |
+| RESTRICT（使われていれば消せない） | concerts.venue_id、concerts.tour_id、concert_artists.artist_id、groups.owner_user_id、members.user_id（退会ではmembersを消してからusersを消す） |
 | SET NULL | setlist_items.artist_id |
 
 - 同じスキーマの中で別の行を指すときは、`(group_id, venue_id)`のように所属を含む複合外部キーにする。参照される側に`(group_id, id)`の一意制約を付ける。別グループの会場や品目は結べない。
@@ -144,10 +144,12 @@ yoinに登録した人。Cognitoの言葉はこのテーブルの`cognito_sub`�
 | `step` | text | 終わった段階（例：`attendance`）。次の段階から再開する |
 | `status` | text | `running` / `done` / `failed` |
 | `attempts` | smallint | 失敗した回数 |
-| `last_error` | text | null可 |
+| `last_error` | text | null可。段の名前とエラーの種類だけを書き、個人の情報（名前、メールアドレス、内容）は書かない（2026-11-21） |
 | `created_at` | timestamptz |  |
 | `updated_at` | timestamptz |  |
 | `watchdog_at` | timestamptz | null可。止まったときに再開させる1回限りの予約の時刻（R11）。終わったら予約を消してnullにする |
+
+終わった記録は残さない。`erasure-worker`は最後の段で、見張りの予約を消してから、この行を消す（2026-11-21）。
 
 ### 公演カタログ（スキーマ`catalog`）
 
@@ -434,6 +436,7 @@ Web Pushを受け取る端末
 | `endpoint` | text | 一意 |
 | `p256dh` | text | Web Pushの鍵 |
 | `auth` | text |  |
+| `label` | text | 端末の名前。登録したときのブラウザと端末の種類から作る（例「iPhone Safari」）。通知先の一覧で見分けるため（2026-11-21） |
 | `created_at` | timestamptz |  |
 | `last_failed_at` | timestamptz | null可。送れなかった端末を画面で示すため |
 
@@ -457,7 +460,7 @@ Web Pushを受け取る端末
 - 定期の起動はしない（R11）。APIはジョブを作るときに、EventBridge Schedulerで15分後の1回限りの予約（見張りの予約）を作ってから`erasure-worker`を起動する。`erasure-worker`は動き始めるたびに見張りの予約を1時間後に作り直し、終わったら消す。途中で止まっても、見張りの予約が起動して続きから再開する。Neonが起きるのは、ジョブがあるときだけになる。
 - 段階ごとに`erasure_jobs.step`を進める。DBだけで済む処理は1つのトランザクションにまとめる（申込の削除と通知の予約の取り消し、同行者の削除と人数の加算、写しの作成と`concert_id`のnull化）。
 - S3の画像は、品目や下書きを消すのと同じトランザクションで`merch.object_deletions`にキーを書く。S3から消せたキーだけ行を消し、失敗したキーは次の回にやり直す。
-- 画像のアップロードは、一時置き場（`uploads/`）を通す（R13）。端末は一時置き場に上げてから、APIに確定を頼む。APIはF2のロックを持ったまま、グループとメンバーが有効かを確かめ、S3の中でコピーしてから`image_key`を書き、コミットする。ロックを持っている間は解散・退会・抜けるが始まらないので、コピーが解散の後に届くことはない。コピー先のキーは、確定した品目なら`groups/<group_id>/items/`、下書きなら`groups/<group_id>/drafts/<user_id>/`の下にする。コピーのあとでDBへの保存に失敗すると、どの行も指さない画像がこの下に残る。そのため解散では`groups/<group_id>/`の下を、退会と抜けるでは本人の`drafts/<user_id>/`の下を、`object_deletions`のキーに加えてまとめて消す。確定は同じ画像で何度やり直しても結果が変わらない。下書きを品目に確定するときも、同じロックの中で画像を`drafts/<user_id>/`から`items/`の下にコピーし、品目の`image_key`には`items/`のキーを書いて、下書きのキーは`object_deletions`に入れる。こうすると、確定した品目の画像は作った人の退会や脱退で消えない。コピーのあとでDBへの保存に失敗したときは、`items/`の下に残った画像を解散のときにまとめて消す。解散中・退会中・抜けている途中なら確定しない。一時置き場はS3のライフサイクルの設定で1日後に消えるので、確定されなかった画像も残らない。`groups/`の下に直接上げるURLは出さない。
+- 画像のアップロードは、一時置き場（`uploads/<group_id>/<user_id>/`の下）を通す（R13）。APIは確定のとき、キーのグループと本人が操作した人に合うかを確かめる（2026-11-21）。端末は一時置き場に上げてから、APIに確定を頼む。APIはF2のロックを持ったまま、グループとメンバーが有効かを確かめ、S3の中でコピーしてから`image_key`を書き、コミットする。ロックを持っている間は解散・退会・抜けるが始まらないので、コピーが解散の後に届くことはない。コピー先のキーは、確定した品目なら`groups/<group_id>/items/`、下書きなら`groups/<group_id>/drafts/<user_id>/`の下にする。コピーのあとでDBへの保存に失敗すると、どの行も指さない画像がこの下に残る。そのため解散では`groups/<group_id>/`の下を、退会と抜けるでは本人の`drafts/<user_id>/`の下を、`object_deletions`のキーに加えてまとめて消す。確定は同じ画像で何度やり直しても結果が変わらない。下書きを品目に確定するときも、同じロックの中で画像を`drafts/<user_id>/`から`items/`の下にコピーし、品目の`image_key`には`items/`のキーを書いて、下書きのキーは`object_deletions`に入れる。こうすると、確定した品目の画像は作った人の退会や脱退で消えない。コピーのあとでDBへの保存に失敗したときは、`items/`の下に残った画像を解散のときにまとめて消す。解散中・退会中・抜けている途中なら確定しない。一時置き場はS3のライフサイクルの設定で1日後に消えるので、確定されなかった画像も残らない。`groups/`の下に直接上げるURLは出さない。
 - どの段階も「まだ残っている行だけを処理する」形にし、2回動いても結果が変わらないようにする。
 
 ### 解散で残すもの（Q2）
@@ -472,6 +475,7 @@ Web Pushを受け取る端末
 - 残すもの：グループの全員のデータ。公演、セトリ、確定した品目と画像は残し、作った人の情報は持たない（`setlists.updated_by`はnullにする）。
 - ほかの人のデータの中の本人：同行者は人数に置き換える。分配先は空に戻す。購入担当は担当なしに戻す。
 - ログには個人の情報を書かない。DBのバックアップは保持期間が過ぎると消える。このことを外部FAQに書く。
+- 画像のS3のバケットはバージョニングを使わない。消した画像が古い版として残らず、完全に消えるようにする（2026-11-21）。
 
 ### 退会の手順（YADR-04）
 
@@ -536,7 +540,7 @@ Web Pushを受け取る端末
 - 時刻を直すとき：Schedulerの予約と見張りの予約を新しい時刻に更新してから、DBの`send_at`を直す。予約がもう無いとき（起動して自動で消えたあと）は、新しい時刻で作り直してからDBを直す（2026-11-21）。起動した時刻がDBの`send_at`より前なら、送らずに`send_at`で予約を作り直す。
 - 予約したときに送信時刻を過ぎていたら、期限前なら1分後に予約し、期限を過ぎていれば予約しない。
 - 送れなかった端末があれば、5分後に1回限りの再送の予約を作る（3回まで）。3回やっても送れない端末が残ったら、送信の関数がAWS構成のC-4のキューに1件入れ、メールで知らせる。関数が正常に終わっても、届いていないことを見落とさないため（2026-11-21）。
-- 予約は送ったあと自動で消える設定にする。Schedulerの予約の作成と削除はAPIから呼ぶので、`api`と`erasure-worker`にその権限を与える。
+- 予約は送ったあと自動で消える設定にする。Schedulerの予約の作成と削除はAPIから呼ぶので、`api`と`erasure-worker`にその権限を与える。`notification-sender`も見張りと再送の予約を作る・動かす・消すので、同じ権限を与える（2026-11-21）。
 - 予約は自動で消えるので、取り消すときに予約がもう無くても、失敗と扱わない（2026-11-21）。
 - Schedulerの予約から起動したLambdaの自動の再試行は、既定の2回のままにする。引き受けは条件つきの更新なので、再試行や見張りと重なっても2本同時には送らない。1時間を過ぎた再試行は捨てる。起動できなかったときと、再試行を使い切ったか捨てたときは、AWS構成のC-4のキューに入り、メールで知らせる（2026-11-21）。
 
@@ -613,6 +617,15 @@ Web Pushを受け取る端末
 | # | 決めること | 決定 |
 |---|---|---|
 | R14 | 物販で買えた・売り切れの印をどこに持つか | `merch.buyers`に`purchase_status`を足す。印は公演ごと・品目ごとに1つで、付けられるのは購入担当だけ。購入担当を替えたら印は消える。担当なしの品目には印を付けられない。売り切れを除いた合計金額は保存せず計算する。新しい表にしないのは、印を付ける人も単位も購入担当と同じため |
+
+2026-11-21（API設計のレビューを受けて。詳しくは[API設計](api.md)）
+
+| # | 決めること | 決定 |
+|---|---|---|
+| R15 | ほかのグループの一時置き場の画像を取り込めないようにする方法 | 一時置き場のキーにグループと本人のIDを入れ、確定のときに合うかを確かめる |
+| R16 | 別の人の端末の通知先を登録しようとしたとき | 奪わずに断る。画面は購読をやり直して新しい通知先で登録する |
+| R17 | 終わった解散・退会の記録をいつ消すか | 最後の段で行ごと消す。失敗の記録には個人の情報を書かない |
+| R18 | 画像のS3でバージョニングを使うか | 使わない。消した画像を完全に消す |
 
 ## 試験の一覧
 
