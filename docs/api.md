@@ -13,7 +13,7 @@
 - 画面はAPI GatewayのURLへ直接送る。CORSは画面のドメインだけを許す。ブラウザが本番の要求の前に送る`OPTIONS`（JWTを付けない事前確認）は、API GatewayのCORSの設定で答え、JWTの確かめとLambdaには回さない。
 - すべてのパスでCognitoのJWTが要る。JWTの無い要求はAPI Gatewayが401で断るので、Lambda `api`には届かない。
 - `api`は、JWTの`sub`に結びつく`users`の行が`active`かを毎回確かめる。行が無ければ`not_registered`、`withdrawing`なら`account_closing`で断る。
-- 例外は招待の2本（`GET /invites/{token}`と`POST /invites/{token}/accept`）。ここだけは`users`の行が無いJWTも受ける。招待リンクを通らずにユーザーを作らない決まり（データモデル「退会の手順」）を守るため、APIで行を作るのは`accept`だけにする。最初のオーナーは、デプロイの流れで流す初期データの手順で作る（APIは作らない。大関さんの確認待ち）。
+- 例外は招待の2本（`GET /invites/{token}`と`POST /invites/{token}/accept`）。ここだけは`users`の行が無いJWTも受ける。招待リンクを通らずにユーザーを作らない決まり（データモデル「退会の手順」）を守るため、APIで行を作るのは`accept`だけにする。最初のオーナーは、デプロイの流れで流す初期データの手順で作る（APIは作らない。2026-11-21に大関さんが決めた）。
 
 ### パスの形
 
@@ -186,7 +186,7 @@ APIの名前は、下の「APIの一覧」の表の1列目と同じ。
 | グループを作る | `POST /groups` | 本文は`{ id, name }`。作った人がオーナーになる。`kind`は`shared` |
 | グループを見る | `GET /groups/{g}` | 名前、`kind`、オーナー、`status`、自分がオーナーか |
 | メンバー一覧 | `GET /groups/{g}/members` | ユーザーID、表示名、参加した日時、オーナーか |
-| 招待リンクを発行する | `POST /groups/{g}/invite-links` | 本文は`{ id, expiresAt, maxUses }`。オーナーだけ。自分用グループでは`forbidden`。応答でリンクのURLを返す。トークンは、SSMに置く秘密の値とリンクのIDからHMAC-SHA256で作り、サーバーはハッシュだけを保存する。こうすると、2回目の送信でも同じトークンを返せる（大関さんの確認待ち） |
+| 招待リンクを発行する | `POST /groups/{g}/invite-links` | 本文は`{ id, expiresAt, maxUses }`。オーナーだけ。自分用グループでは`forbidden`。応答でリンクのURLを返す。トークンは、SSMに置く秘密の値とリンクのIDからHMAC-SHA256で作り、サーバーはハッシュだけを保存する。こうすると、2回目の送信でも同じトークンを返せる（2026-11-21に大関さんが決めた） |
 | 抜ける・外すの確かめ | `GET /groups/{g}/members/{userId}/removal-preview` | 消えるものと残るものの件数（残る参戦、消える予定・申込・頼まれ物・下書き、空に戻る分配と購入担当、人数に置き換わる同行者）。本人かオーナーだけ |
 | メンバーを外す | `DELETE /groups/{g}/members/{userId}` | `userId`が自分なら抜ける、ほかの人なら外す。外すのはオーナーだけで、自分自身は外せない（抜けるとして扱う）。オーナーが抜けるときは一番前から参加しているメンバーに引き継ぐ。ほかにメンバーがいなければ`last_member`。自分用グループは`forbidden`。202 |
 | 解散の確かめ | `GET /groups/{g}/disband-preview` | 消えるものと残るものの件数。オーナーだけ |
