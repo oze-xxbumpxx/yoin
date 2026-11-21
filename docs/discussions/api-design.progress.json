@@ -1,0 +1,32 @@
+{
+  "feature": "api-design",
+  "title": "工程5 API設計",
+  "level": "L2",
+  "page": "https://claude.ai/artifact/EecRFSVi17iTJAGbZWMokX",
+  "round": 1,
+  "stages": {
+    "requirements": {
+      "state": "skipped",
+      "reason": "L2なので要件定義書は作らない"
+    },
+    "design": {
+      "state": "waiting"
+    },
+    "plan": {
+      "state": "pending"
+    },
+    "implement": {
+      "state": "pending"
+    },
+    "review": {
+      "state": "pending"
+    },
+    "merge": {
+      "state": "pending"
+    },
+    "reflect": {
+      "state": "pending"
+    }
+  },
+  "updated_at": "2026-11-21T01:44:37.177Z"
+}
