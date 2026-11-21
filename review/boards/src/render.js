@@ -38,7 +38,7 @@ function wf(sid, o={}){
       case "app": return `<div class="w-row${H}"><div><b>${T(a)}</b><span>${T(b)}</span></div><em class="st ${{"当選":"won","落選":"lost"}[c]||""}">${T(c)}</em>${P}</div>`;
       case "status": return `<div class="w-status${H}">${a.map((t,i)=>`<span class="${i<b?"done":i===b?"on":""}">${esc(t)}</span>`).join("")}${P}</div>`;
       case "photo": return `<div class="w-photo${H}"><svg width="28" height="22" viewBox="0 0 28 22" aria-hidden="true"><rect x="1" y="1" width="26" height="20" rx="3" fill="none" stroke="currentColor"/><circle cx="9" cy="8" r="3" fill="none" stroke="currentColor"/><path d="M3 19l7-7 5 5 4-4 7 6" fill="none" stroke="currentColor"/></svg>${T(a)}${P}</div>`;
-      case "item": return `<div class="w-item${H}"><div class="ph"></div><div><b>${T(a)}</b><span>${T(b)}・${T(c)}</span><span class="req">欲しい数：${T(d)}　<u>＋1</u></span></div>${P}</div>`;
+      case "item": return `<div class="w-item${H}"><div class="ph"></div><div><b>${T(a)}</b><span>${T(b)}・${T(c)}</span><span class="req">欲しい数：${T(d)}　<u>自分の数</u></span></div>${P}</div>`;
       case "buy": return `<div class="w-row${H}"><div><b>${T(a)}</b><span>${T(b)}</span></div><em>${T(c)}${d?`<br><small class="st ${d==="買えた"?"won":"lost"}">${T(d)}</small>`:""}</em>${P}</div>`;
       case "total": return `<div class="w-total${H}"><span>${T(a)}</span><b>${T(b)}</b>${P}</div>`;
       case "bars": return `<div class="w-bars${H}">${a.map(([n,v])=>`<span>${esc(n)}</span><div><i style="width:${v/7*100}%"></i></div><b>${v}</b>`).join("")}${P}</div>`;
@@ -65,26 +65,39 @@ function jsonHL(v){
 
 /* ---------- APIの通り道 ---------- */
 const ROWLOCK = {"group-04":"招待リンクの行","catalog-13":"下書きの行","catalog-14":"下書きの行","merch-02":"下書きの行","merch-04":"下書きの行","ticket-04":"申込の行","ticket-05":"申込の行","ticket-06":"申込の行","catalog-16":"セトリの版を比べて書く"};
-const OTHER_LOCK = {"attendance-04":"同行者に選んだ人","ticket-07":"分配先の人","merch-08":"購入担当にする人"};
+// data-model「書き込みの順番」で、指定されたユーザーの行もロックすると書いてあるのは同行者と分配先だけ。
+const OTHER_LOCK = {"attendance-04":"同行者に指定されたユーザー","ticket-07":"分配先に指定されたユーザー"};
+// 呼べる人。設計資料の「中身と決まり」とデータモデルの権限の表から、APIごとに手で書いた。
+const WHO = {"group-01":"本人の分だけ","group-02":"本人の分だけ","group-03":"ログインした人（未登録でもよい）","group-04":"ログインした人（未登録でもよい）","group-05":"登録済みの人","group-08":"オーナーだけ","group-09":"本人かオーナー","group-10":"抜けるのは本人、外すのはオーナー","group-11":"オーナーだけ","group-12":"オーナーだけ","group-13":"本人の分だけ","group-14":"本人の分だけ",
+ "catalog-12":"自分の下書きだけ","catalog-13":"作るのは全員、直す・消すのは作った人","attendance-02":"自分の参戦を作る","attendance-03":"本人だけ","attendance-04":"本人だけ","attendance-05":"本人だけ","attendance-06":"本人の分だけ","attendance-07":"本人の分だけ","attendance-08":"本人だけ","attendance-09":"本人の分だけ",
+ "ticket-04":"申込者だけ","ticket-05":"申込者だけ","ticket-06":"申込者だけ","ticket-07":"申込者だけ","merch-02":"作るのは全員、直す・消すのは作った人","merch-03":"自分の下書きだけ","merch-07":"自分の分だけ","merch-09":"その品目の購入担当だけ",
+ "notification-01":"本人の分だけ","notification-02":"本人の分だけ","notification-03":"本人だけ"};
 const ASYNC = ["group-10","group-12","group-14"];
 const SCHED = ["ticket-02","ticket-04","ticket-05","ticket-06"];
 const S3 = {"merch-01":"アップロード用URLを作る","merch-02":"一時置き場からコピー","merch-04":"items/へコピー","merch-05":"コピーと消す予定","merch-06":"取得用URL（5分）"};
 function flags(id){
   const a=A[id], ms=methods(a.route), write=ms.some(m=>m!=="GET"), inv=id==="group-03"||id==="group-04";
   const inGroup=/\/groups\/\{g\}/.test(a.route), me=/`(GET|POST|PUT|PATCH|DELETE)[^`]*\/me/.test(a.route)||id==="group-05";
-  return {write, inv, lock: write&&!ASYNC.includes(id) ? (inGroup?"groups・自分の users・members の行を FOR SHARE"+(OTHER_LOCK[id]?"。"+OTHER_LOCK[id]+"の行も":""):(me||id==="group-05")?"自分の users の行を FOR SHARE":null):null,
-    row: ROWLOCK[id]||null, async: ASYNC.includes(id), sched: SCHED.includes(id), s3: S3[id]||null};
+  const async=ASYNC.includes(id);
+  const lock = async ? "users・members・groups を確かめ"+(id==="group-14"?"":"、オーナーか（外す・解散）")+"。対象の行を "+({"group-10":"leaving","group-12":"disbanding","group-14":"withdrawing"})[id]+" に更新（実行中の書き込みを待つ）し、erasure_jobs を作る"
+    : id==="group-04" ? "groups の行を FOR SHARE（解散の開始と重ねない）"
+    : write ? (inGroup?"groups・自分の users・members の行を FOR SHARE"+(OTHER_LOCK[id]?"。"+OTHER_LOCK[id]+"の行も":""):(me||id==="group-05")?"自分の users の行を FOR SHARE":null) : null;
+  return {write, inv, inGroup, me, lock, row: ROWLOCK[id]||null, async, sched: SCHED.includes(id), s3: S3[id]||null};
 }
 function pipeline(id){
   const f=flags(id), ex=EX[id]||{}, code=ex.res?ex.res[0]:200;
   const steps=[
     ["画面","hono/client で呼ぶ",true],
-    ["API Gateway",f.inv?"JWT を確かめる（users の行が無くてもよい）":"Cognito の JWT を確かめる。無ければ 401",true],
-    ["Lambda api",f.inv?"招待の2本だけ users の行を問わない":"users の行が active か。無ければ not_registered",true],
-    ["ロック",[f.lock,f.row&&(f.row.includes("比べ")?f.row:f.row+"を FOR UPDATE")].filter(Boolean).join("、")||(f.async?"終わっていないジョブがあれば先に 202":"読むだけ"),!!(f.lock||f.row||f.async)],
+    ["API Gateway","Cognito の JWT を確かめる。無ければ 401",true],
+    ["Lambda api", f.async ? "先に同じ対象の終わっていないジョブを探す。あれば、ほかの確かめより先に 202"
+      : id==="group-03" ? "users の行が無くてもよい。すでにメンバーなら「メンバー」と返す"
+      : id==="group-04" ? "users の行が無くてもよい。退会を始めていれば account_closing"
+      : f.inGroup ? "users が active か（not_registered）、このグループの members が active か（違えば not_found）"+(f.write?"":"。解散中でも読める")
+      : "users が active か。無ければ not_registered"+(f.me?"。/me の下の他人の行は not_found":""), true],
+    ["ロック",[f.lock,f.row&&(f.row.includes("比べ")?f.row:f.row+"を FOR UPDATE")].filter(Boolean).join("、")||"読むだけ",!!(f.lock||f.row)],
     ["Neon",f.write?"1つのトランザクションで書く":"読む",true],
   ];
-  const side = f.async?["erasure-worker","受け付けたあと、消す処理を続きから最後まで進める"]:f.sched?["EventBridge Scheduler","リマインドの予約を作る・直すのはコミットの前、消すのはあと"]:f.s3?["S3",f.s3]:null;
+  const side = f.async?["erasure-worker","15分後の見張りの予約を作ってから erasure-worker を起動し、消す処理を最後まで進める"]:f.sched?["EventBridge Scheduler","リマインドの予約を作る・直すのはコミットの前、消すのはあと"]:f.s3?["S3",f.s3]:null;
   // 説明の行数から枠の高さを決める。全角1字を1、半角を0.55として、1行に9字ほど入る。
   const cols=t=>[...String(t||"")].reduce((a,ch)=>a+(ch.charCodeAt(0)<128?0.55:1),0);
   const maxLines=Math.max(...steps.map(s=>Math.ceil(cols(s[1])/8.5)),side?Math.ceil(cols(side[1])/8.5):1,1);
@@ -110,14 +123,16 @@ function exampleBlock(id){
       <div><div class="exl">要求の本文</div><pre class="json">${ex.req?jsonHL(ex.req):'<span class="j-n">（本文なし）</span>'}</pre></div>
       <div><div class="exl">応答 <span class="code c${ex.res[0]}">${ex.res[0]}</span></div><pre class="json">${jsonHL(ex.res[1])}</pre></div>
     </div>${errRow}
-    <p class="exnote">設計資料の「中身と決まり」から組み立てた例。値は架空で、欄の名前の一部（<code>merchSalesInfo</code>など）は資料に無く、このボードで仮に付けた。</p>
+    ${ex.errBody?`<div class="exl">エラーの本文の例（応答に入れると決めた中身。どの欄に入れるかは資料に無い）</div><pre class="json">${jsonHL({type:"about:blank",...ex.errBody})}</pre>`:""}
+    <p class="exnote">設計資料の「中身と決まり」から組み立てた例。値は架空。欄の名前は、データモデルの列があればそのキャメルケース（<code>doorsOpenAt</code>など）にした。列も資料の名前も無いもの（<code>fromSnapshot</code>、<code>removes</code>の中の名前など）は、このボードで仮に付けた。</p>
   </div>`;
 }
 
 /* ---------- 進み具合 ---------- */
-const STAGES=[["ストーリー","2026-11-07に書き、11-21にMVP1を37本にした","done"],["画面とAPI","工程5。PR #17でレビュー中","now"],["要件と設計書","最初の1本の設計で書く","todo"],["実装","Devinに渡す","todo"],["E2E","2人をブラウザ2つで動かす","todo"]];
+// 設計資料の状態の書き方に合わせる。ストーリーの文書は「状態：案」のまま。
+const STAGES=[["ストーリー","2026-11-07に案を書き、11-20にN-04とM-06を足して37本。文書の状態は「案」のまま","draft"],["画面とAPI","工程5。PR #17でレビュー中","now"],["AWS構成と費用","工程6。構成は11-13に決めた。費用の試算はこれから","todo"],["要件と設計書","最初の1本の設計で書く","todo"],["実装","Devinに渡す","todo"],["E2E","2人をブラウザ2つで動かす","todo"]];
 function progress(){
-  return `<ol class="prog">${STAGES.map(([t,s,k])=>`<li class="${k}"><i>${k==="done"?"✓":k==="now"?"●":""}</i><b>${t}</b><span>${s}</span></li>`).join("")}</ol>`;
+  return `<ol class="prog">${STAGES.map(([t,s,k])=>`<li class="${k}"><i>${k==="done"?"✓":k==="now"?"●":k==="draft"?"案":""}</i><b>${t}</b><span>${s}</span></li>`).join("")}</ol>`;
 }
 
 /* ---------- タブの中身 ---------- */
@@ -149,7 +164,7 @@ function renderApi(id){
   const errs=errCodes(a.rule), f=flags(id);
   const remind = SCHED.includes(id);
   const sn = sentences(a.rule.replace(/\\\|/g,"|"));
-  const tags=[f.write?["書く","w"]:["読むだけ","r"], /できる人|だけ/.test(a.rule)&&/(オーナー|申込者|本人|作った人|購入担当)だけ/.test(a.rule)?[a.rule.match(/(オーナー|申込者|本人|作った人|購入担当)だけ/)[1]+"だけ","o"]:["メンバー全員","r"], f.async?["202で受けて裏で進む","a"]:null, f.sched?["リマインドを合わせる","n"]:null, f.s3?["画像（S3）","n"]:null, /`id`|\{ id/.test(a.rule)?["IDは画面が作る（UUIDv7）","r"]:null].filter(Boolean);
+  const tags=[f.write?["書く","w"]:["読むだけ","r"], WHO[id]?[WHO[id],"o"]:["グループのメンバー全員","r"], f.async?["202で受けて裏で進む","a"]:null, f.sched?["リマインドを合わせる","n"]:null, f.s3?["画像（S3）","n"]:null, /`id`|\{ id/.test(a.rule)?["IDは画面が作る（UUIDv7）","r"]:null].filter(Boolean);
   return `<div class="pane" style="${cc(a.ctx)}">
   <div class="head"><span class="ctxlabel"><span class="dot"></span>${CTX[a.ctx]}（${a.ctx}）</span></div>
   <div class="head"><h2>${esc(a.name)}</h2></div>
@@ -171,6 +186,9 @@ function renderApi(id){
 function renderStory(id){
   const s=ST[id];
   const steps=s.screens.map(sid=>({sid, apis:s.apis.filter(a=>S[sid].apis.includes(a))}));
+  const linked=(a,b)=>D.edges.some(e=>(e[0]===a&&e[1]===b)||(e[0]===b&&e[1]===a));
+  const decs=(D.storyDec||[]).filter(d=>d.ids.includes(id));
+  const partial=s.apis.filter(a=>/・/.test(A[a].name)&&!s.apiRef.includes(A[a].name));
   const unplaced=s.apis.filter(a=>!steps.some(x=>x.apis.includes(a)));
   const who=(s.text.match(/^(.+?)として/)||[])[1]||"";
   const what=(s.text.match(/として、(.+?)。/)||[])[1]||"";
@@ -181,12 +199,14 @@ function renderStory(id){
   <div class="card3"><div><span>誰が</span><b>${inl(who)}</b></div><div><span>何をしたい</span><b>${inl(what)}</b></div><div><span>なぜ</span><b>${inl(why)}</b></div></div>
   <section class="blk"><h4>進み具合</h4>${progress()}</section>
   <section class="blk"><h4>画面をたどる流れ</h4>
-    <div class="journey">${steps.map((x,i)=>{const href=boardLink("screens",x.sid);return `${i?'<div class="jarrow" aria-hidden="true">→</div>':""}<div class="jstep"><a class="wfcap" ${href?`href="${href}" target="_blank" rel="noopener"`:""}><b>${x.sid}</b>${esc(S[x.sid].title)}${href?" ↗":""}</a>${wf(x.sid,{sm:1,hl:x.apis[0]})}<div class="japis">${x.apis.map(a=>{const h=boardLink("apis",a);return `<a class="ja" ${h?`href="${h}" target="_blank" rel="noopener"`:""}><span class="m ${MCOL(a)}">${MCOL(a)}</span>${esc(A[a].name)}</a>`;}).join("")}</div></div>`;}).join("")}</div>
-    ${unplaced.length?`<p class="empty">画面の表に名前が無いAPI：${unplaced.map(a=>esc(A[a].name)).join("、")}</p>`:""}
+    <div class="journey">${steps.map((x,i)=>{const href=boardLink("screens",x.sid);return `${i?`<div class="jarrow" aria-hidden="true" title="${linked(steps[i-1].sid,x.sid)?"移り方の図に線がある":"移り方の図では直接つながっていない"}">${linked(steps[i-1].sid,x.sid)?"→":"・"}</div>`:""}<div class="jstep"><a class="wfcap" ${href?`href="${href}" target="_blank" rel="noopener"`:""}><b>${x.sid}</b>${esc(S[x.sid].title)}${href?" ↗":""}</a>${wf(x.sid,{sm:1,hl:x.apis[0]})}<div class="japis">${x.apis.length?"":'<span class="empty" style="font-size:12px">このストーリーではAPIを呼ばない</span>'}${x.apis.map(a=>{const h=boardLink("apis",a);return `<a class="ja" ${h?`href="${h}" target="_blank" rel="noopener"`:""}><span class="m ${MCOL(a)}">${MCOL(a)}</span>${esc(A[a].name)}</a>`;}).join("")}</div></div>`;}).join("")}</div>
+    <p class="empty" style="margin-top:4px">「→」は移り方の図に線がある画面、「・」は図では直接つながっていない画面。設計資料の対応表の画面の並びは、順番を表していない。</p>
+    ${unplaced.length?`<p class="empty">このストーリーの画面では呼ばないAPI：${unplaced.map(a=>{const sc=D.screens.filter(x=>x.apis.includes(a)).map(x=>x.id);return esc(A[a].name)+(sc.length?`（${sc.join("・")}で呼ぶ）`:"");}).join("、")}</p>`:""}
   </section>
-  <section class="blk"><h4>受け入れ条件 <span class="n">${s.ac.length}</span></h4><ul class="ac">${s.ac.map(x=>`<li>${check}<span>${inl(x)}</span></li>`).join("")}</ul></section>
+  <section class="blk"><h4>受け入れ条件 <span class="n">${s.ac.length}</span></h4>${s.ac.length?`<ul class="ac">${s.ac.map(x=>`<li>${check}<span>${inl(x)}</span></li>`).join("")}</ul>`:'<p class="empty">設計資料に受け入れ条件は書かれていない。</p>'}</section>
+  ${decs.length?`<section class="blk"><h4>このストーリーに関わる決めたこと</h4><div class="decs">${decs.map(d=>`<div class="dec"><b>${d.date}</b><span>${inl(d.q)}</span><p>${inl(d.a)}</p></div>`).join("")}</div></section>`:""}
   <section class="blk"><h4>使うAPI <span class="n">${s.apis.length}</span></h4><div class="apis">${s.apis.map(a=>apiCard(a)).join("")}</div>
-  ${/（/.test(s.apiRef)?`<p class="empty" style="margin-top:8px">設計資料の書き方では「${inl(s.apiRef)}」。</p>`:""}</section>
+  ${/（/.test(s.apiRef)||partial.length?`<p class="empty" style="margin-top:8px">設計資料の書き方では「${inl(s.apiRef)}」。${partial.length?`${partial.map(a=>"「"+esc(A[a].name)+"」").join("")}は表の1行をそのまま出したので、このストーリーでは一部だけを使う。`:""}</p>`:""}</section>
   </div>`;
 }
 
@@ -213,11 +233,14 @@ function renderOverview(){
   const scr=D.screens.map(s=>s.id);
   return `<div class="pane"><div class="head"><h2>ストーリーの全体</h2></div>
   <div class="stats"><div class="stat"><span class="v">${D.stories.length}</span><span class="k">ストーリー</span></div><div class="stat"><span class="v">${D.stories.reduce((n,s)=>n+s.ac.length,0)}</span><span class="k">受け入れ条件</span></div><div class="stat"><span class="v">${new Set(D.stories.flatMap(s=>s.screens)).size}</span><span class="k">挙がっている画面（23のうち）</span></div></div>
-  <section class="blk"><h4>進み具合（37本とも同じ段階）</h4>${progress()}</section>
+  <section class="blk"><h4>進み具合（37本とも同じ段階。${esc((D.storyStatus||"").split("。")[0])}）</h4>${progress()}</section>
   <section class="blk"><h4>文脈ごとのストーリー</h4><div class="kanban">${D.ctxs.map(([k,ja])=>`<div class="kcol" style="${cc(k)}"><h5><span class="dot"></span>${ja}<span class="n">${D.stories.filter(s=>s.ctx===k).length}</span></h5>${D.stories.filter(s=>s.ctx===k).map(s=>`<a class="kcard" href="#${s.id}"><b>${s.id}</b><span>${esc(s.title)}</span><small>画面 ${s.screens.join("・")}　API ${s.apis.length}　条件 ${s.ac.length}</small></a>`).join("")}</div>`).join("")}</div></section>
   <section class="blk"><h4>ストーリーと画面の対応</h4><p class="lead" style="margin-bottom:8px">色の付いたマスは、そのストーリーを満たす画面。</p>
   <div class="scroll"><table class="matrix"><thead><tr><th class="rowh"></th>${scr.map(x=>`<th class="colh" title="${esc(S[x].title)}">${x}</th>`).join("")}</tr></thead>
   <tbody>${D.stories.map(s=>`<tr style="${cc(s.ctx)}"><th class="rowh"><button data-go="${s.id}">${s.id} <span style="font-family:var(--body)">${esc(s.title)}</span></button></th>${scr.map(x=>`<td class="${s.screens.includes(x)?"on":""}"${s.screens.includes(x)?` title="${s.id} → ${x} ${esc(S[x].title)}"`:""}></td>`).join("")}</tr>`).join("")}</tbody></table></div>
-  <p class="empty" style="margin-top:8px">どのストーリーにも挙がっていない画面：${scr.filter(x=>!D.stories.some(s=>s.screens.includes(x))).map(x=>`${x} ${esc(S[x].title)}`).join("、")}。</p></section>
+  <p class="empty" style="margin-top:8px">どのストーリーにも挙がっていない画面：${scr.filter(x=>!D.stories.some(s=>s.screens.includes(x))).map(x=>`${x} ${esc(S[x].title)}`).join("、")}。サインインの細かな流れはストーリーにしないと決めた（2026-11-21）。</p>
+  <p class="empty">どのストーリーにも挙がっていないAPI：${D.apis.filter(a=>!a.stories.length).map(a=>{const h=boardLink("apis",a.id);return h?`<a href="${h}" target="_blank" rel="noopener">${esc(a.name)}</a>`:esc(a.name);}).join("、")}。</p></section>
+  <section class="blk"><h4>決めたこと</h4><div class="decs">${(D.storyDec||[]).map(d=>`<div class="dec"><b>${d.date}</b><span>${inl(d.q)}</span><p>${inl(d.a)}</p><small>${d.ids.map(x=>`<a href="#${x}">${x}</a>`).join("・")}</small></div>`).join("")}</div></section>
+  <section class="blk"><h4>MVP1のあとの候補</h4><div class="md">${md(["| 番号 | ストーリー | 出典 |","|---|---|---|",...D.storyLater.planned.map(r=>`| ${r.join(" | ")} |`)])}${md(["| 番号 | ストーリー | 文脈 | 優先度 |","|---|---|---|---|",...D.storyLater.new.map(r=>`| ${r.join(" | ")} |`)])}${md(D.storyLater.not)}</div></section>
   <section class="blk"><h4>登場する人</h4><div class="md">${md(["| 人 | 用語集での名前 | 説明 |","|---|---|---|",...D.people.map(r=>`| ${r.join(" | ")} |`)])}</div></section></div>`;
 }

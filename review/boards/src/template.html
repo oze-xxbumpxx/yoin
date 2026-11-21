@@ -245,14 +245,14 @@ pre.json{margin:0;padding:8px 12px 12px;font-family:var(--mono);font-size:12px;l
 .card3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:10px}
 .card3>div{background:var(--surface);padding:12px 14px;display:grid;gap:4px;align-content:start}
 .card3 span{font-size:11.5px;color:var(--cc);font-weight:700}.card3 b{font-family:var(--display);font-weight:600;font-size:16px;line-height:1.6}
-.prog{list-style:none;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;padding:0;margin:0;counter-reset:s}
+.prog{list-style:none;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0;padding:0;margin:0;counter-reset:s}
 .prog li{position:relative;display:grid;gap:2px;padding:0 8px 0 0;font-size:12px}
 .prog li::before{content:"";position:absolute;left:24px;right:0;top:11px;height:2px;background:var(--line)}
 .prog li.done::before{background:var(--m-get)}
 .prog li:last-child::before{display:none}
 .prog i{position:relative;z-index:1;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:12px;background:var(--surface);border:2px solid var(--line);color:var(--surface)}
 .prog li.done i{background:var(--m-get);border-color:var(--m-get)}
-.prog li.now i{border-color:var(--m-put);color:var(--m-put);font-size:10px}
+.prog li.draft i{border-color:var(--m-get);color:var(--m-get);font-size:10px}.prog li.now i{border-color:var(--m-put);color:var(--m-put);font-size:10px}
 .prog b{font-size:13px;margin-top:4px}.prog span{color:var(--muted);font-size:11.5px;line-height:1.5}
 .journey{display:flex;gap:6px;align-items:flex-start;overflow-x:auto;padding:4px 4px 10px}
 .jstep{flex:0 0 230px;display:grid;gap:6px;align-content:start}

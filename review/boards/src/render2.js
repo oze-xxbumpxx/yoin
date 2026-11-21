@@ -147,6 +147,7 @@ function renderDbOverview(){
    "| 画像の確定 | F2のロックを持ったまま、S3の中でコピーしてから`image_key`を書いてコミットする。ロックの間は解散・退会・抜けるが始まらない | data-model「解散と退会」 |",
    "| `erasure-worker` | `active`は確かめない。削除ジョブ用の公開関数が`erasure_jobs`の行を`FOR UPDATE`でロックし、`running`と処理中の状態を確かめる。`step`の1段階ごとに1つのトランザクション。2つ動いても1つずつ進む | ADR-0003 |"])}</div></section>
   <section class="blk"><h4>解散と退会で、文脈ごとに起きること</h4><div class="md">${md(["| 文脈 | 解散のとき | 退会のとき |","|---|---|---|",...DB.erase.map(r=>`| ${r.join(" | ")} |`)])}</div></section>
+  <section class="blk"><h4>メンバーを外す・自分から抜けるときに起きること（R10）</h4><div class="md">${md(DB.leave||[])}</div><p class="empty">上の表と違い、設計資料はこの場合を文脈ごとの表にせず、箇条書きで書いている。</p></section>
   <section class="blk"><h4>全体の決まり（設計資料から）</h4><div class="md">${Object.entries(S).map(([h,l])=>`<h5>${inl(h)}</h5>${md(l)}`).join("")}</div></section>
   <section class="blk"><h4>決めたこと <span class="n">${DB.decisions.length}件</span></h4><div class="decs">${DB.decisions.map(d=>`<div class="dec"><b>${d[0]}</b><span>${inl(d[1])}</span><p>${inl(d[2])}</p></div>`).join("")}</div></section>
   </div>`;
@@ -155,23 +156,33 @@ function renderDbOverview(){
 /* ================= AWSボード ================= */
 const AW = D.aws || {nodes:{},edges:[]};
 const AN = Object.assign({}, AW.nodes, {sqs:"SQS＋アラーム 失敗の知らせ（メール）"});
-const AEDGES = AW.edges.concat([["sched","sqs","起動できなかった"],["worker","sqs","再試行を使い切った"],["sender","sqs","再試行切れ・届かない端末"],["sender","sched","見張りを動かす・消す"],["worker","sched","見張りを作り直す"],["api","img","S3の中でコピー"]]);
+const AEDGES = AW.edges.concat([["sched","sqs","起動できなかった"],["worker","sqs","再試行を使い切った"],["sender","sqs","再試行切れ・届かない端末"],["sender","sched","見張り・再送の予約"],["worker","sched","見張り・予約を消す"],["api","img","S3の中でコピー"]]);
 const ADDED = new Set(["sched>sqs","worker>sqs","sender>sqs","sender>sched","worker>sched","api>img"]);
+// 設計資料の図の線の名前のうち、文章の決まり（データモデルR11）に合わせて言葉を足したもの。
+const LABEL_FIX = {"api>sched":"予約を作る・直す・消す"};
 const ALABEL = {device:["利用者の端末","PWA・Service Worker"],cf:["CloudFront","＋S3 画面のファイル"],cognito:["Cognito","ユーザープール"],apigw:["API Gateway","HTTP API"],api:["api","Lambda"],worker:["erasure-worker","Lambda"],sender:["notification-sender","Lambda"],sched:["EventBridge","Scheduler"],img:["S3","グッズの画像"],ssm:["SSM","Parameter Store"],logs:["CloudWatch","Logs（保存7日）"],sqs:["SQS＋アラーム","失敗をメールで知らせる"],neon:["Neon","Postgres・AWSの外"],push:["Web Push","Apple・Googleの配信"]};
 const AL = k => ALABEL[k][0]+(["api","worker","sender"].includes(k)?"（Lambda）":"");
 const APOS = {device:[20,300],cf:[240,46],cognito:[240,160],apigw:[240,300],img:[240,470],ssm:[470,46],logs:[700,46],api:[470,300],worker:[700,190],sched:[470,470],sender:[700,470],sqs:[700,600],neon:[940,300],push:[940,470]};
 const AKIND = {device:"client",neon:"ext",push:"ext",cf:"edge",cognito:"sec",apigw:"edge",api:"fn",worker:"fn",sender:"fn",sched:"int",img:"store",ssm:"sec",logs:"ops",sqs:"ops"};
 const AKIND_JA = {client:"端末",ext:"AWSの外",edge:"入口",sec:"認証と秘密",fn:"Lambda",int:"予約",store:"保存",ops:"見張り"};
 const NODE_PART = {device:["画面"],cf:["画面"],cognito:["認証"],apigw:["API"],api:["API"],worker:["解散・退会・外す"],sender:["通知"],sched:["通知"],push:["通知"],neon:["データベース"],img:["画像"],ssm:["設定と秘密"],logs:["ログ"],sqs:["失敗の知らせ"]};
-const NODE_DEC = {device:["C-5"],cf:["B-1"],cognito:[],apigw:["A-1"],api:["A-1","A-2","C-6"],worker:["A-1","A-2","C-4","C-6"],sender:["A-1","A-2","C-4","C-5","C-6"],sched:["C-4"],push:["C-5"],neon:["A-1","A-2","C-2"],img:["B-2"],ssm:["C-1"],logs:["C-3","C-6"],sqs:["C-4"]};
+const NODE_DEC = {device:["C-5"],cf:["B-1"],cognito:["C-2"],apigw:[],api:["A-1","A-2","C-6"],worker:["A-1","A-2","C-4","C-6"],sender:["A-1","A-2","C-4","C-5","C-6"],sched:["C-4"],push:["C-5"],neon:["A-1","A-2","C-2"],img:["B-2"],ssm:["C-1"],logs:["C-3","C-6"],sqs:["C-4"]};
 const FLOW_EDGES = [
   ["device>cognito"],
   ["device>apigw","apigw>api","api>neon"],
   ["device>apigw","apigw>api","api>neon","device>img","api>img"],
-  ["device>apigw","apigw>api","api>neon","api>worker","api>sched","sched>worker","worker>neon","worker>img","worker>cognito","worker>sched","worker>sqs"],
+  ["device>apigw","apigw>api","api>neon","api>worker","api>sched","sched>worker","worker>neon","worker>img","worker>cognito","worker>sched","worker>sqs","sched>sqs"],
   ["api>sched","sched>sender","sender>sched","sender>neon","sender>push","push>device","sched>sqs","sender>sqs"],
 ];
 const FID = i => "flow-"+(i+1);
+// 処理の流れの文（architecture.md）に無く、データモデルとAPI設計の別の節に書いてあること。
+const FLOW_MORE = [
+ [["`users`の行は、招待から参加する（`POST /invites/{token}/accept`）を受けた`api`が作る。ログインだけでは行はできない","api.md「APIの一覧」の招待から参加する"],["知らない`sub`のJWTで自動登録はしない。`users`の行が無ければ`not_registered`","data-model「退会の手順」"]],
+ [],
+ [["確定は、`api`がF2のロックを持ったままS3の中でコピーしてから`image_key`を書き、コミットする","data-model「解散と退会」の「動かし方」"]],
+ [["`api`はジョブを作るときに、15分後の見張りの予約を作ってから`erasure-worker`を起動する","data-model「動かし方」"],["`erasure-worker`は動き始めるたびに見張りの予約を1時間後に作り直し、終わったら消す","data-model「動かし方」"],["申込を消すときは、まだ届いていないリマインドの予約と見張りの予約も取り消す","data-model「チケットの状態と予約（R9）」「予約の作り方（R11）」"],["見張りが`erasure-worker`を起動できなかったとき、再試行を使い切ったときは、C-4のキューに入りメールで知らせる","architecture「決めたこと」C-4"]],
+ [["予約するとき、`api`は送信の予約（`reminder-<予約ID>`）と、送信時刻の10分後の見張りの予約（`reminder-watch-<予約ID>`）を作ってから、DBに書く","data-model「予約の作り方（R11）」"],["時刻を直すときは2つの予約を新しい時刻に更新してからDBを直す。取り消すときはDBを`canceled`にしてから2つの予約を消す","data-model「予約の作り方（R11）」"],["`notification-sender`は引き受けるときに見張りを10分後に動かし直し、送り終えたら消す","data-model「送り方（F5、Q4）」"],["送れなかった端末があれば、5分後に再送の予約を作る（3回まで）。それでも残ればC-4のキューに入れる","data-model「予約の作り方（R11）」"],["Lambdaの自動の再試行は2回。1時間を過ぎた再試行は捨てる。起動できなかったとき・再試行を使い切ったときはC-4のキューに入りメールで知らせる","data-model「予約の作り方（R11）」、architecture C-4"]],
+];
 const ANID = k => "aws-"+k;
 function awsSVG(o={}){
   const W=176,H=58;
@@ -181,9 +192,12 @@ function awsSVG(o={}){
   const focus = hiE.size>0;
   const c = k => ({x:APOS[k][0]+W/2,y:APOS[k][1]+H/2});
   let es="", ls="";
-  AEDGES.forEach(([a,b,l],i)=>{
+  const placed=[], boxes=Object.keys(APOS).map(k=>({x:APOS[k][0],y:APOS[k][1],w:W,h:H}));
+  const hit=(r,q)=>r.x<q.x+q.w&&q.x<r.x+r.w&&r.y<q.y+q.h&&q.y<r.y+r.h;
+  AEDGES.forEach(([a,b,l0],i)=>{
+    const l = LABEL_FIX[a+">"+b]||l0;
     const k=a+">"+b, A0=APOS[a], B0=APOS[b]; let d, lx, ly;
-    if(k==="push>device"){ d=`M${B0[0]+W/2} ${A0[1]+H} C${A0[0]+W/2} ${A0[1]+H+140},${B0[0]+W/2} ${A0[1]+H+140},${B0[0]+W/2} ${B0[1]+H}`; d=`M${A0[0]+W/2} ${A0[1]+H} C${A0[0]+W/2} 720,${B0[0]+W/2} 720,${B0[0]+W/2} ${B0[1]+H}`; lx=(A0[0]+B0[0])/2+W/2; ly=690; }
+    if(k==="push>device"){ d=`M${B0[0]+W/2} ${A0[1]+H} C${A0[0]+W/2} ${A0[1]+H+140},${B0[0]+W/2} ${A0[1]+H+140},${B0[0]+W/2} ${B0[1]+H}`; d=`M${A0[0]+W/2} ${A0[1]+H} C${A0[0]+W/2} 720,${B0[0]+W/2} 720,${B0[0]+W/2} ${B0[1]+H}`; lx=A0[0]+W/2; ly=A0[1]+H+26; }
     else {
       const ca=c(a), cb=c(b), dx=cb.x-ca.x, dy=cb.y-ca.y;
       let p,q;
@@ -194,7 +208,13 @@ function awsSVG(o={}){
     }
     const hi=hiE.has(k), cls=`ae${hi?" hi":""}${focus&&!hi?" dim":""}${ADDED.has(k)?" added":""}`;
     es+=`<path class="${cls}" d="${d}" marker-end="url(#am${hi?"h":""})"/>`;
-    if(l && (!focus||hi)) ls+=`<g class="al${hi?" hi":""}"><rect x="${lx-l.length*5.6-6}" y="${ly-10}" width="${l.length*11.2+12}" height="20" rx="10"/><text x="${lx}" y="${ly+4}" text-anchor="middle">${esc(l)}</text></g>`;
+    if(l && (!focus||hi)){
+      const w=l.length*11.2+12;
+      let r={x:lx-w/2,y:ly-10,w,h:20};
+      for(const dy of [0,-22,22,-44,44,-66,66]){ const t={...r,y:ly-10+dy}; if(![...placed,...boxes].some(q=>hit(t,q))){ r=t; break; } }
+      placed.push(r);
+      ls+=`<g class="al${hi?" hi":""}"><rect x="${r.x}" y="${r.y}" width="${w}" height="20" rx="10"/><text x="${lx}" y="${r.y+14}" text-anchor="middle">${esc(l)}</text></g>`;
+    }
   });
   let ns="";
   Object.keys(APOS).forEach(k=>{
@@ -205,7 +225,7 @@ function awsSVG(o={}){
   return `<svg class="awsd" width="1140" height="740" style="width:100%;min-width:780px;height:auto" viewBox="0 0 1140 740" role="img" aria-label="AWS構成図"><defs>
    <marker id="am" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker>
    <marker id="amh" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--accent)"/></marker></defs>
-   <rect class="frame" x="220" y="14" width="690" height="666" rx="16"/><text class="frame-t" x="236" y="36">AWS 東京リージョン（ap-northeast-1）</text>
+   <rect class="frame" x="220" y="14" width="690" height="666" rx="16"/><text class="frame-t" x="236" y="36">AWS 東京リージョン（ap-northeast-1。シンガポールに移す案あり）</text>
    ${es}${ls}${ns}</svg>`;
 }
 function awsIcon(k){
@@ -221,7 +241,11 @@ function renderAwsNode(k){
   const nm=AN[k];
   const extra = k==="neon" ? `<section class="blk"><h4>中にあるスキーマ</h4><div class="chips">${Object.keys(SCH_JA).map(s=>{const h=boardLink("db",""); return `<a class="chip" style="${cc(SC(s))}" ${URLS.db?`href="${URLS.db}" target="_blank" rel="noopener"`:""}><b>${s}</b>${SCH_JA[s]}</a>`;}).join("")}</div></section><div class="box" style="--cc:var(--c-ticket);margin-top:14px"><p><b>まだ決めていないこと</b></p><p>${inl(AW.undecided.find(x=>x.startsWith("リージョン"))||"")}</p></div>`
     : k==="api" ? `<section class="blk"><h4>受け持つAPI</h4><p>${URLS.apis?`<a href="${URLS.apis}" target="_blank" rel="noopener">APIボードの${D.apis.length}件 ↗</a>`:`${D.apis.length}件`}。全部を1つのLambdaで受け、Honoで文脈ごとのルートにつなぐ。</p></section>`
-    : k==="ssm"||k==="logs" ? `<p class="empty">設計資料の図では、ほかの部品とのあいだに線を引いていない。</p>` : k==="sqs" ? `<p class="empty">設計資料の図（mermaid）にはまだ無い。2026-11-21のC-4で足したので、このボードでは点線で描いた。</p>`:"";
+    : k==="cognito" ? `<div class="box" style="--cc:var(--c-ticket);margin-top:14px"><p><b>まだ決めていないこと</b></p><p>${inl(AW.undecided.find(x=>x.startsWith("リージョン"))||"")}</p></div>`
+    : k==="apigw" ? `<p class="empty">JWTの無い要求や検証に通らない要求は、ここで401で断るので<code>api</code>まで届かない（api.md「つなぎ先と認証」）。</p>`
+    : k==="ssm" ? `<p class="empty">3つのLambdaがNeonの接続文字列を、<code>notification-sender</code>がWeb PushのVAPID鍵を読む（C-1）。設計資料の図では線を引いていないので、このボードでも描いていない。</p>`
+    : k==="logs" ? `<p class="empty">3つのLambdaがPowertoolsのLoggerで書く（C-6）。設計資料の図では線を引いていない。</p>` : k==="sqs" ? `<p class="empty">設計資料の図（mermaid）にはまだ無い。2026-11-21のC-4で足したので、このボードでは点線で描いた。</p>`:"";
+  const neonMore = k==="neon" ? `<p class="empty" style="margin-top:8px">バックアップ（復元できる履歴）の保持期間は未決（データモデル「決めないこと」、工程6）。外部FAQの「バックアップからは保持期間が過ぎると消えます」に入れる数字になる。</p>` : "";
   return `<div class="pane" style="--cc:var(--k-${kind})">
   <div class="head"><span class="ctxlabel"><span class="dot"></span>${AKIND_JA[kind]}</span></div>
   <div class="head"><h2>${esc(ALABEL[k][0])}</h2><span class="ent" style="--cc:var(--muted)">${esc(ALABEL[k][1])}</span></div>
@@ -230,7 +254,7 @@ function renderAwsNode(k){
   <section class="blk"><h4>つながり</h4><div class="split2">
     <div><p class="exl" style="padding:0 0 6px">入ってくる</p>${ins.length?ins.map(e=>`<div class="rel"><a class="chip" href="#${ANID(e[0])}"><b>${AKIND_JA[AKIND[e[0]]]}</b>${esc(AL(e[0]))}</a><span class="arrow">${esc(e[2]||"→")}</span></div>`).join(""):'<p class="empty">なし</p>'}</div>
     <div><p class="exl" style="padding:0 0 6px">出ていく</p>${outs.length?outs.map(e=>`<div class="rel"><span class="arrow">${esc(e[2]||"→")}</span><a class="chip" href="#${ANID(e[1])}"><b>${AKIND_JA[AKIND[e[1]]]}</b>${esc(AL(e[1]))}</a></div>`).join(""):'<p class="empty">なし</p>'}</div></div></section>
-  ${extra}
+  ${extra}${neonMore}
   ${flowsOfNode(k).length?`<section class="blk"><h4>通る処理の流れ</h4><div class="chips">${flowsOfNode(k).map(({f,i})=>`<a class="chip" href="#${FID(i)}"><b>流れ</b>${esc(f[0])}</a>`).join("")}</div></section>`:""}
   ${decs.length?`<section class="blk"><h4>関わる決定</h4><div class="decs">${decs.map(d=>`<div class="dec"><b>${d[0]}</b><span>${inl(d[1])}</span><p>${inl(d[2])}</p>${d[3]?`<small>選ばなかった案：${inl(d[3])}</small>`:""}</div>`).join("")}</div></section>`:""}
   </div>`;
@@ -243,6 +267,7 @@ function renderFlow(i){
   <div class="scroll" style="padding:6px;margin-top:10px">${awsSVG({edges:FLOW_EDGES[i],anim:1})}</div>
   <p class="empty" style="margin-top:6px">色の付いた線がこの流れで通る道。${FLOW_EDGES[i].some(e=>ADDED.has(e))?"点線は設計資料の図（mermaid）に無く、文章から足した線。":""}</p>
   <section class="blk"><h4>順に起きること</h4><ol class="steps">${steps.map(s=>`<li>${inl(s)}</li>`).join("")}</ol></section>
+  ${FLOW_MORE[i].length?`<section class="blk"><h4>設計資料の別の節に書いてあること</h4><ul class="sentences">${FLOW_MORE[i].map(([t,src])=>`<li>${inl(t)}<span class="empty" style="font-size:12px">（${esc(src)}）</span></li>`).join("")}</ul></section>`:""}
   </div>`;
 }
 function renderAwsOverview(){
@@ -255,6 +280,6 @@ function renderAwsOverview(){
   <div class="box" style="--cc:var(--c-ticket);margin-top:18px"><p><b>リージョンはまだ動く可能性がある</b></p><p>${inl(AW.undecided.find(x=>x.startsWith("リージョン"))||"")}</p></div>
   <section class="blk"><h4>決めたこと <span class="n">${AW.decisions.length}件</span></h4><div class="decs">${AW.decisions.map(d=>`<div class="dec"><b>${d[0]}</b><span>${inl(d[1])}</span><p>${inl(d[2])}</p><small>選ばなかった案：${inl(d[3])}</small></div>`).join("")}</div></section>
   <section class="blk"><h4>費用の見込み（推測。工程6で公式の料金から試算する）</h4><ul class="sentences" style="--cc:var(--c-catalog)">${AW.cost.map(x=>`<li>${inl(x)}</li>`).join("")}</ul></section>
-  <section class="blk"><h4>決めないこと</h4><ul class="sentences" style="--cc:var(--muted)">${AW.undecided.map(x=>`<li>${inl(x)}</li>`).join("")}</ul></section>
+  <section class="blk"><h4>決めないこと</h4><ul class="sentences" style="--cc:var(--muted)">${AW.undecided.map(x=>`<li>${inl(x)}${/^IaC/.test(x)?'<br><span class="empty" style="font-size:12.5px">2026-11-21にADR-0004で決めた（Terraform、Drizzle ORM、Neonのサーバーレスドライバー）。設計資料のこの行は古いまま。</span>':""}</li>`).join("")}</ul></section>
   </div>`;
 }

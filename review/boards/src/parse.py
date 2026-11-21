@@ -140,6 +140,17 @@ for s in stories:
     s["apiRef"] = r[2]
     if miss: print("STORY MISS", s["id"], miss, file=sys.stderr)
 people = table2(section(st, r"^## 登場する人", 2))
+# 決めたことの表と、MVP1のあとの候補
+story_dec = []
+for h in [r"^## 決めたこと（2026-11-07）$", r"^## 決めたこと（2026-11-21）$"]:
+    sec = section(st, h, 2)
+    date = re.search(r"\d{4}-\d{2}-\d{2}", h).group(0)
+    for r in table2(sec):
+        story_dec.append({"date": date, "q": r[0], "a": r[1], "ref": r[2], "ids": re.findall(r"[GCATMN]-\d+", r[2])})
+story_later = {"planned": table2(section(st, r"^### 資料で予定されているもの（MVP2）$", 3)),
+               "new": table2(section(st, r"^### 新しく挙げた候補$", 3)),
+               "not": [l for l in section(st, r"^### 候補にしないもの$", 3) if l.strip() and not l.startswith("#")]}
+story_status = next((l for l in st if l.startswith("状態：")), "")
 
 # reverse links
 for a in apis:
@@ -153,7 +164,7 @@ for s in screens:
 data = {"screens": screens, "apis": apis, "stories": stories, "edges": E, "mermaid": "\n".join(mer),
         "flowNotes": flow_notes, "errors": errors, "rules": rules, "remindText": remind_text,
         "remindTable": remind_table, "notifNote": notif_note, "people": people,
-        "ctxs": ctxs}
+        "ctxs": ctxs, "storyDec": story_dec, "storyLater": story_later, "storyStatus": story_status}
 print(len(screens), len(apis), len(stories), len(E), file=sys.stderr)
 json.dump(data, open(f"{D}/data.json", "w", encoding="utf-8"), ensure_ascii=False)
 
@@ -196,13 +207,14 @@ dm_sections = {}
 for h in ["## 全体の決まり", "## 外部キーと、消したときの動き", "## グループの所属と権限（YADR-01）", "## 書き込みの順番（YADR-02）", "## グループは1人でもよい", "## アーティストごとのまとめ方"]:
     dm_sections[h[3:]] = section(dm, "^" + re.escape(h) + "$", 2)
 erase = table2(section(dm, r"^### 各文脈で起きること", 3))
+leave = [l for l in section(dm, r"^### メンバーを外す・自分から抜ける（R10）", 3) if l.strip()]
 decisions = []
 dsec = section(dm, r"^## 決めたこと$", 2)
 for l in dsec:
     if l.startswith("|") and not l.startswith("| #") and not l.startswith("|---"):
         c = split_cells(l); decisions.append(c)
 tests = table2(section(dm, r"^## 試験の一覧", 2))
-data["db"] = {"tables": tables, "fks": fks, "ondel": ondel, "sections": dm_sections, "erase": erase, "decisions": decisions, "tests": tests, "schemaCtx": schema_ctx}
+data["db"] = {"tables": tables, "fks": fks, "ondel": ondel, "sections": dm_sections, "erase": erase, "leave": leave, "decisions": decisions, "tests": tests, "schemaCtx": schema_ctx}
 print("tables", len(tables), "fks", len(fks), file=sys.stderr)
 
 # ===== AWS
