@@ -82,10 +82,14 @@ eslint-plugin-boundariesで、ADR-0003の決定5の2つを書く。lintはCIと�
 |---|---|
 | パッケージの管理 | pnpm（workspace） |
 | 単体と結合の試験 | Vitest |
+| 結合試験のDB | GitHub ActionsのPostgresのコンテナ（Neonと同じ版）。試験ごとに空のDBから始め、Neonの計算時間を使わない。Neonにしかない動き（接続の数の上限、休止からの起動）は結合検証環境で見る |
 | 性質で確かめる試験 | fast-check（Vitestの中で動かす）。コアの文脈の決まり、リマインドの送信と再送、解散などの削除ジョブに使う（2026-11-18 大関の判断。記録は`docs/discussions/verification-loop.md`の論点「property-tests」） |
 | E2E | Playwright。2人をブラウザのcontext 2つで動かす |
+| APIの入口のルーティングと入力の確認 | HonoとZod。関数`api`の中でパスごとに公開関数を呼び分け、入力の確認とエラーの形をそろえる |
 | lintと整形 | ESLintとPrettier |
 | CIとデプロイ | GitHub Actions |
+
+結合試験のDBとAPIの入口の2つは、PR #8の論点の記録（`tooling.md`）で仮決定にしていたものを、2026-11-21に大関がこのADRへ移すと決めた。`tooling.md`は同じ問いの記録が`dev-tools.md`と2本になるので消した。
 
 ## 検討した案
 

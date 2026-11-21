@@ -237,7 +237,7 @@ flowchart LR
 - 推奨: A（境目の検査をESLintで書け、Playwrightで2人のブラウザを1つの試験で動かせる）
 - 決定: A
 - 推奨と同じか: 同じ
-- 理由: 推奨のとおり（仮決定に異議なし）
+- 理由: 推奨のとおり（仮決定に異議なし）。2026-11-21に、PR #8の論点の記録`tooling.md`にだけあった仮決定2つ（結合試験のDBはGitHub ActionsのPostgresのコンテナ、APIの入口はHonoとZod）も、大関の判断でここに加えた。`tooling.md`は消した
 - 選ばなかった理由: B（BiomeではESLintのプラグインによる境目の検査が使えないため）
 - 反映先: docs/decisions/ADR-0004-dev-tools.mdの決定8
 - 決めた日: 2026-11-17
