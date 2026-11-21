@@ -40,7 +40,7 @@ description: >
 2. `node .claude/scripts/delegation.mjs open-task docs/implementation-plans/<機能名>.md <機能名>:<タスク名> --title <題> --model swe-2-<effort>`でIssueと委譲の記録を作る。本文の先頭に印（タスク名と本文のdigest）が入り、同じ印の開いたIssueがあれば作らずにその番号を返す。digestが違えば止まるので、計画を変えたら古いIssueを閉じてから作り直す。
 3. 専用クローンに前のプロセスや変更が残っていないか先に確認する。残っていたら捨てずにユーザーへ渡す。非公開prompt fileを0600で作る。SWE-2のeffortは難しさで選び、依頼時にユーザーへ伝える。
 4. `node .claude/scripts/delegation-launch.mjs <Issue番号> --runner local --model swe-2-<effort> --prompt-file <非公開ファイル> --clone <専用クローン>`で起動する。runner/modelは省かない。クラウドは起動の確かめが済むまで使えない（`cloud_launch_verified:false`）。
-5. promptにはリポジトリ内での作業、force push・ブランチ削除・履歴改変・mainへのpushの禁止と、PR後の監視を含める。生ログは状態の置き場の`devin-logs/issue-<n>.log`（0600）に残る。
+5. promptにはリポジトリ内での作業、`AGENTS.md`の「コマンドの範囲」（作業クローンの外への書き込み、`.git`のフックと設定の変更、AWS・Neon・Cognito・SSM・本番・結合検証への通信を、確認なしにしないこと。`--permission-mode dangerous`はこの範囲を広げない）、force push・ブランチ削除・履歴改変・mainへのpushの禁止、PR後の監視を含める。生ログは状態の置き場の`devin-logs/issue-<n>.log`（0600）に残る。
 6. 起動の結果は1行のJSONで出る。`running`ならセッションのIDが確定している。`launch_unknown`やエラーでは、自動で起動し直さず、`devin list`とログで確かめてからユーザーに渡す。
 7. `wait-for-pr.mjs <Issue>`と、セッション1本の`wait-for-devin-pr.mjs --since <UTC時刻>`でPRを待つ。複数の対応候補から番号の小さいPRを選ばない。
 
@@ -49,6 +49,8 @@ description: >
 ロックはクローンごとに1つ。既定のクローン（`~/devin-work/<リポジトリ名>`）は`devin-clone.lock`、ほかのクローンは`devin-clone-<実パスの要約値16桁>.lock`。並行で動かすときは、`~/devin-clones/<リポジトリ名>-2`のようにクローンを足し（見張り画面のタブにはASCIIのパスしか渡せないため、日本語を含まない場所に置く）、タスクごとに`--clone`で別のクローンを渡す。一覧の読み比べはクローンの作業フォルダで絞るので、別のクローンなら続けて起動してもIDを取り違えない。並行に渡すのは、触るファイルが重ならないタスクだけにする。足したクローンの見張り画面は`devin-watch <n> --clone <クローン>`で開く。
 
 ## レビュー（round 0は全体、round 1以降は前回のレビュー以降の差分）
+
+`main`の`REVIEW.md`を先に読み、差分で当たる確認項目を選んでから見る。PRの版の`REVIEW.md`では判定しない。
 
 1. **状態**: `gh pr view <n> --json files,statusCheckRollup,mergeable,body,headRefOid`。既存CIの結果を確認する。
    round 1以降は`gh api repos/{owner}/{repo}/compare/<前回の sha>...<今の head>`で差分を見て、
@@ -66,6 +68,7 @@ description: >
    サンドボックス外で実行する（Dockerの認証ヘルパーを避けるため）。
 6. **衝突**: 並行PRが同じファイルを触っていないか。マージ順を提案する。
    DevinのPRに`logs/`の変更があれば、`scope-creep`の`must`にする（`devin-workflow` §5。並行PRの衝突の元）。
+7. **検査の変更**: アプリのタスクのPRが`REVIEW.md`・`.github/workflows/`・`docs/tests/`を変えていたら`scope-creep`の`must`にする。既存の試験を消した・assertを弱めた箇所は、理由があっても「必ず見る」に挙げる。
 
 ## IssueなしPR（Devinが自分から出したPR）
 
@@ -125,7 +128,8 @@ description: >
 
 どの場合も、記録に追記する:
 `node .claude/scripts/delegation.mjs review <Issue> --round <n> --sha <レビューした head> --verdict <merge|fix|escalate> [--posted] --finding '<severity>:<category>:<summary>' …`。
-`security`のsummaryは自動で`(非公開)`になる。再現手順を記録やログに書かない（公開リポジトリのため）。
+`security`のsummaryは自動で`(非公開)`になる。
+summaryの先頭には、最初にその指摘を出したレビュアーを`[claude]` `[reviewer]` `[codex]` `[devin-review]`の形で付ける。誰の指摘が採用されたかを数え、3回続けて新しい指摘を出さないレビュアーを外すかどうかの材料にする（`AGENTS.md`の「レビュー」）。再現手順を記録やログに書かない（公開リポジトリのため）。
 
 ## 自動投稿（`must` / `nit`）
 

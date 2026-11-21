@@ -1,0 +1,49 @@
+{
+  "feature": "verification-loop",
+  "title": "検証の進め方",
+  "level": "L2",
+  "page": "https://claude.ai/artifact/J9s3bZRLym3pRCN8AnZE1L",
+  "round": 1,
+  "stages": {
+    "requirements": {
+      "state": "skipped",
+      "reason": "L2なので要件定義書は作らない"
+    },
+    "design": {
+      "state": "done",
+      "docs": [
+        "REVIEW.md"
+      ],
+      "approved": {
+        "pr": 10,
+        "at": "2026-11-18"
+      }
+    },
+    "plan": {
+      "state": "skipped",
+      "reason": "決まりと文書だけの変更"
+    },
+    "implement": {
+      "state": "skipped",
+      "reason": "決まりと文書だけの変更で、PR #10に含めた"
+    },
+    "review": {
+      "state": "done",
+      "approved": {
+        "pr": 10,
+        "at": "2026-11-18"
+      }
+    },
+    "merge": {
+      "state": "done",
+      "approved": {
+        "pr": 10,
+        "at": "2026-11-18"
+      }
+    },
+    "reflect": {
+      "state": "done"
+    }
+  },
+  "updated_at": "2026-11-18T00:28:58.659Z"
+}

@@ -108,7 +108,7 @@ L2/L3の実装に着手する前に、以下が揃っていることを確認す
 
 - 要求、設計、実装計画、実装、試験の間に矛盾がない
 - L2/L3で必要な成果物が存在し、必須セクションが埋まっている
-- `npm run lint` / `npm run type-check` / `npm test`が通っている（未導入のゲートは`unknown`）
+- `definition-of-done.md`の表の品質コマンドが通っている（未導入のゲートは`unknown`）
 - スコープ外の変更が混入していない
 - L2/L3の新規review packetがcurrentで、open `BLOCK`と高影響の未検証が0
 - Gate Bへ渡す人間項目が3件以下で、各項目に推奨と証拠参照がある
