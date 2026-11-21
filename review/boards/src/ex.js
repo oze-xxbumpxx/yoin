@@ -40,7 +40,7 @@ const EX = {
 "attendance-08":{res:[200,{id:"at_01…09",fromSnapshot:true,concert:{date:"2026-10-03",title:"フェスY",artists:["アーティストB"]},setlist:[{order:1,title:"一曲目"}]}]},
 "attendance-09":{res:[200,{artists:[{name:"アーティストA",count:7,dates:["2026-12-20","2026-08-11"]}]}]},
 "ticket-01":{q:"?concertId=c_01…01",res:[200,{applications:[{id:"ta_01…01",applicant:{displayName:"みなと"},saleName:"FC先行",quantity:2,status:"won",displayStatus:"won",paymentDeadline:"2027-02-10T20:00:00+09:00",pickupAvailable:false}]}]},
-"ticket-02":{req:{id:"ta_01…02",concertId:"c_01…01",saleName:"一般",quantity:2,pickupMethod:"smart_ticket",status:"applied",resultAnnouncedAt:"2027-01-20T18:00:00+09:00",paymentDeadline:null,pickupStartsAt:null},res:[201,{id:"ta_01…02",status:"applied",displayStatus:"applied"}]},
+"ticket-02":{req:{id:"ta_01…02",concertId:"c_01…01",saleName:"一般",quantity:2,pickupMethod:"smart",status:"applied",resultAnnouncedAt:"2027-01-20T18:00:00+09:00",paymentDeadline:null,pickupStartsAt:null},res:[201,{id:"ta_01…02",status:"applied",displayStatus:"applied"}]},
 "ticket-03":{res:[200,{id:"ta_01…01",saleName:"FC先行",quantity:2,status:"won",displayStatus:"won",pickupAvailable:false,paymentDeadline:"2027-02-10T20:00:00+09:00",distributions:[{seq:1,userId:"u_01…a1"},{seq:2,userId:null,guestName:null}]}]},
 "ticket-04":{req:{paymentDeadline:"2027-02-11T20:00:00+09:00"},res:[200,{id:"ta_01…01",paymentDeadline:"2027-02-11T20:00:00+09:00"}],err:"forbidden"},
 "ticket-05":{req:{status:"paid"},res:[200,{id:"ta_01…01",status:"paid",displayStatus:"paid"}],err:"invalid_transition"},

@@ -44,7 +44,7 @@ function wf(sid, o={}){
       case "bars": return `<div class="w-bars${H}">${a.map(([n,v])=>`<span>${esc(n)}</span><div><i style="width:${v/7*100}%"></i></div><b>${v}</b>`).join("")}${P}</div>`;
       case "preview": return `<div class="w-prev${H}"><b>${T(a)}</b><span>${T(b)}</span>${P}</div>`;
       case "copy": return `<div class="w-in${H}"><div class="sel">${T(a)}<i>コピー</i></div>${P}</div>`;
-      case "dev": return `<div class="w-row${H}"><div><b>${T(a)}</b><span>${T(b)}</span></div><em>${typeof d==="string"&&d?`<small class="st lost">${T(d)}</small><br>`:""}<u>外す</u></em>${P}</div>`;
+      case "dev": return `<div class="w-row${H}"><div><b>${T(a)}</b><span>${T(b)}</span></div><em>${typeof c==="string"&&c?`<small class="st lost">${T(c)}</small><br>`:""}<u>外す</u></em>${P}</div>`;
       case "fab": return `<div class="w-fab${H}">${T(a)}</div>`;
       case "nav": return `<div class="w-nav${H}"><span class="on">ホーム</span><span>公演</span><span>自分</span><span>設定</span></div>`;
     }
@@ -65,13 +65,14 @@ function jsonHL(v){
 
 /* ---------- APIの通り道 ---------- */
 const ROWLOCK = {"group-04":"招待リンクの行","catalog-13":"下書きの行","catalog-14":"下書きの行","merch-02":"下書きの行","merch-04":"下書きの行","ticket-04":"申込の行","ticket-05":"申込の行","ticket-06":"申込の行","catalog-16":"セトリの版を比べて書く"};
+const OTHER_LOCK = {"attendance-04":"同行者に選んだ人","ticket-07":"分配先の人","merch-08":"購入担当にする人"};
 const ASYNC = ["group-10","group-12","group-14"];
 const SCHED = ["ticket-02","ticket-04","ticket-05","ticket-06"];
 const S3 = {"merch-01":"アップロード用URLを作る","merch-02":"一時置き場からコピー","merch-04":"items/へコピー","merch-05":"コピーと消す予定","merch-06":"取得用URL（5分）"};
 function flags(id){
   const a=A[id], ms=methods(a.route), write=ms.some(m=>m!=="GET"), inv=id==="group-03"||id==="group-04";
   const inGroup=/\/groups\/\{g\}/.test(a.route), me=/`(GET|POST|PUT|PATCH|DELETE)[^`]*\/me/.test(a.route)||id==="group-05";
-  return {write, inv, lock: write&&!ASYNC.includes(id) ? (inGroup?"グループの行を FOR SHARE":(me||id==="group-05")?"自分の users の行を FOR SHARE":null):null,
+  return {write, inv, lock: write&&!ASYNC.includes(id) ? (inGroup?"groups・自分の users・members の行を FOR SHARE"+(OTHER_LOCK[id]?"。"+OTHER_LOCK[id]+"の行も":""):(me||id==="group-05")?"自分の users の行を FOR SHARE":null):null,
     row: ROWLOCK[id]||null, async: ASYNC.includes(id), sched: SCHED.includes(id), s3: S3[id]||null};
 }
 function pipeline(id){
@@ -98,7 +99,7 @@ function exampleBlock(id){
   const a=A[id], ex=EX[id]; if(!ex) return "";
   const ms=methods(a.route), ps=paths(a.route);
   const m = ex.req? (ms.find(x=>x!=="GET"&&x!=="DELETE")||ms[0]) : (ms.includes("GET")?"GET":ms[ms.length-1]);
-  const p = (ms.length>1 && ps.length>1 ? ps[1] : ps[0]).replace(/\?.*$/,"")+(ex.q||"");
+  const p = (ps.length>1 && m!==ms[0] ? ps[ps.length-1] : ps[0]).replace(/\?.*$/,"")+(ex.q||"");
   const errRow = ex.err && ERR[ex.err] ? `<div class="exerr"><span class="err">${ex.err}<i>${ERR[ex.err][1]}</i></span><span>${inl(ERR[ex.err][2])}</span></div>`:"";
   return `<div class="ex">
     <div class="exh"><span class="m ${m}">${m}</span><code>${esc(p)}</code></div>

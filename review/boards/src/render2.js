@@ -5,7 +5,7 @@ const TB = Object.fromEntries(DB.tables.map(t=>[TID(t),t]));
 const TBN = Object.fromEntries(DB.tables.map(t=>[t.id,t]));
 const SCH_JA = {groups:"グループ",catalog:"公演カタログ",attendance:"参戦記録",ticket:"チケット",merch:"グッズ",notification:"通知"};
 const SC = s => DB.schemaCtx[s];
-const COLREF = {group_id:"groups.groups",user_id:"groups.users",applicant_user_id:"groups.users",created_by:"groups.users",updated_by:"groups.users",owner_user_id:"groups.users",concert_id:"catalog.concerts",tour_id:"catalog.tours",venue_id:"catalog.venues",artist_id:"catalog.artists",attendance_id:"attendance.attendances",ticket_application_id:"ticket.ticket_applications",merch_list_id:"merch.merch_lists",merch_item_id:"merch.merch_items",reminder_id:"notification.reminders",push_subscription_id:"notification.push_subscriptions"};
+const COLREF = {requested_by:"groups.users",group_id:"groups.groups",user_id:"groups.users",applicant_user_id:"groups.users",created_by:"groups.users",updated_by:"groups.users",owner_user_id:"groups.users",concert_id:"catalog.concerts",tour_id:"catalog.tours",venue_id:"catalog.venues",artist_id:"catalog.artists",attendance_id:"attendance.attendances",ticket_application_id:"ticket.ticket_applications",merch_list_id:"merch.merch_lists",merch_item_id:"merch.merch_items",reminder_id:"notification.reminders",push_subscription_id:"notification.push_subscriptions"};
 const CASCADE_CHILD = ["groups.members","groups.invite_links","catalog.setlists","catalog.setlist_items","catalog.concert_artists","attendance.attendance_records","attendance.companions","attendance.concert_snapshots","ticket.distributions","merch.buyers","merch.merch_requests","notification.reminder_deliveries"];
 function refsOf(t){
   const out=[];
@@ -129,8 +129,8 @@ function renderDbOverview(){
 /* ================= AWSボード ================= */
 const AW = D.aws || {nodes:{},edges:[]};
 const AN = Object.assign({}, AW.nodes, {sqs:"SQS＋アラーム 失敗の知らせ（メール）"});
-const AEDGES = AW.edges.concat([["sched","sqs","起動できなかった"],["worker","sqs","再試行を使い切った"],["sender","sqs","再試行切れ・届かない端末"]]);
-const ADDED = new Set(["sched>sqs","worker>sqs","sender>sqs"]);
+const AEDGES = AW.edges.concat([["sched","sqs","起動できなかった"],["worker","sqs","再試行を使い切った"],["sender","sqs","再試行切れ・届かない端末"],["sender","sched","見張りを動かす・消す"],["worker","sched","見張りを作り直す"],["api","img","S3の中でコピー"]]);
+const ADDED = new Set(["sched>sqs","worker>sqs","sender>sqs","sender>sched","worker>sched","api>img"]);
 const ALABEL = {device:["利用者の端末","PWA・Service Worker"],cf:["CloudFront","＋S3 画面のファイル"],cognito:["Cognito","ユーザープール"],apigw:["API Gateway","HTTP API"],api:["api","Lambda"],worker:["erasure-worker","Lambda"],sender:["notification-sender","Lambda"],sched:["EventBridge","Scheduler"],img:["S3","グッズの画像"],ssm:["SSM","Parameter Store"],logs:["CloudWatch","Logs（保存7日）"],sqs:["SQS＋アラーム","失敗をメールで知らせる"],neon:["Neon","Postgres・AWSの外"],push:["Web Push","Apple・Googleの配信"]};
 const AL = k => ALABEL[k][0]+(["api","worker","sender"].includes(k)?"（Lambda）":"");
 const APOS = {device:[20,300],cf:[240,46],cognito:[240,160],apigw:[240,300],img:[240,470],ssm:[470,46],logs:[700,46],api:[470,300],worker:[700,190],sched:[470,470],sender:[700,470],sqs:[700,600],neon:[940,300],push:[940,470]};
@@ -141,9 +141,9 @@ const NODE_DEC = {device:["C-5"],cf:["B-1"],cognito:[],apigw:["A-1"],api:["A-1",
 const FLOW_EDGES = [
   ["device>cognito"],
   ["device>apigw","apigw>api","api>neon"],
-  ["device>apigw","apigw>api","api>neon","device>img"],
-  ["device>apigw","apigw>api","api>neon","api>worker","api>sched","sched>worker","worker>neon","worker>img","worker>cognito","worker>sqs"],
-  ["api>sched","sched>sender","sender>neon","sender>push","push>device","sched>sqs","sender>sqs"],
+  ["device>apigw","apigw>api","api>neon","device>img","api>img"],
+  ["device>apigw","apigw>api","api>neon","api>worker","api>sched","sched>worker","worker>neon","worker>img","worker>cognito","worker>sched","worker>sqs"],
+  ["api>sched","sched>sender","sender>sched","sender>neon","sender>push","push>device","sched>sqs","sender>sqs"],
 ];
 const FID = i => "flow-"+(i+1);
 const ANID = k => "aws-"+k;
@@ -161,8 +161,9 @@ function awsSVG(o={}){
     else {
       const ca=c(a), cb=c(b), dx=cb.x-ca.x, dy=cb.y-ca.y;
       let p,q;
-      if(Math.abs(dx)>=Math.abs(dy)*0.9){ p={x:ca.x+Math.sign(dx)*W/2,y:ca.y}; q={x:cb.x-Math.sign(dx)*W/2,y:cb.y}; const m=(q.x-p.x)/2; d=`M${p.x} ${p.y} C${p.x+m} ${p.y},${q.x-m} ${q.y},${q.x} ${q.y}`; }
-      else { p={x:ca.x,y:ca.y+Math.sign(dy)*H/2}; q={x:cb.x,y:cb.y-Math.sign(dy)*H/2}; const m=(q.y-p.y)/2; d=`M${p.x} ${p.y} C${p.x} ${p.y+m},${q.x} ${q.y-m},${q.x} ${q.y}`; }
+      const rev=AEDGES.some(e=>e[0]===b&&e[1]===a), off=rev?(a<b?-9:9):0;
+      if(Math.abs(dx)>=Math.abs(dy)*0.9){ p={x:ca.x+Math.sign(dx)*W/2,y:ca.y+off}; q={x:cb.x-Math.sign(dx)*W/2,y:cb.y+off}; const m=(q.x-p.x)/2; d=`M${p.x} ${p.y} C${p.x+m} ${p.y},${q.x-m} ${q.y},${q.x} ${q.y}`; }
+      else { p={x:ca.x+off*2,y:ca.y+Math.sign(dy)*H/2}; q={x:cb.x+off*2,y:cb.y-Math.sign(dy)*H/2}; const m=(q.y-p.y)/2; d=`M${p.x} ${p.y} C${p.x} ${p.y+m},${q.x} ${q.y-m},${q.x} ${q.y}`; }
       lx=(p.x+q.x)/2; ly=(p.y+q.y)/2;
     }
     const hi=hiE.has(k), cls=`ae${hi?" hi":""}${focus&&!hi?" dim":""}${ADDED.has(k)?" added":""}`;
@@ -214,7 +215,7 @@ function renderFlow(i){
   <div class="head"><span class="ctxlabel"><span class="dot"></span>処理の流れ</span></div>
   <div class="head"><h2>${esc(f[0])}</h2></div>
   <div class="scroll" style="padding:6px;margin-top:10px">${awsSVG({edges:FLOW_EDGES[i],anim:1})}</div>
-  <p class="empty" style="margin-top:6px">色の付いた線がこの流れで通る道。${FLOW_EDGES[i].some(e=>ADDED.has(e))?"点線は失敗したときだけ通る。":""}</p>
+  <p class="empty" style="margin-top:6px">色の付いた線がこの流れで通る道。${FLOW_EDGES[i].some(e=>ADDED.has(e))?"点線は設計資料の図（mermaid）に無く、文章から足した線。":""}</p>
   <section class="blk"><h4>順に起きること</h4><ol class="steps">${steps.map(s=>`<li>${inl(s)}</li>`).join("")}</ol></section>
   </div>`;
 }
@@ -224,7 +225,7 @@ function renderAwsOverview(){
   <p class="lead">部品を押すとそのタブを開く。下の流れのボタンを押すと、その流れで通る線を光らせる。</p>
   <div class="flowbtns">${AW.flows.map((f,i)=>`<button class="fb" data-flow="${i}">${esc(f[0])}</button>`).join("")}<button class="fb" data-flow="-1">すべて</button></div>
   <div class="scroll" style="padding:6px" id="awsbox">${awsSVG({})}</div>
-  <div class="legend">${Object.entries(AKIND_JA).map(([k,v])=>`<span style="--cc:var(--k-${k})"><i></i>${v}</span>`).join("")}<span><i class="dash"></i>失敗したときだけ（C-4）</span></div>
+  <div class="legend">${Object.entries(AKIND_JA).map(([k,v])=>`<span style="--cc:var(--k-${k})"><i></i>${v}</span>`).join("")}<span><i class="dash"></i>設計資料の図に無く、文章から足した線（C-4、見張りの予約、画像のコピー）</span></div>
   <div class="box" style="--cc:var(--c-ticket);margin-top:18px"><p><b>リージョンはまだ動く可能性がある</b></p><p>${inl(AW.undecided.find(x=>x.startsWith("リージョン"))||"")}</p></div>
   <section class="blk"><h4>決めたこと <span class="n">${AW.decisions.length}件</span></h4><div class="decs">${AW.decisions.map(d=>`<div class="dec"><b>${d[0]}</b><span>${inl(d[1])}</span><p>${inl(d[2])}</p><small>選ばなかった案：${inl(d[3])}</small></div>`).join("")}</div></section>
   <section class="blk"><h4>費用の見込み（推測。工程6で公式の料金から試算する）</h4><ul class="sentences" style="--cc:var(--c-catalog)">${AW.cost.map(x=>`<li>${inl(x)}</li>`).join("")}</ul></section>

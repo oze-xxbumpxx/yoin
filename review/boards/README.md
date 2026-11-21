@@ -10,14 +10,14 @@ PR #17のブランチ（6526db2）の設計資料から作った、見るため�
 | DB | `db.html` | `docs/data-model.md` | https://claude.ai/artifact/4h6MzsLNuina9XVcxWm7EK |
 | AWS | `aws.html` | `docs/architecture.md` | https://claude.ai/artifact/UmJ8sdv6BgU1nmNgczpok5 |
 
-公開しているページは大関さんだけが開ける。レビューにはこのフォルダのHTMLを使う。HTMLはブラウザで直接開ける（外部から読むのはGoogle Fontsだけ）。
+公開しているページは大関さんだけが開ける。レビューにはこのフォルダのHTMLを使う。HTMLはブラウザで直接開ける（外部から読むのはGoogle Fontsだけ）。このフォルダのHTMLは、ボードどうしのリンクを同じフォルダのファイル（`apis.html#ticket-03`など）へ向けて作ってある。公開しているページは、同じスクリプトにそのページのURLを渡して作る。
 
 ## 作り方
 
 `src/parse.py`がMarkdownを解析して`data.json`を作り、`src/build.py`がテンプレートに埋め込んで5つのHTMLを作る。設計資料から機械的に取り出した部分と、Claudeが組み立てた部分がある。
 
 - 設計資料から取り出した部分：画面・API・ストーリー・テーブル・列・構成要素・決めたことの文言、画面とAPIとストーリーの対応、画面の移り方、AWSの線。
-- Claudeが組み立てた部分：画面のワイヤーフレーム（`src/wf.js`）、APIの要求と応答の例（`src/ex.js`）、APIの「要求が通る順番」の図とロック・リマインドの札（`src/render.js`の`flags`）、DBの外部キーの消したときの動きの割り当て（`src/render2.js`の`refsOf`）、AWSの部品と決定・処理の流れの対応（`src/render2.js`の`NODE_DEC`・`FLOW_EDGES`）、SQSの点線（設計資料の図に無く、C-4の文章から足した）。
+- Claudeが組み立てた部分：画面のワイヤーフレーム（`src/wf.js`）、APIの要求と応答の例（`src/ex.js`）、APIの「要求が通る順番」の図とロック・リマインドの札（`src/render.js`の`flags`）、DBの外部キーの消したときの動きの割り当て（`src/render2.js`の`refsOf`）、AWSの部品と決定・処理の流れの対応（`src/render2.js`の`NODE_DEC`・`FLOW_EDGES`）、設計資料の図（mermaid）に無く文章から足した点線の線（C-4のSQS、送信の関数と`erasure-worker`が見張りの予約を動かす線、`api`がS3の中で画像をコピーする線）。
 
 ## 見てほしいこと
 
