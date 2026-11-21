@@ -520,7 +520,7 @@ __RENDER2__
 const B=BOARDS[BOARD];
 document.getElementById("h1").textContent=B.title;
 document.getElementById("sub").textContent=B.sub;
-document.getElementById("src").innerHTML=`元の資料：GitHubのPR #17（レビュー中）のブランチにある${BOARD==="db"?"<code>docs/data-model.md</code>":BOARD==="aws"?"<code>docs/architecture.md</code>":"<code>docs/api.md</code>と<code>docs/user-stories.md</code>"}（コミット __SHA__、2026-11-21）。PRの直しで中身が変わることがある。`;
+document.getElementById("src").innerHTML=`元の資料：GitHubの<code>main</code>にある${BOARD==="db"?"<code>docs/data-model.md</code>":BOARD==="aws"?"<code>docs/architecture.md</code>":"<code>docs/api.md</code>と<code>docs/user-stories.md</code>"}（コミット __SHA__、2026-11-21。PR #17のマージ後）。`;
 document.getElementById("boards").innerHTML=Object.entries(BOARDS).map(([k,v])=>k===BOARD?`<span class="cur" aria-current="page">${v.name}</span>`:(URLS[k]?`<a href="${URLS[k]}" target="_blank" rel="noopener">${v.name}<span aria-hidden="true">↗</span></a>`:`<span>${v.name}</span>`)).join("");
 const G=groupsFor();
 const ALL=["overview",...G.flatMap(g=>g.items.map(i=>i.id))];

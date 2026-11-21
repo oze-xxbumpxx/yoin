@@ -7,19 +7,19 @@ const SCH_JA = {groups:"グループ",catalog:"公演カタログ",attendance:"�
 const SC = s => DB.schemaCtx[s];
 const COLREF = {requested_by:"groups.users",group_id:"groups.groups",user_id:"groups.users",applicant_user_id:"groups.users",created_by:"groups.users",updated_by:"groups.users",owner_user_id:"groups.users",concert_id:"catalog.concerts",tour_id:"catalog.tours",venue_id:"catalog.venues",artist_id:"catalog.artists",attendance_id:"attendance.attendances",ticket_application_id:"ticket.ticket_applications",merch_list_id:"merch.merch_lists",merch_item_id:"merch.merch_items",reminder_id:"notification.reminders",push_subscription_id:"notification.push_subscriptions"};
 // data-model.mdの外部キーの表のCASCADEの行を、子の表と親の表の組で写したもの。表に無い組はCASCADEにしない。
-const CASCADE_PAIRS = {"groups.members":["groups.groups"],"groups.invite_links":["groups.groups"],"catalog.setlists":["catalog.concerts"],"catalog.setlist_items":["catalog.concerts","catalog.setlists"],"catalog.concert_artists":["catalog.concerts"],"attendance.attendance_records":["attendance.attendances"],"attendance.companions":["attendance.attendances","attendance.attendance_records"],"attendance.concert_snapshots":["attendance.attendances"],"ticket.distributions":["ticket.ticket_applications"],"merch.buyers":["merch.merch_lists","merch.merch_items"],"merch.merch_requests":["merch.merch_lists","merch.merch_items"],"notification.reminder_deliveries":["notification.reminders","notification.push_subscriptions"]};
+const CASCADE_PAIRS = {"groups.members":["groups.groups"],"groups.invite_links":["groups.groups"],"catalog.setlists":["catalog.concerts"],"catalog.setlist_items":["catalog.setlists"],"catalog.concert_artists":["catalog.concerts"],"attendance.attendance_records":["attendance.attendances"],"attendance.companions":["attendance.attendance_records"],"attendance.concert_snapshots":["attendance.attendances"],"ticket.distributions":["ticket.ticket_applications"],"merch.buyers":["merch.merch_lists","merch.merch_items"],"merch.merch_requests":["merch.merch_lists","merch.merch_items"],"notification.reminder_deliveries":["notification.reminders","notification.push_subscriptions"]};
 // 列の説明と外部キーの表で、参照先が違って書かれているもの。
-const DOC_CONFLICT = {"catalog.setlist_items.concert_id":"列の説明ではsetlistsを指すが、外部キーの表では「setlist_items → concerts」と書いてある","attendance.companions.attendance_id":"列の説明ではattendance_recordsを指すが、外部キーの表では「companions → attendances」と書いてある"};
+const DOC_CONFLICT = {};
 // テーブルごとの決定と試験。設計資料に表との対応表が無いので、決定と試験の中身を読んで手で付けた。
 const TABLE_DOCS = {
  "groups.users":["Q2","Q4","R1","YADR-04"],"groups.groups":["Q4","Q8","Q9","R2","YADR-06","YADR-07"],"groups.members":["Q2","R10","YADR-01","YADR-02"],
- "groups.invite_links":[],"groups.erasure_jobs":["R5","R11","YADR-03"],
+ "groups.invite_links":[],"groups.erasure_jobs":["R5","R11","R17","YADR-03"],
  "catalog.artists":["Q1","R7","YADR-09"],"catalog.venues":["YADR-01","YADR-07"],"catalog.tours":["YADR-01"],"catalog.concerts":["Q1","YADR-01"],"catalog.concert_artists":["Q1","R7","YADR-09"],
  "catalog.setlists":["YADR-06"],"catalog.setlist_items":[],"catalog.drafts":["Q3"],
  "attendance.attendances":["R2","R8","YADR-06"],"attendance.attendance_records":["R8"],"attendance.companions":["R10"],"attendance.concert_snapshots":["R2","YADR-06"],
  "ticket.ticket_applications":["R9"],"ticket.distributions":["Q5"],
- "merch.merch_items":["R12","R13","YADR-01"],"merch.merch_lists":["YADR-01"],"merch.buyers":["R14"],"merch.merch_requests":[],"merch.drafts":["Q3","R13"],"merch.object_deletions":["R13","YADR-03"],
- "notification.reminders":["R3","R4","R11","YADR-05","YADR-08"],"notification.push_subscriptions":["YADR-05"],"notification.reminder_deliveries":["R4","YADR-05"]};
+ "merch.merch_items":["R12","R13","R18","YADR-01"],"merch.merch_lists":["YADR-01"],"merch.buyers":["R14"],"merch.merch_requests":[],"merch.drafts":["Q3","R13","R15"],"merch.object_deletions":["R13","R18","YADR-03"],
+ "notification.reminders":["R3","R4","R11","YADR-05","YADR-08"],"notification.push_subscriptions":["R16","YADR-05"],"notification.reminder_deliveries":["R4","YADR-05"]};
 function refsOf(t){
   const out=[];
   t.cols.forEach(c=>{
@@ -35,6 +35,7 @@ function refsOf(t){
     else if(cross) rule="RESTRICT";
     else if((CASCADE_PAIRS[t.id]||[]).includes(tgt)) rule="CASCADE";
     else if(t.id==="groups.groups"&&c.name==="owner_user_id") rule="RESTRICT";
+    else if(t.id==="groups.members"&&c.name==="user_id") rule="RESTRICT";
     else rule="資料に無い";
     const tt=TBN[tgt];
     const comp = !cross && rule!=="外部キーなし" && tgt!=="groups.groups" && c.name!=="group_id" && t.cols.some(x=>x.name==="group_id") && tt && tt.cols.some(x=>x.name==="group_id");
@@ -137,7 +138,7 @@ function renderDbOverview(){
   return `<div class="pane"><div class="head"><h2>DBの全体図</h2></div>
   <div class="stats"><div class="stat"><span class="v">6</span><span class="k">スキーマ</span></div><div class="stat"><span class="v">${DB.tables.length}</span><span class="k">テーブル</span></div><div class="stat"><span class="v">${DB.tables.reduce((n,t)=>n+t.cols.length,0)}</span><span class="k">列</span></div><div class="stat"><span class="v">${nCross}</span><span class="k">文脈をまたぐ参照</span></div></div>
   <p class="lead">Neon（Postgres）の1つのデータベースを、文脈ごとのスキーマに分けている。箱を押すとそのテーブルを開く。</p>
-  <div class="ertools"><label><input type="checkbox" id="common"> グループとユーザーへの線も出す</label><span class="lg"><i class="CASCADE"></i>CASCADE</span><span class="lg"><i class="RESTRICT"></i>RESTRICT</span><span class="lg"><i class="SETNULL"></i>SET NULL</span><span class="lg"><i class="NODOC"></i>資料に無い</span><span class="lg"><i class="NOFK"></i>外部キーなし（IDだけ）</span></div>
+  <div class="ertools"><label><input type="checkbox" id="common"> グループとユーザーへの線も出す</label><span class="lg"><i class="CASCADE"></i>CASCADE</span><span class="lg"><i class="RESTRICT"></i>RESTRICT</span><span class="lg"><i class="SETNULL"></i>SET NULL</span><span class="lg"><i class="NOFK"></i>外部キーなし（IDだけ）</span></div>
   <div class="scroll er-wrap" id="erbox">${erSVG(null,false)}</div>
   <section class="blk"><h4>マイグレーションを流す順番</h4><div class="order">${["groups","catalog","attendance・ticket・merch・notification"].map((s,i)=>`${i?'<span class="arrow">→</span>':""}<span class="ostep">${s}</span>`).join("")}</div><p class="empty" style="margin-top:6px">文脈をまたぐIDにRESTRICTの外部キーを張るので、この順でないと流せない。</p></section>
   <section class="blk"><h4>書き込みの順番（画面の操作。解散・退会の説明では「F2のロック」と呼ぶ）</h4><div class="lockflow">
