@@ -10,23 +10,37 @@
       "reason": "L2なので要件定義書は作らない"
     },
     "design": {
-      "state": "approval"
+      "state": "done",
+      "approved": {
+        "pr": 17,
+        "at": "2026-11-21"
+      }
     },
     "plan": {
-      "state": "pending"
+      "state": "skipped",
+      "reason": "API設計で、実装計画は最初の1本で書く"
     },
     "implement": {
-      "state": "pending"
+      "state": "skipped",
+      "reason": "設計資料だけの変更で、PR #17に含めた"
     },
     "review": {
-      "state": "pending"
+      "state": "done",
+      "approved": {
+        "pr": 17,
+        "at": "2026-11-21"
+      }
     },
     "merge": {
-      "state": "pending"
+      "state": "done",
+      "approved": {
+        "pr": 17,
+        "at": "2026-11-21"
+      }
     },
     "reflect": {
-      "state": "pending"
+      "state": "done"
     }
   },
-  "updated_at": "2026-11-21T05:02:07.275Z"
+  "updated_at": "2026-11-21T12:17:48.713Z"
 }
