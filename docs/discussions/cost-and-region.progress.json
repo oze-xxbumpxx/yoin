@@ -3,7 +3,7 @@
   "title": "工程6 費用の試算とリージョン",
   "level": "L2",
   "page": "https://claude.ai/artifact/Y8M6nQqf4KMBoH75RmHJtV",
-  "round": 1,
+  "round": 2,
   "stages": {
     "requirements": {
       "state": "skipped",
@@ -28,5 +28,5 @@
       "state": "pending"
     }
   },
-  "updated_at": "2026-11-21T13:35:22.199Z"
+  "updated_at": "2026-11-22T00:38:29.320Z"
 }
