@@ -10,16 +10,22 @@
       "reason": "L2なので要件定義書は作らない"
     },
     "design": {
-      "state": "waiting"
+      "state": "approval",
+      "docs": [
+        "docs/decisions/ADR-0006-region-and-cost.md",
+        "docs/architecture.md"
+      ]
     },
     "plan": {
-      "state": "pending"
+      "state": "skipped",
+      "reason": "設計の工程の記録で、実装はない。実装は最初の1本（L3）で計画する"
     },
     "implement": {
-      "state": "pending"
+      "state": "skipped",
+      "reason": "設計の工程の記録で、実装はない。実装は最初の1本（L3）で計画する"
     },
     "review": {
-      "state": "pending"
+      "state": "active"
     },
     "merge": {
       "state": "pending"
@@ -28,5 +34,5 @@
       "state": "pending"
     }
   },
-  "updated_at": "2026-11-22T00:38:29.320Z"
+  "updated_at": "2026-11-22T01:18:44.033Z"
 }
