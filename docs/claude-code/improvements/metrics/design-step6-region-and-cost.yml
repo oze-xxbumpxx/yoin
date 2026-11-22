@@ -28,7 +28,7 @@ process:
   requirement_rework: 0
   design_rework: 3 # reviewer 7件、Devin Review 14件、Codex 2件で書き直した
   implementation_rework: 0
-  missing_documents: 3  # docs 存在チェックから自動補完
+  missing_documents: 0  # 設計の工程なので成果物はADR。要件・設計書・実装計画・試験計画は対象外（自動集計は3）
   unresolved_items: 0
   # セッション時間に占めるメタ作業（改善サイクル・棚卸し・承認待ち・ハーネス議論）の割合。
   # 0.0〜1.0またはunknown。個人開発ライトモードの肥大監視用（IMP-2026-030）。
