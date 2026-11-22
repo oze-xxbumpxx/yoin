@@ -1,19 +1,19 @@
 # AWSアーキテクチャ
 
-状態：確定（2026-11-13）。案は2026-11-07に作り、同日リマインドを1件ずつ予約する方式に直した。関数とスキーマの分け方は[ADR-0002](decisions/ADR-0002-schema-and-functions.md)（2026-11-12承認）に合わせた。このページで決めた7点は「決めたこと」の節にある。費用は工程6で公式の料金ページをもとに試算する。
+状態：確定（2026-11-13）。案は2026-11-07に作り、同日リマインドを1件ずつ予約する方式に直した。関数とスキーマの分け方は[ADR-0002](decisions/ADR-0002-schema-and-functions.md)（2026-11-12承認）に合わせた。このページで決めたことは「決めたこと」の節にある。リージョンと費用は、工程6の[ADR-0006](decisions/ADR-0006-region-and-cost.md)で決めた（2026-11-22）。
 
 - 関連：[データモデル](data-model.md)、[ADR-0002](decisions/ADR-0002-schema-and-functions.md)、[PR/FAQ](prfaq.md)
 
 ## 全体図
 
-AWSの公式アイコン（AWS Architecture Icons）で描いた図。下のmermaidの図と同じ内容である。
+AWSの公式アイコン（AWS Architecture Icons）で描いた図。画像はまだリージョンが東京のままで、C-4のSQSとアラームも描いていない。正しいのは下のmermaidの図である（描き直しは「決めないこと」）。
 
 ![AWS構成図](images/aws-architecture.svg)
 
 ```mermaid
 flowchart LR
   device[利用者の端末<br>PWA・Service Worker]
-  subgraph aws[AWS 東京リージョン]
+  subgraph aws[AWSシンガポールリージョン（ap-southeast-1）]
     cf[CloudFront + S3<br>画面のファイル]
     cognito[Cognito<br>ユーザープール]
     apigw[API Gateway<br>HTTP API]
@@ -25,7 +25,7 @@ flowchart LR
     ssm[SSM Parameter Store<br>接続文字列・VAPID鍵]
     logs[CloudWatch Logs]
   end
-  neon[(Neon Postgres<br>AWS外)]
+  neon[(Neon Postgres<br>AWS外・シンガポール)]
   push[Web Pushの配信サービス<br>Apple・Google など]
 
   device -->|画面を開く| cf
@@ -73,7 +73,7 @@ flowchart LR
 
 ## 決めたこと
 
-C-1〜C-3は2026-11-13に大関さんが回答フォームで決めた。C-3のほかは、お勧めの案のとおりである。C-4〜C-6は、2026-11-21に大関さんが出した構成の見直しを、Claudeが確かめて決めた。選択肢ごとの利点と欠点は、論点の記録（[aws-architecture](discussions/aws-architecture.md)）にある。
+C-1〜C-3は2026-11-13に大関さんが回答フォームで決めた。C-3のほかは、お勧めの案のとおりである。C-4〜C-6は、2026-11-21に大関さんが出した構成の見直しを、Claudeが確かめて決めた。選択肢ごとの利点と欠点は、論点の記録（[aws-architecture](discussions/aws-architecture.md)）にある。C-2は2026-11-22に東京からシンガポールに変え、C-7〜C-9を足した。この4つは工程6の論点の記録（[cost-and-region](discussions/cost-and-region.md)）とADR-0006で決めた。
 
 | | 決めたこと | 理由 | 選ばなかった案 |
 |---|---|---|---|
@@ -82,23 +82,20 @@ C-1〜C-3は2026-11-13に大関さんが回答フォームで決めた。C-3の�
 | B-1 | 画面はCloudFront + S3に置く | IaCで全体を同じ形で書けるため | Amplify Hosting（設定がIaCの外に分かれる）、AWSの外（Vercelなど） |
 | B-2 | 画像は署名付きURLで、端末とS3が直接やりとりする。URLは`api`がメンバーかを確かめてから出す。アップロードは一時置き場を通して`api`が確定する。取得用URLの期限は5分で、グループを抜けた人もその間は見られる例外を認める（2026-11-13、Codexのレビューを受けて大関さんが決定） | 画像のデータがLambdaを通らないので、実行時間と費用を抑えられる | Lambdaを通して受け渡す |
 | C-1 | Neonの接続文字列とWeb PushのVAPID鍵は、SSM Parameter Store（SecureString）に置く | 標準のパラメーターは無料のため | Secrets Manager（1つごとに月額がかかる） |
-| C-2 | リージョンは東京（ap-northeast-1）。Neonのリージョンは、東京に近いものを工程6で公式の一覧から選ぶ | 利用者が日本にいるため | 大阪（ap-northeast-3） |
+| C-2 | リージョンはシンガポール（ap-southeast-1）。Neonもシンガポール（aws-ap-southeast-1）に作る（2026-11-22、ADR-0006の決定1。2026-11-13の決定は東京だった） | Neonに東京が無く、往復の多いLambdaとNeonを近くに置くほうが速いため | AWSは東京でNeonだけシンガポール、DBを東京にあるもの（Aurora DSQL、Supabase）に替える |
 | C-3 | CloudWatch Logsの保存期間は7日にする | 個人で作るアプリなので7日で足りると判断し、費用も抑えるため（大関さんの判断。お勧めは14日） | 14日、30日 |
 | C-4 | Schedulerが起動できなかったときと、Lambda（`notification-sender`と`erasure-worker`）が再試行を使い切ったときの送り先を、同じSQSのキューにする。再送を3回しても届かない端末が残ったときも、`notification-sender`がこのキューに入れる。キューに1件でも入ったら、CloudWatchのアラームからメールで知らせる。Lambdaの自動の再試行は既定の2回のままにし、1時間を過ぎた再試行は捨てる。見張りの予約は、リマインドを予約するときに一緒に作る（2026-11-21） | リマインドが知らないうちに失敗すると、発券忘れを防ぐ目的が成り立たないため。関数の失敗と、関数は終わったが届かなかったことの両方を見る | CloudWatch Logsを見に行ったときだけ気づく |
 | C-5 | 通知の中身はDeclarative Web Pushの形にする。Service Workerは対応していない環境のために残し、同じ中身を読んで表示する（2026-11-21） | iOSでService Workerが通知を出し損ねると、購読ごと取り消されることがあるため | 今の形のまま、Service Workerがすべて表示する |
 | C-6 | ログはPowertools for AWS LambdaのLoggerで書く。Idempotencyの機能は使わない（2026-11-21） | 二重送信はNeonの行の引き受けで防いでいて、記録用の表を増やさずに済むため | Idempotencyも使う（DynamoDBなどの表が増える） |
+| C-7 | 費用はAWS Budgetsの月5ドルの予算でメールを送る。Neonの計算時間は週に1回コンソールで見て、上限の半分を超えたらLaunchプランに移す（2026-11-22、ADR-0006の決定5） | 通知だけの予算は無料のため。Neonは操作が1日に散ると無料の上限を超えることがあるので、週に1回見る（Neonを見る間隔は大関さんが決めた。Budgetsは仮決定で、ADR-0006のマージで確定する） | Neonの使った量を定期に読む関数を作る |
+| C-8 | API Gatewayのステージの流量の上限は、毎秒20回、瞬間40回（2026-11-22、ADR-0006の決定6） | 瞬間の暴走を抑え、費用の増え方を1日約7ドルまでにするため。Neonの計算時間はこれでは守れない。仮決定 | 上限を置かない |
+| C-9 | API Gatewayの要求の数とLambdaの起動の数（リージョンの合計）に、1時間ごとのCloudWatchのアラームを置き、C-4と同じメールで知らせる（2026-11-22、ADR-0006の決定7。仮決定） | Budgetsは気づくのが約2日あとで、Neonの計算時間を使い切る前に暴走に気づくため | Neonの使った量を定期に読む関数を作る |
 
-## 費用の見込み（推測）
+## 費用の見込み
 
-利用者は10人以下なので、どのサービスも小さな量で済む見込みである。ただし、次の点は公式の料金ページで確かめていない。工程6でAWSとNeonの料金ページをもとに試算して確定する。
-
-- Lambda、EventBridge Scheduler、CloudFront、SSM Parameter Store（標準）、Cognitoは、無料の範囲に収まる見込み。
-- API Gateway HTTP APIは、無料枠が新規アカウントの12か月に限られる見込み。それ以降も、この量なら月に数円程度と推測する。
-- S3は画像の量に応じて少額がかかる可能性がある（PR/FAQの内部FAQのとおり）。
-- NATゲートウェイとVPCエンドポイントは置かないので、固定費は出ない。
+10人が使ったときの月の費用は、約3円（消費税を足して約3.3円）と見込んでいる。AWSのクレジットがあるあいだは0円である。内訳と、費用が増える3つの場合は、[ADR-0006](decisions/ADR-0006-region-and-cost.md)の「費用の試算」にある。
 
 ## 決めないこと
 
 - 独自ドメインを使うか（公開前）
-- C-4のほかの監視（Neonの計算時間の残り、費用の通知など）（工程6）
-- リージョン。Neonに東京は無く、近いのはシンガポール。AWSごとシンガポールに移す案を、工程6でADRにする。NeonとCognitoのリージョンは作ったあと変えられないので、Devinに土台を渡す前に決める（2026-11-21。論点の記録の「neon-region」）
+- 全体図の画像（`images/aws-architecture.svg`）に、シンガポールのリージョンの名前と、C-4のSQS・アラームを描き足すこと。全体図のmermaidは、シンガポールに直した（最初の1本の設計の前）

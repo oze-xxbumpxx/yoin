@@ -1,0 +1,38 @@
+{
+  "feature": "cost-and-region",
+  "title": "工程6 費用の試算とリージョン",
+  "level": "L2",
+  "page": "https://claude.ai/artifact/Y8M6nQqf4KMBoH75RmHJtV",
+  "round": 2,
+  "stages": {
+    "requirements": {
+      "state": "skipped",
+      "reason": "L2なので要件定義書は作らない"
+    },
+    "design": {
+      "state": "approval",
+      "docs": [
+        "docs/decisions/ADR-0006-region-and-cost.md",
+        "docs/architecture.md"
+      ]
+    },
+    "plan": {
+      "state": "skipped",
+      "reason": "設計の工程の記録で、実装はない。実装は最初の1本（L3）で計画する"
+    },
+    "implement": {
+      "state": "skipped",
+      "reason": "設計の工程の記録で、実装はない。実装は最初の1本（L3）で計画する"
+    },
+    "review": {
+      "state": "active"
+    },
+    "merge": {
+      "state": "pending"
+    },
+    "reflect": {
+      "state": "pending"
+    }
+  },
+  "updated_at": "2026-11-22T01:18:44.033Z"
+}

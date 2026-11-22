@@ -67,7 +67,7 @@ LambdaはNode.jsで動かす。Node.jsの版は、Lambdaで使えるLTSのうち
 ### 5. IaCはTerraformにする
 
 - AWSの資源（Lambda、API Gateway、Cognito、EventBridge Scheduler、S3、CloudFront、IAM）をTerraformで書く。
-- 状態ファイルは、東京リージョンのS3のバケットに置き、同じバケットのロックファイルで同時の実行を防ぐ。このバケットとGitHubのOIDCの設定は、最初に1回だけ作る小さなTerraformの構成で作る。
+- 状態ファイルは、S3のバケットに置き（リージョンは、この決定の時点では東京。2026-11-22のADR-0006の決定2でシンガポールに変えた）、同じバケットのロックファイルで同時の実行を防ぐ。このバケットとGitHubのOIDCの設定は、最初に1回だけ作る小さなTerraformの構成で作る。
 - Lambdaのコードは、手順1でまとめたファイルをTerraformが受け取って更新する。
 - Neonのプロジェクトは、Terraformでは作らない。数が少なく変えることもまれなので、手で作る。
 - SSMのパラメーター（Neonの接続文字列2つとWeb PushのVAPID鍵）は、置き場所ごとTerraformの外で作る（2026-11-17 大関の判断）。Terraformが`aws_ssm_parameter`を資源やデータソースとして持つと、値を外で入れても、状態の更新のたびに値が状態ファイルに平文で記録されるためである。TerraformはIAMの権限とLambdaの設定で、パラメーターの名前（とそこから組み立てたARN）だけを使う。Lambdaは動くときに名前で値を読む。
@@ -128,8 +128,8 @@ eslint-plugin-boundariesで、ADR-0003の決定5の2つを書く。lintはCIと�
 ## この決定では決めないこと
 
 - 画面の移り方やデータの取り方の道具（最初の1本の設計で決める）
-- 監視とアラートの範囲（工程6）
-- Neonのリージョンと、無料枠に収まるか（工程6）
+- 監視とアラートの範囲（工程6。ADR-0006の決定5）
+- Neonのリージョンと、無料枠に収まるか（工程6。ADR-0006の決定1と費用の試算）
 - Neonのブランチを試験に使うか。2026-11-21に、MVP1では使わないと決めた（無料枠の計算時間を使うため。記録は`docs/discussions/api-design.md`の論点「neon-branch」）
 
 ## 2026-11-21の追記
