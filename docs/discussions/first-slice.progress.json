@@ -3,7 +3,7 @@
   "title": "最初の1本（登録からリマインドがiPhoneに届くまで）",
   "level": "L3",
   "page": "https://claude.ai/artifact/6hN723fZxgmnP59cujyHr8",
-  "round": 3,
+  "round": 4,
   "stages": {
     "requirements": {
       "state": "waiting"
@@ -27,5 +27,5 @@
       "state": "pending"
     }
   },
-  "updated_at": "2026-11-22T10:55:20.585Z"
+  "updated_at": "2026-11-23T11:10:25.169Z"
 }
