@@ -71,8 +71,8 @@ sequenceDiagram
     opt 有効な招待から初回登録
         P->>C: SignUp（メール、暗号化した招待証明）
         C->>L: PreSignUp_SignUp
-        L->>DB: 招待ハッシュ、期限、残数、グループ状態を確認
-        L-->>C: 許可（回数を減らさない）
+        L->>DB: 招待を検査して登録開始枠だけを使う
+        L-->>C: 許可（参加回数は減らさない）
         C->>M: 確認コードを送る
         M-->>P: メールでコード
         P->>C: ConfirmSignUp（コード）
@@ -86,10 +86,19 @@ sequenceDiagram
     P->>A: GET /me と GET /me/groups（JWT）
 ```
 
-- 未確認なら確認コードを再送してから続ける。登録済みなら [USER_AUTH](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_InitiateAuth.html) の [EMAIL_OTP](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_RespondToAuthChallenge.html) にコードを返す。初回は [ConfirmSignUpのSession](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ConfirmSignUp.html) で確認コードを再利用できる。
-- [登録前Lambda](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-pre-sign-up.html)は既存の署名秘密をブラウザに渡さない。ブラウザは配布済みの公開鍵で、招待トークンと登録メールのダイジェストを暗号化し、版付きの暗号文だけをSignUpのValidationDataに渡す。RSA-OAEP/SHA-256、2048ビットとし、暗号化するデータは固定長のトークンとメールのSHA-256に限る。秘密鍵は環境別のSSM SecureStringに置く。Lambdaは復号、要求の正規化したメールとの照合、DB上の招待の検査を行う。暗号文の使い回しだけでは別のメールで登録できない。生トークンや暗号文をログに出さない。
-- 招待が無効、照会が失敗、または証明が無ければ登録を拒む。Cognitoの例外はUserLambdaValidationException。autoConfirmUser / autoVerifyEmailは設定しない。PreSignUp_AdminCreateUserは初期データのため招待検査をしない。通常の登録者には管理者権限を与えない。
-- 招待を持つ人は期限内に別アドレスで登録を試せる。確認メールの再送は登録前Lambdaを通らない。招待は短く発行し、参加時にもう一度期限と残数を確かめる。登録拒否後のアカウント不在・メール0通は実環境で確かめる（[AWS確認とBot回答](../discussions/first-slice.md#aws公式文書で確かめたこと)）。
+- 招待なしのS-01はSignUpを呼ばず、[USER_AUTH](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_InitiateAuth.html)のEMAIL_OTPだけを使う。招待付きでは暗号化した証明でSignUpを試す。UsernameExistsExceptionなら同じ入力でUSER_AUTHへ進む。UserNotConfirmedExceptionなら、招待付きの場合だけ確認入力へ戻り、利用者の操作でResendConfirmationCodeを呼ぶ。招待なしなら招待リンクから開き直すよう案内する。PreventUserExistenceErrorsはENABLED。画面はアカウントの存在を表示しない。CognitoのSignUp自体では既存アドレスの応答を完全には隠せない。
+- [登録前Lambda](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-pre-sign-up.html)は招待トークンと正規化したメールのSHA-256を照合する。ブラウザは配布済みの公開鍵（RSA-OAEP/SHA-256、2048ビット）で暗号化し、版付き暗号文だけをSignUpのValidationDataに入れる。TLSに加え、Cognito・監査やイベントの照会箇所で任意のValidationDataに生の招待が残らないための対策であり、リンクを知る人による別メールの登録は防がない。生トークンも暗号文もアプリのログに出さない。鍵を替えるときはSSMに新旧を置いて新しい公開鍵を配布し、旧PWAの入れ替えを確認してから旧鍵を削除する。
+- 同期Lambdaは復号・メール照合後、有効期限・取り消し・残り参加枠・グループ状態を条件に、登録開始数だけを1文のUPDATEで増やす。登録開始数の上限は参加上限の3倍。開始数はCognitoの失敗やトリガー再試行で戻さない。招待は有効24時間以内・参加1〜10人。参加のときだけ参加数を増やし、登録開始枠の不足で既存会員のログインや確認済みの招待参加は拒まない。枠を使い切ったときはオーナーが必要に応じてリンクを発行し直す。
+- [ConfirmSignUpのSession](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ConfirmSignUp.html)は初回ログインで再利用する。通常は確認メール1通、再ログインは[EMAIL_OTPのコード入力](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_RespondToAuthChallenge.html)。自動確認・メールの自動検証は無効。PreSignUp_AdminCreateUserは初期データ用に通す。
+
+| SDKで受ける結果 | S-01の案内と次の操作 |
+|---|---|
+| SignUpがUserLambdaValidationException | Lambdaの固定メッセージ末尾を完全一致で分類する。invite_unusableなら別の招待リンク、retry_laterまたは読めない文なら時間をおいて再操作。生の例外は出さない |
+| SignUpがLimitExceededException | 未確認アカウントが残る場合がある。後で同じアドレスと招待から続け、既存・未確認なら確認入力と明示的なコード再送へ進む。登録が成功したとは表示しない |
+| 送信操作がTooManyRequestsException、LimitExceededException、CodeDeliveryFailureException、または送信設定エラー | 要求数・送信量・配信の問題として「時間をおいてやり直してください」。自動再送しない。設定エラーが続く場合は運用側で調べる |
+| ConfirmSignUpまたはRespondToAuthChallengeがCodeMismatchException / ExpiredCodeException | 誤り・期限切れの案内からコード入力や再送へ。認証セッション切れはUSER_AUTHからやり直す |
+
+確認メールの再送と既存アカウントへの認証コード送信は登録前Lambdaを通らない。PWAが直接呼ぶCognitoにGatewayの流量制限は効かず、既存会員への送信や共有SES枠に負荷がかかる残余リスクがある。[監視](#ログと監視)を入れ、追加の送信制限を有料のAWS WAFで行うかは運用費の判断として残す。
 
 ## API 設計
 
@@ -116,9 +125,9 @@ HTTP APIからLambdaのHonoに渡す。Zodで未知キーと誤った型を拒�
 
 - API Gatewayは環境のissuerとapp clientを照合する。apiはCognitoアクセストークン（token_use=access）だけを受け、JWTのsubをgroups.users.cognito_subから内部のuuidへ引く。Cognito subを内部の主キーにしない。JWTなしはGatewayの401、users行なしは招待の2本以外403 not_registered。CognitoのアクセスJWTはaudがなければGatewayがclient_idを使う（[JWT authorizer](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-jwt-authorizer.html)）。
 - グループIDと資源IDを組で照会する。非メンバー・不在・別グループIDは404 not_found。メンバーに見える資源があり、操作する権限だけが無いなら403 forbidden。グループの削除対象が不在なら再送でも404。初回が成功して応答が失われた場合も、画面は一覧を読み直す。他のグループでの存在は調べない。初回204、再送404でも副作用は重ならない。
-- 作成は画面が作るUUIDv7で重複を見分ける。初回201、同じID・同じ内容は200、別内容や別グループの同一IDは409 id_conflict。通知先はendpointを重複の印にし、同じ本人なら200。PATCHの省略は維持、nullは任意欄だけを消す。APIで申込者IDを入力させない。
-- エラーはRFC 9457のapplication/problem+json。422 invalid_inputはerrorsに欄を入れる。409はinvite_unusable、already_exists、invalid_transition、group_closing、id_conflictを区別する。退会開始は403 account_closing。未知の失敗は内容を伏せて500 internal。Gatewayの401と流量制限の429は画面で別扱いにする。
-- 境界値は招待期限が現在より後で30日以内・1〜10回、枚数1〜99、受付名100字・座席と整理番号200字まで。空欄をnullにそろえ、文字数はUnicodeコードポイントで数える。
+- 作成は画面が作るUUIDv7で重複を見分ける。初回201。同じ操作・グループ・認証済み作成者に属する同じIDと内容だけを再送として200にする。他人の非公開下書きの同一IDには、本文の一致にかかわらず汎用の409 id_conflictを返し、作成者・内容・所属を出さない。通知先はendpointを重複の印にし、同じ本人なら200。PATCHの省略は維持、nullは任意欄だけを消す。APIで申込者IDを入力させない。
+- エラーはRFC 9457のapplication/problem+json。422 invalid_inputはerrorsに欄を入れる。409はinvite_unusable、already_exists、invalid_transition、group_closing、id_conflict、reminder_conflictを区別する。退会開始は403 account_closing。未知の失敗は内容を伏せて500 internal。Gatewayの401と流量制限の429は画面で別扱いにする。
+- 境界値は招待期限が現在より後で24時間以内・1〜10回、枚数1〜99、受付名100字・座席と整理番号200字まで。空欄をnullにそろえ、文字数はUnicodeコードポイントで数える。
 
 ## DB 設計
 
@@ -127,7 +136,7 @@ Drizzleの表定義は文脈ごとのinfrastructureに置く。型・null・外�
 | スキーマ・テーブル | 主な列・制約と照会 |
 |---|---|
 | groups.users / groups.groups | users(id PK, cognito_sub UNIQUE, display_name, status)、groups(id PK, owner_id, kind, status, name)。自分用はowner_idごとに1件（kindに対する部分一意索引） |
-| groups.members / groups.invite_links | members PK(group_id,user_id)、逆引き(user_id,group_id)。invite_links(id PK, group_id, token_hash UNIQUE, expires_at, max_uses, used_count, revoked_at)とCHECK 0 ≤ used_count ≤ max_uses |
+| groups.members / groups.invite_links | members PK(group_id,user_id)、逆引き(user_id,group_id)。invite_links(id PK, group_id, token_hash UNIQUE, expires_at, max_uses, used_count, registration_starts, revoked_at)。参加数と登録開始数を別々に制限 |
 | catalog.artists / catalog.venues | id PKとgroup_id。artistsは(group_id,name_key) UNIQUEと12色のCHECK。名称検索はgroup_idを先頭にする |
 | catalog.tours / catalog.concerts | id PKとgroup_id。concertsのvenue_id/tour_idは同じグループへの複合FK。tour_idはnull可。公演一覧は(group_id,日付,id) |
 | catalog.concert_artists / catalog.drafts | concert_artists PK(concert_id,artist_id)、同じグループへの複合FK、出演順。draftsはJSONBのpayloadを持ち、(group_id,created_by,created_at)で一覧 |
@@ -156,11 +165,11 @@ erDiagram
 
 招待参加はユーザー作成・自分用グループ・所属・利用回数を1トランザクションで更新する。対象の招待行とグループの状態を確認し、所属を新規に加えた場合だけ、期限内かつ残数が正の条件付きUPDATEで1回加算する。0行なら全体を戻す。競合した同じ人はコミット後に既存所属を確認し、残数を減らさない。確定した公演と下書き削除も1トランザクション。
 
-申込削除では先に未送信のリマインドを取り消し、申込を削除する。Pushの404/410は通知先とその子の送信結果を削除する。退会・解散・匿名化のAPIやジョブ表は今回作らない。将来の削除・匿名化の順序や保持対象は[既存のデータモデル](../data-model.md#解散と退会)から変更しない。個人情報を他文脈の表に写さない。
+申込削除では先に未送信のリマインドを取り消し、申込を削除する。Pushの404/410は通知先とその子の送信結果を削除する。退会・解散・匿名化のAPIやジョブ表は今回作らない。SESのアカウント単位の抑止リストは、Cognitoとは別に宛先が残り得る。後の退会処理で消す順序は[データモデル](../data-model.md#退会の手順yadr-04)に記録する。公開前のプライバシーポリシーにも、シンガポールのAmazon SESがログインメールの宛先を扱うことを書く。
 
 ## フロントエンド設計
 
-React＋Vite、React RouterとTanStack Query、Honoクライアントを使う。グループIDをクエリキーに含め、更新後に関係する一覧と詳細を読み直す。S-01の招待先や通知からの戻り先は同一オリジンのパスに限る。
+React＋Vite、React RouterとTanStack Query、Honoクライアントを使う。認証されたセッションごとにQueryClientを作り、キーにユーザーIDとグループIDを含める。ログアウト・アカウント交代では通信を中断し、キャッシュを消して別のQueryClientに替える。完了が遅れた旧応答は新しいキャッシュに入らない。Service Workerは認証済み応答を保存しない。S-01の招待先や通知からの戻り先は同一オリジンのパスに限る。
 
 ```mermaid
 flowchart LR
@@ -169,7 +178,7 @@ flowchart LR
     E --> F["通知を押す"] --> G["未ログインならログイン"] --> H["申込の詳細"]
 ```
 
-- Safariとホーム画面のPWAは別のログイン状態を持つ。各環境のCognitoリフレッシュトークンは365日、ログアウト時に失効させて端末の保持分を消す。Service WorkerにJWTを渡さない。招待トークンや認証画面はオフラインキャッシュに置かない。
+- Safariとホーム画面のPWAは別のログイン状態を持つ。リフレッシュトークンは365日。Cognitoの失効を有効にしてログアウト時はRevokeTokenを呼び、成否にかかわらず端末の保持分を消す。Gatewayの署名検証は発行済みのアクセストークンの失効を見ないため、最長1時間の有効期限までは使える前提とする。通知先はログアウトでは消さない。Service WorkerにJWTを渡さず、招待トークンや認証画面もオフラインキャッシュに置かない。
 - ホームは自分の申込と有効な期限から「次にすること」を作り、最も近い期日を帯にする。通知先0台またはlastFailedAt付きの端末があればS-23へ案内する。許可拒否でも帯を残す。
 - ホームはwhen=upcomingで最も近い公演を探す。公演一覧（S-06）はwhen=upcomingとwhen=pastを使い、自分の下書きも別に出す。日本時間の今日の公演は「これから」に入れる。
 - 7日ちょうどはカウントダウンなし。座席を出せる自分の申込が複数なら、座席が空でない入金済み/受取済みのうち、受取済みを優先する。同じ状態では申込一覧のcreatedAtが新しいものを選び、同時刻ならIDの昇順で最初の1件を使う。
@@ -225,7 +234,7 @@ sequenceDiagram
 | 観点 | 設計 |
 |---|---|
 | リトライ | Schedulerの送信不能は最大2回、Lambda非同期実行の関数エラーも最大2回、各イベントの保持は最大1時間。サービスのバックオフに従い、使い切り・期限切れはC-4へ送る。Web Pushの業務上の再送3回は5分固定。Cognitoのメール送信要求を画面で自動再送しない |
-| タイムアウト | 登録前LambdaはAWSの5秒制限より短い4秒とし、秘密の取得とNeon照会を合わせて3秒で打ち切る。apiは20秒、DB文とScheduler SDKは各3秒、送信Lambdaは60秒、端末のPush要求は各5秒を上限とする。無制限に待つと、招待の同期応答枠やグループの書き込みロックを使い切る |
+| タイムアウト | 登録前LambdaはAWSの5秒制限より短い4秒。SSMの鍵・接続情報は初期化時に取得して実行環境内に保ち、DB書き込みに最大3秒を充てる。初期化と処理を含む応答枠も超えないよう残り時間で打ち切る。apiは20秒、DB文とScheduler SDKは各3秒、送信Lambdaは60秒、端末のPush要求は各5秒を上限とする |
 | 冪等性 | 作成ID、招待の所属PK、通知先endpoint、予約の世代・回数と端末ごとの送信記録を使う。Schedulerの再呼び出しは同名・同じ入力に限る |
 | 部分失敗 | 予約作成とDB確定の一方だけが成功しても、旧予約を先に消さず、有効名で送信を止める。取消・削除はDBから確定し、その後AWS側を消す |
 | 縮退 | SESが止まれば新規登録・再ログインに時間をおく案内を出す。既にログイン済みの操作は継続できる。予約を保存できなければ申込の変更を成功と返さない。Pushが届かなくてもアプリから期限を確認できる |
@@ -234,29 +243,36 @@ sequenceDiagram
 
 Powertoolsの構造化ログを7日保存する。操作種別・要求ID・エラー分類・回数・経過時間のみとし、招待URLやヘッダー、氏名、メール、JWT、Push endpointと鍵、通知文を記録しない。Gatewayのログに実パスや本文を入れない。
 
-ADR-0006に従い、Budgetsは月5ドル、Gatewayは20回/秒・瞬間40回。10人×30操作/日の見込みから、1時間のアラームをAPIは125件、Lambdaの合計は150件で始め、結合検証で調整する。C-4で予約の起動失敗、Lambda実行失敗、再送枯渇を検知する。SESの送信失敗・バウンス・苦情も監視し、E-16の上限到達時は利用者に待つよう案内する。
+ADR-0006に従い、Budgetsは月5ドル、Gatewayは20回/秒・瞬間40回。CloudWatchはAPIの1時間125件を環境別2個、Lambdaの1時間150件をリージョン全体1個、C-4キューの可視件数>0を環境別2個で見る。失敗キューへの送付自体が失敗した場合は、SchedulerのInvocationsFailedToBeSentToDeadLetterCountとLambdaのDestinationDeliveryFailuresをそれぞれ環境別に1件以上で通知する（計4個）。
+
+SESは共有のアカウント／リージョンの集計値だけを見て、1時間のSendが20件以上、Rejectが1件以上、Reputation.BounceRateが5%以上、Reputation.ComplaintRateが0.1%以上を各1個の警報にする。オーナーに宛先も本文もない警報を送る。宛先入りのSESイベント通知は構成しない。恒久バウンス・苦情はアカウント単位の抑止リストで止め、安易に解除しない。オーナーが本人と宛先を別経路で確認し、原因が解消した場合のみ解除する。問い合わせや監視ログに抑止対象の一覧を転記しない。
 
 ## セキュリティ
 
 Cognitoのプール・発行者・アプリクライアントを環境で分離する。SSMの秘密は必要な関数だけが読み、VAPID公開鍵と招待証明の暗号化用公開鍵だけをPWAへ配る。HMACから作る元の招待トークンはDBにハッシュだけを保存する。秘密鍵・既存メールアドレスの実値をコード、作業ログ、Terraformソースに書かない。招待画面にReferrer-Policy: no-referrerを設定し、外部リソースへURLを送らない。CORSはその環境のPWAのオリジンに限る。
 
+送信元の設定はplanやstateにも残り得る。planの平文をCIに出さず、公開の成果物にも置かない。S3の状態は専用の環境別キーと権限で分離し、暗号化とアクセス制限を適用する。SSMの秘密値はTerraformのデータソースでは読まず、許可された関数が実行時に読む。
+
 通知の購読情報は本人にしか返さない。任意URLへのサーバーからの要求を避けるため、PushのendpointはHTTPSで、対応するPushプロバイダーのホストに限り、転送先URLには追従しない。ロック画面に公演名と受付名が出ることは通知を許可する画面で案内する。
 
 ## 性能
 
-定期ポーリングでNeonを起こさず、予約単位で起動する。登録前LambdaのDB照会は1本とし、採用ドライバーのトランザクションは書き込みに限って使う。一覧は10人の利用を前提にページ分けしない。日付と申込者の索引を使い、ホームの表示に端末ごとの送信履歴を読まない。
+定期ポーリングでNeonを起こさず、予約単位で起動する。登録前LambdaのDB書き込みは1文とする。一覧は10人の利用を前提にページ分けしない。日付と申込者の索引を使い、ホームの表示に端末ごとの送信履歴を読まない。
 
 ## テスト方針
 
-- CIはメールを送らない。登録前のイベント試験で招待の無効・期限・上限・AdminCreateUserを確認する。API結合試験でJWTなし・usersなし・非メンバー・非オーナーを区別し、招待の最後の1回を2人で競合させる。DELETE不在と他グループの404を比較する。
-- Playwrightは2つのcontextで、オーナーの招待発行、招待者の参加、公演確定、申込から受取済みまでを通す。CIではテスト用の認証代替を使い、本番構成に認証の迂回を置かない。結合検証で2人を用意するときは、初期データの手順がAdminCreateUser（SUPPRESS）で用意する。実プールへのメールなしの認証E2Eが要る場合のパスワードは結合検証専用設定に限り、本番では許可しない。
+- CIはメールを送らない。Playwrightはランナー内のPWAとHono、使い捨てPostgreSQLを使う。試験専用の入口がランナー内の短命な鍵とテストissuerで2人のJWTを発行し、試験用アダプターがHonoの認証済み入力に渡す。画面の試験用コード入力はランナー内の代替だけで扱う。試験用の入口・鍵・発行者を製品ビルドの依存から外し、成果物に試験用の入口が無く、試験JWTを受けないことを検査する。結合検証も実際のメールOTPのみとし、パスワード方式は足さない。
+- ローカルのHonoではusers行なし・非メンバー・非オーナー、招待の最後の1回、他人の下書きIDへ同じ／違う内容を送った場合の応答、DELETE不在と別グループの404を確かめる。Gatewayの401はローカルHonoの試験に含めず、Terraformでissuer・client・全ルートのauthorizerを照合し、実環境でJWTなし・別issuer・別clientを拒否することを確かめる。同じブラウザで会員を交代し、旧会員の下書きや通知状態が一瞬も表示されないことも確かめる。
+- 登録前のイベント試験は招待の無効・期限・登録開始枠・AdminCreateUserを確認する。SDKの境界に上の例外を注入し、特にSignUpのLimitExceededExceptionから未確認ユーザーの確認を再開できることを確かめる。結合検証で休止したNeonを使う初回登録の応答時間を測り、登録開始枠を超えた新規登録は送信されず、既存会員のログインは継続することを確かめる。
 - fast-checkで予約の時刻と状態遷移、再送上限、世代切替と引き受けの競合、旧見張り、同じ再送、端末ごとの再開を確かめる。Push成功直後に失敗させ、成功記録と端末の失敗印が別々に残らないことも確かめる。
 - 1月10日12時の入金期限で、1月9日20時の通知を送ったあと、同日21時に期限を翌日の1月11日12時へ延ばす。期限が保存され、1月10日20時は別IDで予約され、3時間前の予約が1月11日9時に切り替わることを確かめる。同じ変更を送り直しても予約を増やさない。
 - 送信済みの期限を過去に直したときは、申込詳細に旧予約の時刻や結果がなく、新規予約もないことを確かめる。取り消した期限の入れ直し、旧世代の送信結果の分離、5回目の拒否も確かめる。結合検証で見張り移動後の設定、SchedulerとLambdaの各失敗経路、停止中のDBが戻った後のキュー処理を確認する。
 - 同じ公演の受取済みの申込2件に座席を入れ、古い申込をあとで編集しても、券面が作成日時の新しい申込を選ぶことを確かめる。
 - 日本時間で昨日・今日・明日の確定済み公演と、自分の下書きを用意する。S-06の「これから」に今日と明日、「過去」に昨日、自分の下書きは別の一覧に出ることを確かめる。
 - 結合検証では初期データでオーナーと共有グループを用意する。大関さんはオーナーとして招待リンクを発行し、2人目として別のメールアドレスでiPhoneのSafariから参加する。2人目はホーム画面のyoinで再ログインして通知を許可し、公演を確定して自分の期限付き申込を作る。そのiPhoneで結果発表・入金期限・受取開始の通知を受け取り、通知から自分の申込を開く（AC-07〜AC-10b）。大関さんはオーナーとしてパソコンでも開き、2人目の申込が読めても編集できないことを確かめる（AC-11）。
-- 大関さんは登録拒否後のAdminGetUserでアカウントが無く、確認メールも届かないことと、正常な初回登録からログインまではメールが1通であることを確かめる。CIの上限エラー画面テストは応答を模す。実AWSとiPhoneはこの設計作成時点では未検証。
+- AC-10bでは2人目が受取開始の通知を予約してからS-22でログアウトする。通知先を残したまま、そのiPhoneの未ログイン状態で通知を押す。S-01で同じ人が再ログインし、ホームではなく押した通知の申込詳細へ戻ることを確かめる。
+- AC-09の予約時刻は固定時計で厳密に比べる。結合検証ではFlexibleTimeWindowなしの予約時刻、Scheduler起動、Push受理、端末着信を別々に記録する。通常経路の試験目安は、Scheduler起動が予約の分内（60秒未満）、Push受理が起動から60秒以内、着信が受理から2分以内。端末は通信可能な状態にし、範囲を外れた段を記録する。試験計画にもこの判定を引き継ぐ。
+- 大関さんはTerraform適用後の実プールで、登録拒否後のAdminGetUser不在・メール0通、正常な初回1通、メールOTPによる再ログインを確認する。SESのバウンス／苦情は結合検証のSESシミュレーターと監視試験で、実宛先を使わずに確認する。シミュレーターだけでは実際の抑止リスト入りや評判指標を検証できないため、抑止の検査は同意済みの検証専用宛先を明示登録し、送信停止と解除を別に確かめる。実AWSとiPhoneはこの設計作成時点では未検証。
 
 ## 移行とリリース
 
@@ -272,13 +288,15 @@ Drizzleで環境共通のSQLを生成し、表・制約・索引・世代シー�
 |---|---|
 | Cognito Essentials | 10 MAUは直接ログイン月1万MAUの無料枠内（アカウント/組織で共有）。0円、固定費なし |
 | SES à la carte | 100通 × 0.10ドル/1,000通 = 0.01ドル = 約1.50円。固定費なし。専用IPや新規ドメインは購入しない |
-| 新しい合計 | ADR-0006の約3円＋約1.50円＝約4.50円（10%税込で約4.95円）。クレジット適用前 |
+| SESだけを足した比較値 | ADR-0006の約3円＋約1.50円＝約4.50円（10%税込で約4.95円）。運用全体の見積もりではない |
+| 監視を含む試算 | 標準アラーム13個（環境別API・失敗キュー・キュー送付失敗で8個、Lambdaリージョン合計1個、共有SES4個）。各アラームは1メトリクス。無料枠10個をこの構成で使えるなら、超過3個 × 0.10ドル＝約45円。上記の比較値と合計で約49.50円（税込約54.45円） |
+| Neonが無料枠を超えた場合 | 2つの環境ともプロジェクトごとの無料枠内が上の合計の前提。片方が月120 CU時でLaunchに移れば、そのプロジェクトの計算だけで120 × 0.106ドル＝12.72ドル（約1,908円）。データ保存などの従量費は別 |
 
-実通数が10通なら送信料は約0.15円。SES Essentials（別のSES料金プラン）の場合は月100通で0.016ドル（約2.40円）だが、本設計の試算はà la carte。単価と無料枠は[AWS Cognito料金](https://aws.amazon.com/cognito/pricing/)・[Amazon SES料金](https://aws.amazon.com/ses/pricing/)による。AWSのサンドボックスの上限と本番アクセス後の割当は金額と別であり、既定送信の50通/日をSESの上限に使わない。
+試算は同じAWSアカウントの2環境で利用量を合わせた比較で、他のアラームや費用、WAF、税・クレジットは含めない。SESはà la carteとし、単価と無料枠は[AWS Cognito料金](https://aws.amazon.com/cognito/pricing/)・[Amazon SES料金](https://aws.amazon.com/ses/pricing/)・[CloudWatch料金](https://aws.amazon.com/cloudwatch/pricing/)・[Neon料金](https://neon.com/pricing)による。既定送信の50通/日はSESの枠ではない。
 
 ## リスク
 
-- SESの確認メールに応じられる既存アドレスをオーナーが選ぶ。既存アドレスを確認しただけでは、そのドメインのDMARC整合までは保証されない。FromとMAIL FROMのSPF整合、またはFromと署名ドメインのDKIM整合が必要で、送信元ドメインが厳格に拒否する場合は不達になり得る（[AWSのDMARC解説](https://docs.aws.amazon.com/ses/latest/dg/send-email-authentication-dmarc.html)）。結合検証で受信結果とAuthentication-Resultsを確かめ、不達なら別の既存アドレスで再確認する。未承認のまま本番へ出さない。
+- [AWSのDMARC解説](https://docs.aws.amazon.com/ses/latest/dg/send-email-authentication-dmarc.html)のとおり、既存アドレスを確認しただけではDMARCに合格しない。本番に使うFromで招待客の主要なメールサービス（Gmail、iCloudなど）に届き、受信側のAuthentication-Resultsが、Fromに整合したSPFまたはDKIMによるdmarc=passとなることをリリース条件とする。満たせなければ送信元を選び直し、公開しない。
 - SchedulerとDBは一つのトランザクションにはできない。不要予約が一時的に残っても、有効名を確かめて止める。Pushの受理とDB保存も一つにはできず、重複通知を完全にはなくせない。
 
 ## 決めたこと（問いと答え）
@@ -287,6 +305,4 @@ Drizzleで環境共通のSQLを生成し、表・制約・索引・世代シー�
 
 ## 未決事項
 
-オーナーへの質問は回答待ち0件。[画面とデータ取得の道具](../discussions/first-slice.md#画面の移り方とデータの取り方の道具を何にするか)の技術提案1件は、この設計書と一緒に承認を受ける。
-
-[SES方式の論点](../discussions/first-slice.md#メールのコードを送る仕組みをどれにするか)のとおり、既存メールアドレスを使い、オーナーが解除を申請する。アドレスの実値の設定、送信元確認、AWSの承認と受信確認は実装・結合検証の作業として残る。
+オーナーへの質問は3件。 [送信元と返信先](../discussions/first-slice.md#認証メールにどのアドレスを表示し返信を受けるか)、[退会機能前の本番参加](../discussions/first-slice.md#退会機能がない期間に本番で誰が参加するか)、[認証の追加防御にかける固定費](../discussions/first-slice.md#認証メールの追加制限に固定費をかけるか)。既存アドレスを使いオーナーが解除を申請する決定は変えない。公開時の選択肢はまだ採用しない。[画面とデータ取得の道具](../discussions/first-slice.md#画面の移り方とデータの取り方の道具を何にするか)の技術提案1件は設計書と一緒に承認を受ける。
