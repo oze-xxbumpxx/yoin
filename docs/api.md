@@ -139,7 +139,7 @@ flowchart TD
 ```
 
 - 下の段の画面（公演・申込など）は、パスに`groupId`を含む画面のURLを持つ。通知を押したときは、リマインドの`url`（`/groups/<groupId>/ticket-applications/<id>`）で申込の画面を開く。
-- ログインの方式（メールとパスワードか、メールに届くコードか）は最初の1本の要件で決める（論点の記録の「login」）。S-01はCognitoの画面か自前の画面かも、そこで決める。
+- ログインは、メールに届くコードで行い、S-01はyoinの中に自前で作る（2026-11-22に決定。`docs/requirements/first-slice.md`のF-05、論点の記録の「login」）。Cognitoにアカウントが無いメールアドレスなら、S-01の同じ流れでCognitoのアカウントを作り（パスワードなしの登録とメールのコードでの確認）、JWTを得る。アカウントを作れるのは有効な招待リンクから来たときだけで、確かめ方は設計で決める。Cognitoのアカウントを作っても`groups.users`の行は作らず、行を作るのは有効な招待の「招待から参加する」だけである。
 
 ### 画面ごとの中身と呼ぶAPI
 
@@ -147,7 +147,7 @@ APIの名前は、下の「APIの一覧」の表の1列目と同じ。
 
 | 画面 | 中身 | 呼ぶAPI |
 |---|---|---|
-| S-01 ログイン | Cognitoでのログイン | （Cognito） |
+| S-01 ログイン | メールアドレスを入れ、届いたコードを入れる。Cognitoにアカウントが無ければ、同じ流れで作る。yoinの中の自前の画面 | （Cognito） |
 | S-02 招待 | グループ名と、参加するボタン。招待を見るAPIが未登録と返したときだけ、表示名の欄を出す | 招待を見る、招待から参加する |
 | S-03 初回の案内 | ホーム画面への追加と、通知の許可の案内。許可されたら端末を登録する | 通知先を登録する |
 | S-04 グループの切り替え | 自分のグループの一覧。自分用グループは分けて出す。グループを作る | 自分のグループ一覧、グループを作る |
@@ -200,20 +200,20 @@ APIの名前は、下の「APIの一覧」の表の1列目と同じ。
 
 | 名前 | メソッドとパス | 中身と決まり |
 |---|---|---|
-| アーティスト一覧 | `GET /groups/{g}/artists` | 名前の順。アーティストごとに、公演で使っているか（`inUse`） |
-| アーティストを作る | `POST /groups/{g}/artists` | `{ id, name }`。正規化した名前が同じなら`already_exists`で、応答に既存のアーティストのIDを入れる |
-| アーティストを直す・消す | `PATCH`・`DELETE /groups/{g}/artists/{artistId}` | 使っていれば消せない（`in_use`） |
+| アーティスト一覧 | `GET /groups/{g}/artists` | 名前の順。アーティストごとに、色（`color`）と、公演で使っているか（`inUse`） |
+| アーティストを作る | `POST /groups/{g}/artists` | `{ id, name }`。色は名前から決めて保存する（`docs/requirements/first-slice.md`のF-21）。正規化した名前が同じなら`already_exists`で、応答に既存のアーティストのIDを入れる |
+| アーティストを直す・消す | `PATCH`・`DELETE /groups/{g}/artists/{artistId}` | 色（`docs/ui-guidelines.md`の12色のどれか）も直せる。使っていれば消せない（`in_use`） |
 | 会場一覧 | `GET /groups/{g}/venues` | 会場ごとに、名前、最寄り駅、メモ、公演で使っているか（`inUse`） |
 | 会場を作る | `POST /groups/{g}/venues` | `{ id, name, nearestStation, memo }` |
 | 会場を直す・消す | `PATCH`・`DELETE /groups/{g}/venues/{venueId}` | 使っていれば消せない（`in_use`） |
 | ツアー一覧 | `GET /groups/{g}/tours` |  |
 | ツアーを直す | `PATCH /groups/{g}/tours/{tourId}` | ツアーは下書きの確定で作る |
-| 公演一覧 | `GET /groups/{g}/concerts?when=upcoming\|past&year=` | 確定した公演だけ。日付の順（`past`は新しい順）。今日の公演は`upcoming`に入れる。日付は日本時間で比べる。公演ごとに、題名かツアー名、日付、会場名、開場・開演時刻、出演順のアーティスト名 |
-| 公演を見る | `GET /groups/{g}/concerts/{concertId}` | 公演、ツアー（グッズ販売時間を含む）、会場、出演順のアーティスト |
+| 公演一覧 | `GET /groups/{g}/concerts?when=upcoming\|past&year=` | 確定した公演だけ。日付の順（`past`は新しい順）。今日の公演は`upcoming`に入れる。日付は日本時間で比べる。公演ごとに、題名かツアー名、日付、会場名、開場・開演時刻、出演順のアーティスト名と色 |
+| 公演を見る | `GET /groups/{g}/concerts/{concertId}` | 公演、ツアー（グッズ販売時間を含む）、会場、出演順のアーティスト（色を含む） |
 | 公演を直す | `PATCH /groups/{g}/concerts/{concertId}` | 日付・会場・時刻・URL・題名・アーティストの並び。アーティストを送るときは並び全体を置き換える |
 | 公演の下書き一覧 | `GET /groups/{g}/concert-drafts` | 自分が作った下書きだけ |
 | 公演の下書きを作る・直す・消す | `POST /groups/{g}/concert-drafts`、`PATCH`・`DELETE /groups/{g}/concert-drafts/{draftId}` | 中身は、ツアー（任意）と公演の配列。ツアー・会場・アーティストは、登録済みのIDか新しい名前のどちらか。登録済みのツアーを指せば、確定でそのツアーに公演を足す（本文の`tourId`はそのツアーのID）。決まっていなくてもよい。直す・消すのは作った人だけ |
-| 公演の下書きを確定する | `POST /groups/{g}/concert-drafts/{draftId}/confirm` | 本文は`{ tourId, concertIds }`（画面が作るUUIDv7。`concertIds`は下書きの公演と同じ順）。1つのトランザクションで、新しい会場・アーティスト・ツアー・公演を作り、下書きを消す。新しい名前のアーティストが正規化して既存と同じなら、既存のほうを使う。会場が決まっていない公演や、ツアーも題名もない公演があれば`invalid_input`。下書きがもう無くても、`concertIds`の公演がすべてこのグループにあれば、確定済みとして同じ応答を返す。表に下書きとの対応を持たないので、別の下書きから作った公演と区別しないことは受け入れる（画面は自分が作ったIDしか送らない） |
+| 公演の下書きを確定する | `POST /groups/{g}/concert-drafts/{draftId}/confirm` | 本文は`{ tourId, concertIds }`（画面が作るUUIDv7。`concertIds`は下書きの公演と同じ順）。1つのトランザクションで、新しい会場・アーティスト・ツアー・公演を作り、下書きを消す。新しいアーティストの色は、名前から決めて保存する。新しい名前のアーティストが正規化して既存と同じなら、既存のほうを使う。会場が決まっていない公演や、ツアーも題名もない公演があれば`invalid_input`。下書きがもう無くても、`concertIds`の公演がすべてこのグループにあれば、確定済みとして同じ応答を返す。表に下書きとの対応を持たないので、別の下書きから作った公演と区別しないことは受け入れる（画面は自分が作ったIDしか送らない） |
 | セトリを見る | `GET /groups/{g}/concerts/{concertId}/setlist` | 曲目の配列と`version`。まだ無ければ空の配列と`version: 0` |
 | セトリを保存する | `PUT /groups/{g}/concerts/{concertId}/setlist` | 本文は`{ version, items }`。曲目は全体を置き換える。`version`が今の版と違えば`stale_version`で、応答に今の版の曲目を入れる。保存できたら`version`を1増やす。送り直しに備えて、今の版が送った版の次で、最後に保存した人が自分で、曲目も同じなら、200で今の版を返す。曲目のアーティストは、その公演のアーティストだけ |
 
@@ -235,10 +235,10 @@ APIの名前は、下の「APIの一覧」の表の1列目と同じ。
 
 | 名前 | メソッドとパス | 中身と決まり |
 |---|---|---|
-| 申込一覧 | `GET /groups/{g}/ticket-applications?concertId=&applicant=me` | どちらの絞り込みも任意。申込ごとに、保存した状態と、計算した`displayStatus`（`won`のまま入金期限を過ぎたら`expired`）と`pickupAvailable`。公演の題名と日付、申込者の表示名、受付名、枚数、結果発表日時・入金期限・受取開始日時 |
-| 申込を作る | `POST /groups/{g}/ticket-applications` | 本文は`{ id, concertId, saleName, quantity, pickupMethod, status, resultAnnouncedAt, paymentDeadline, pickupStartsAt }`。`status`は`applied`か`won`（先着）。作った人が申込者。リマインドは下の「申込とリマインド」の決まりで合わせる |
-| 申込を見る | `GET /groups/{g}/ticket-applications/{applicationId}` | 申込、計算した表示、分配 |
-| 申込を直す | `PATCH /groups/{g}/ticket-applications/{applicationId}` | 申込者だけ。期限を入れた・直した・空にしたときは、下の「申込とリマインド」の決まりで合わせる |
+| 申込一覧 | `GET /groups/{g}/ticket-applications?concertId=&applicant=me` | どちらの絞り込みも任意。申込ごとに、保存した状態と、計算した`displayStatus`（`won`のまま入金期限を過ぎたら`expired`）と`pickupAvailable`。公演の題名と日付、申込者の表示名、受付名、枚数、結果発表日時・入金期限・受取開始日時、座席・整理番号（`seatOrEntryNumber`） |
+| 申込を作る | `POST /groups/{g}/ticket-applications` | 本文は`{ id, concertId, saleName, quantity, pickupMethod, status, resultAnnouncedAt, paymentDeadline, pickupStartsAt, seatOrEntryNumber }`。`seatOrEntryNumber`（座席・整理番号）は任意。`status`は`applied`か`won`（先着）。作った人が申込者。リマインドは下の「申込とリマインド」の決まりで合わせる |
+| 申込を見る | `GET /groups/{g}/ticket-applications/{applicationId}` | 申込（座席・整理番号を含む）、計算した表示、分配。申込者が見るときだけ、リマインドの予約ごとに種類・届ける時刻・状態（`scheduled`・`sent`・`canceled`。`sending`は`scheduled`として返す）を足す（`docs/requirements/first-slice.md`のF-32）。チケットの公開関数が通知の公開関数から読む |
+| 申込を直す | `PATCH /groups/{g}/ticket-applications/{applicationId}` | 申込者だけ。座席・整理番号も直せる。期限を入れた・直した・空にしたときは、下の「申込とリマインド」の決まりで合わせる |
 | 申込の状態を変える | `PUT /groups/{g}/ticket-applications/{applicationId}/status` | 本文は`{ status }`。申込者だけ。移れるのは`applied`→`won`・`lost`、`won`→`paid`、`paid`→`picked_up`。期限切れ（`won`のまま期限を過ぎた）から`paid`にも移れる。すでにその状態なら何もせず200。ほかは`invalid_transition`。リマインドは下の「申込とリマインド」の決まりで合わせる |
 | 申込を消す | `DELETE /groups/{g}/ticket-applications/{applicationId}` | 申込者だけ。まだ届いていないリマインドを取り消す |
 | 分配を保存する | `PUT /groups/{g}/ticket-applications/{applicationId}/distributions` | 本文は`{ items: [{ seq, userId, guestName, distributedAt }] }`で全体を置き換える。申込者だけ。受取方法がスマチケでない申込は`invalid_input`（`errors`の`path`は`pickupMethod`）。`seq`は1から枚数まで。`userId`は同じグループの有効なメンバー |
@@ -329,7 +329,6 @@ VAPIDの公開鍵は画面のビルドの設定に入れ、APIでは出さない
 ## 決めないこと
 
 - 見た目（色・配置・文言）、画面のルーティングとデータの取り方の道具（最初の1本の設計。ADR-0004）
-- ログインの方式とS-01の作り（最初の1本の要件。論点の記録の「login」）
 - 画像の大きさの上限の値と、HEICを画面で変換するか（グッズの画面の設計）
 - API Gatewayの流量の制限の値と、DBを過去に戻せる期間は、工程6で決めた（毎秒20回・瞬間40回。戻せる期間は6時間。[ADR-0006](decisions/ADR-0006-region-and-cost.md)）
 - 表示名を変えるAPI。ストーリーに無いので作らない
