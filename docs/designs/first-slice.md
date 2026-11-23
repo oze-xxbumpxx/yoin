@@ -132,7 +132,7 @@ Drizzleの表定義は文脈ごとのinfrastructureに置く。型・null・外�
 | catalog.tours / catalog.concerts | id PKとgroup_id。concertsのvenue_id/tour_idは同じグループへの複合FK。tour_idはnull可。公演一覧は(group_id,日付,id) |
 | catalog.concert_artists / catalog.drafts | concert_artists PK(concert_id,artist_id)、同じグループへの複合FK、出演順。draftsはJSONBのpayloadを持ち、(group_id,created_by,created_at)で一覧 |
 | ticket.ticket_applications | id PK。公演への同グループ複合FK、申込者、各期限、状態、枚数、受取方法、座席・整理番号。created_atは初回の挿入時にDBで記録し、編集・状態変更・作成の再送では変えない。CHECKで状態・受取方法・枚数を守り、(group_id,concert_id)、(group_id,申込者)で絞る |
-| notification.reminders | id PK、宛先、dedupe_key UNIQUE、send_at、schedule_name UNIQUE、status CHECK、claimed_at、sent_at、attempts smallint NOT NULL DEFAULT 0（0〜4）、retry_at、通知文とURL。宛先の索引 |
+| notification.reminders | id PK、宛先、dedupe_key UNIQUE、send_at、recover_until、schedule_name UNIQUE、status CHECK、claimed_at、sent_at、attempts smallint NOT NULL DEFAULT 0（0〜4をCHECK）、retry_at、通知文とURL。宛先の索引 |
 | notification.push_subscriptions / notification.reminder_deliveries | subscriptionsのendpoint UNIQUE、user_id索引。deliveries PK(reminder_id,push_subscription_id)、status CHECK、attempted_at。FKで両親の削除時CASCADE、push_subscription_id側にも索引 |
 
 ```mermaid
@@ -199,12 +199,26 @@ sequenceDiagram
     W->>D: 有効名と状態が一致する行だけを引き受け
 ```
 
-- 新規・変更とも送信と見張り（10分後）を先に作る。並行処理と中途停止で世代名が重ならないよう、世代nは環境別PostgreSQLシーケンスのnextvalで発行する。形はreminder-<id>-<n>とreminder-watch-<id>-<n>。差分を計算した時点でscheduledだった行の時刻変更だけを、旧名かつscheduledの条件付きUPDATEで切り替える。見張りのために追加の行ロックやadvisory lockは取らない。この切り替えが競合で0行なら申込変更も戻し、新しい組だけを消す。コミット結果が不明なら、別の接続で新旧どちらが有効かを確かめるまで削除しない。
-- 変更前からsending・sent・canceledの行は時刻の切り替えに使わない。期限変更後に同じ種類の予約が必要なら、申込と同じDBトランザクションで旧行のdedupe_keyを履歴用のhistory:<旧予約ID>へ移し、元のキーで別IDの新規行を挿入する。新規行は送信結果と再送回数を引き継がず、申込画面は元のキーで現行の予約だけを読む。引き受け済みの旧行は自分の処理を終え、旧送信が新しい予約やその再送に触れることはない。計算結果に予約がなければ新規行は作らない。同じ期限での再送信や受付名だけの編集では、完了済みの予約を作り直さない。
+- 新規・変更は送信と見張り（10分後）を先に作る。世代nは環境別の`notification.reminder_generation_seq`から発行する。予約名のidはハイフンなし32桁のUUID、nは正のbigintを小文字36進数で表す。送信と見張りは`reminder-<id>-<n>`と`reminder-watch-<id>-<n>`。差分を計算した時点でscheduledだった行だけを、旧名かつscheduledの条件付きUPDATEで切り替える。競合で0行なら申込変更も戻し、新しい組だけを消し、409 `reminder_conflict`を返す。画面は申込を取り直して編集をやり直せる。コミット結果が不明なら、別の接続で有効名を確かめるまで削除しない。
+- 状態や期限が変わったとき、差分計算時点でscheduledで後継も必要なら、上の切り替えで現行キーを保つ。それ以外で旧予約が新しい期限を表さなくなったら、申込と同じトランザクションで旧行のdedupe_keyを`history:<旧予約ID>`に移す。不要なscheduledは先にcanceledにする。計算時点でsending・sent・canceledの行はその状態を保ち、引き受け済みの行は自分の処理を終える。後継が必要なときだけ元のキーで別IDを挿入し、再送回数・送信結果を引き継がない。申込詳細は元のキーだけで読み、旧期限の送信結果を返さない。同じ期限の再送信や受付名だけの編集では履歴化も作り直しもしない。
 - 送信・見張り・再送にはDB上の有効名を渡す。旧名や未確定の名前では送らない。初回予約がDB確定前に起動した場合も、確定後に起動する見張りがscheduledを引き受ける。送信と再送は起動後に自動削除する。見張りは同名で時刻を動かすため自動削除を無効にし、不要になった時点で明示的に消す。古い見張りは自分の世代の予約だけを消す。
-- 引き受けは状態とclaimed_atも見る条件付きUPDATE。最初・再送の各回を初めて引き受けるときだけattemptsを増やす。見張りはclaimed_atが10分以上古ければ同じ回を再開し、10分未満ならclaimed_atの10分1秒後に見張りを移す。送信前に見張りが次回も起動することを確かめる。
+- 引き受けは状態とclaimed_atも見る条件付きUPDATE。新しい回だけはattempts < 4を条件に1増やす。見張りはclaimed_atが10分以上古ければ同じ回を再開し、10分未満ならclaimed_atの10分1秒後に見張りを移す。作成と移動で同じ設定を使い、[UpdateSchedule](https://docs.aws.amazon.com/scheduler/latest/APIReference/API_UpdateSchedule.html)にもターゲット、実行ロール、入力、DLQ、再試行設定、FlexibleTimeWindow=OFF、自動削除なしを毎回渡す。
 - 記録がsentの端末は再送しない。端末ごとの成功とlast_failed_atの解除、初回の成功時刻sent_atは同じトランザクションで保存する。404/410の端末はgoneとして扱ってから削除する。通知先が0台なら再送待ちにせず、完了状態sentにする。申込詳細はsent_atから得たsentToAnyDeviceを使い、1台分も受理されなかった完了を「送信なし」と表示する。後から通知先を足しても過去の通知は出さない。
-- 一時失敗は5分後に3回まで。reminder-retry-<id>-<回数>で二重作成を止める。停止後に作り直すとき同名があれば、世代・回数が一致する既存予約の時刻を使う。再送予約と見張り（再送の10分後）を確保してから、retry_atを保存しclaimed_atを空にする。再送はretry_at以降かつ入力の回数がattemptsの次のときだけ引き受ける。次の再送が来なければ見張りが同じ条件で引き受ける。引き受け時はretry_atを空にする。使い切った場合は端末のlast_failed_atを保存してC-4に通知したあと、完了にする。通知が失敗したら見張りで再開する。C-4の同一予約に対する重複報告は許す。Web Pushの受理直後に停止した場合も重複を許す。
+- 一時失敗は5分後に3回まで。`reminder-retry-<id>-<n>-<回数>`で世代と回ごとの重複を止める。停止後に作り直すとき同名があれば、入力も一致する既存予約の時刻を使う。再送予約と見張り（再送の10分後）を確保してから、retry_atを保存しclaimed_atを空にする。再送はretry_at以降、attempts < 4かつ入力の回数がattemptsの次のときだけ引き受ける。次の再送が来なければ見張りが同じ条件で引き受ける。引き受け時はretry_atを空にする。使い切った場合は端末のlast_failed_atを保存してC-4に通知したあと、完了にする。通知が失敗したら見張りで再開する。C-4の同一予約に対する重複報告は許す。Web Pushの受理直後に停止した場合も重複を許す。
+
+### 失敗キューから現行の通知だけを復旧する
+
+環境別の同じ標準SQSキューに、SchedulerのTarget.DeadLetterConfig、送信Lambda非同期呼び出しのOnFailure、再送枯渇のアプリ通知を送る。Schedulerターゲット実行ロールとLambda実行ロールには、それぞれ対象キューだけのsqs:SendMessageを付ける。受信メッセージはSchedulerの属性、LambdaのrequestContext/requestPayload、アプリ通知の種別で分ける。予約の入力と報告には通知ID・有効名・種別・回数だけを入れる。
+
+オーナーがC-4の警報を受け、キューの件数が0になるまで保守手順で処理する。ALARM中は次の失敗ごとにメールが届くとは限らない。キューの保持は4日とし、消す前にDBの有効名、履歴化の有無、状態、次回、復旧期限を照合する。
+
+| DBの状態 | オーナーが取る操作 |
+|---|---|
+| 現行で未完了、復旧期限内 | 環境限定の保守操作で有効名を指定し、まだ必要な起動と見張りだけ確保する。初回・次回・同じ回の再開の区別は送信関数の条件付き引き受けに任せ、attemptsや送信済み端末を初期化しない。直せたことを確かめてメッセージを除去する |
+| 不在・別世代・履歴・完了・取消、または配信の復旧期限を過ぎた | 再送しない。該当する現行行が期限切れで未完了なら、稼働中の引き受けを妨げない条件で完了させる。再送枯渇は案内・調査だけとし、処理後にメッセージを除去する |
+| DB未復旧、状態不明、見張りの再作成失敗 | メッセージを除去せず、復旧後に照合し直す |
+
+復旧期限は通常は計算した送信時刻から1時間。入金の場合はさらに入金期限を越えない。チケットが`recover_until`を計算して予約に保存し、通知側はチケットを読まない。ログや対処記録に宛先・通知文を書かない。
 
 ## エラー処理
 
@@ -238,6 +252,7 @@ Cognitoのプール・発行者・アプリクライアントを環境で分離�
 - Playwrightは2つのcontextで、オーナーの招待発行、招待者の参加、公演確定、申込から受取済みまでを通す。CIではテスト用の認証代替を使い、本番構成に認証の迂回を置かない。結合検証で2人を用意するときは、初期データの手順がAdminCreateUser（SUPPRESS）で用意する。実プールへのメールなしの認証E2Eが要る場合のパスワードは結合検証専用設定に限り、本番では許可しない。
 - fast-checkで予約の時刻と状態遷移、再送上限、世代切替と引き受けの競合、旧見張り、同じ再送、端末ごとの再開を確かめる。Push成功直後に失敗させ、成功記録と端末の失敗印が別々に残らないことも確かめる。
 - 1月10日12時の入金期限で、1月9日20時の通知を送ったあと、同日21時に期限を翌日の1月11日12時へ延ばす。期限が保存され、1月10日20時は別IDで予約され、3時間前の予約が1月11日9時に切り替わることを確かめる。同じ変更を送り直しても予約を増やさない。
+- 送信済みの期限を過去に直したときは、申込詳細に旧予約の時刻や結果がなく、新規予約もないことを確かめる。取り消した期限の入れ直し、旧世代の送信結果の分離、5回目の拒否も確かめる。結合検証で見張り移動後の設定、SchedulerとLambdaの各失敗経路、停止中のDBが戻った後のキュー処理を確認する。
 - 同じ公演の受取済みの申込2件に座席を入れ、古い申込をあとで編集しても、券面が作成日時の新しい申込を選ぶことを確かめる。
 - 日本時間で昨日・今日・明日の確定済み公演と、自分の下書きを用意する。S-06の「これから」に今日と明日、「過去」に昨日、自分の下書きは別の一覧に出ることを確かめる。
 - 結合検証では初期データでオーナーと共有グループを用意する。大関さんはオーナーとして招待リンクを発行し、2人目として別のメールアドレスでiPhoneのSafariから参加する。2人目はホーム画面のyoinで再ログインして通知を許可し、公演を確定して自分の期限付き申込を作る。そのiPhoneで結果発表・入金期限・受取開始の通知を受け取り、通知から自分の申込を開く（AC-07〜AC-10b）。大関さんはオーナーとしてパソコンでも開き、2人目の申込が読めても編集できないことを確かめる（AC-11）。

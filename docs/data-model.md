@@ -418,17 +418,20 @@ yoinに登録した人。Cognitoの言葉はこのテーブルの`cognito_sub`�
 |---|---|---|
 | `id` | uuid | PK |
 | `user_id` | uuid | 宛先 |
-| `dedupe_key` | text | 一意。呼ぶ側が決める文字列（例：`ticket:<申込ID>:payment_deadline`）。同じキーで予約し直すと上書きし、キーで取り消せる |
+| `dedupe_key` | text | 一意。呼ぶ側が決める文字列（例：`ticket:<申込ID>:payment:eve`）。現行の予約を示す。失効した行は`history:<旧予約ID>`に移す |
 | `send_at` | timestamptz | 届ける時刻。期限の種類ごとに呼ぶ側が決める（Q3）。この時刻にEventBridge Schedulerの1回限りの予約を作る（R11） |
 | `schedule_name` | text | 一意。有効な送信予約の名前（`reminder-<id>-<n>`）。予約は起動後に自動で消える |
-| `attempts` | smallint | NOT NULL DEFAULT 0。初回と再送の引き受け回数（0〜4）。見張りによる同じ回の再開では増やさない |
-| `retry_at` | timestamptz | null可。次の再送を待っている時刻。見張りは再送が届かなければ同じ回を引き受ける |
+| `attempts` | smallint | NOT NULL DEFAULT 0、CHECK (attempts BETWEEN 0 AND 4)。同じ回の再開では増やさない |
+| `retry_at` | timestamptz | null可。次の再送を待っている時刻。CHECK (retry_at IS NULL OR status = 'sending') |
+| `recover_until` | timestamptz | NOT NULL。呼ぶ側が決める失敗キューから復旧してよい最終時刻 |
 | `title` | text |  |
 | `body` | text |  |
 | `url` | text | null可。通知を押したときに開く画面 |
 | `status` | text | `scheduled` → `sending` → `sent`、または`canceled`。取り消せるのは`scheduled`だけ（F5） |
 | `claimed_at` | timestamptz | null可。送信の関数が引き受けた時刻。1回の送信を終えて、送れていない端末が残っていればnullに戻す |
-| `sent_at` | timestamptz | null可 |
+| `sent_at` | timestamptz | null可。最初に端末の配信サービスが受理した時刻。sentでnullなら、1台も受理されず完了。別IDで作り直す行はnullから始める |
+
+`notification.reminder_generation_seq`は正のbigintのシーケンス（NO CYCLE）。APIはSchedulerを作る前に短い独立のDB呼び出しでnextvalを取得する。欠番は許す。世代を作るAPIと保守用DBロールにだけUSAGEを付ける。送信関数は既存世代を使うので不要。
 
 #### `notification.push_subscriptions`通知先`PushSubscription`
 
@@ -542,17 +545,17 @@ Web Pushを受け取る端末
 
 - 予約するとき：先にSchedulerの送信予約（`reminder-<id>-<n>`）と10分後の見張り（`reminder-watch-<id>-<n>`）を同じ世代で作り、そのあとDBに`reminders`の行を書く。両方の入力に有効名の照合に使う送信予約名を入れる。DBに行がないか名前が合わない場合は送らない。
 - 取り消すとき：先にDBの行を`canceled`にし、そのあとSchedulerの予約と見張りの予約を消す。予約を消せなくても、起動したときに`canceled`を見て送らない。
-- 未送信（`scheduled`）の予約の時刻を直すとき：新しい世代の送信と見張りを作る。`status = 'scheduled'`かつ旧名が一致する行だけを条件付きUPDATEし、`send_at`と`schedule_name`を同時に替える。コミット後に旧世代を消す。更新が0行かロールバックなら新しい組だけを消す。名前が合わない送信・見張りは送らず、自分の古い予約だけを片づける。
-- 差分の計算時点で`sending`・`sent`・`canceled`の予約は時刻を更新しない。期限変更後に同じ種類の予約が必要なら、同じトランザクションで旧行の`dedupe_key`を`history:<旧予約ID>`へ移し、元のキーを使って別IDで予約する。旧行の予約名と送信結果は変えない。新旧の再送予約名は予約IDで分かれる。
+- 未送信（`scheduled`）の予約の時刻を直すとき：新しい世代の送信と見張りを作る。`status = 'scheduled'`かつ旧名が一致する行だけを条件付きUPDATEし、`send_at`、`recover_until`、`schedule_name`を同時に替える。コミット後に旧世代を消す。更新が0行かロールバックなら新しい組だけを消す。名前が合わない送信・見張りは送らず、自分の古い予約だけを片づける。
+- 状態・期限が変わって旧予約が無効なら、後継の予約がなくても旧行の`dedupe_key`を`history:<旧予約ID>`へ移す。未送信の行は取り消すか、新しい時刻へ切り替える場合は現行キーを保つ。差分の計算時点で`sending`・`sent`・`canceled`なら時刻・送信結果は更新しない。後継が必要なときだけ、元のキーで別IDの行を作る。旧行の送信結果は別IDに引き継がない。
 - 予約したときに送信時刻を過ぎていたら、期限前なら1分後に予約し、期限を過ぎていれば予約しない。
-- 送れなかった端末があれば、5分後に1回限りの再送（`reminder-retry-<id>-<回数>`）の予約を作る（3回まで）。予約の入力に有効名と回数を入れ、同じ回の重複予約は名前で防ぐ。3回やっても送れない端末が残ったら、AWS構成のC-4のキューに入れる。
+- 送れなかった端末があれば、5分後に1回限りの再送（`reminder-retry-<id>-<n>-<回数>`）の予約を作る（3回まで）。idはハイフンなし32桁、nは小文字36進数にし、全予約名を64文字以内にする。入力にも有効名と回数を入れ、同じ世代・回の重複を防ぐ。3回やっても送れない端末が残ったら、AWS構成のC-4のキューに入れる。
 - 送信予約と再送予約は起動後に自動で消える。見張りは時刻を動かすので自動では消さず、不要になった時に消す。`api`と`notification-sender`に担当する予約だけを作る・動かす・消す権限を与える。後の工程の`erasure-worker`にも、担当する予約の権限を与える。
 - 予約は自動で消えるので、取り消すときに予約がもう無くても、失敗と扱わない（2026-11-21）。
 - Schedulerの予約から起動したLambdaの自動の再試行は、既定の2回のままにする。引き受けは条件つきの更新なので、再試行や見張りと重なっても2本同時には送らない。1時間を過ぎた再試行は捨てる。起動できなかったときと、再試行を使い切ったか捨てたときは、AWS構成のC-4のキューに入り、メールで知らせる（2026-11-21）。
 
 ### 送り方（F5、Q4）
 
-- 送信の関数は、有効な`schedule_name`と状態が一致する予約だけを`sending`に更新し、`claimed_at`に今の時刻を入れる。初回と再送回の初めての引き受けでは、同じ更新で`attempts`を1増やす。
+- 送信の関数は、有効な`schedule_name`と状態が一致する予約だけを`sending`に更新し、`claimed_at`に今の時刻を入れる。初回と再送回の初めての引き受けは`attempts < 4`も条件にして、同じ更新で1増やす。
 - 引き受けられるのは、`scheduled`の予約と、`sending`で`claimed_at`がnullか10分より前の予約。10分は送信の関数のタイムアウトより長くする。送信の途中で関数が止まっても、10分たてば引き受け直せる。
 - 送る前に、その世代の見張りを10分後に動かし直す。見張りも有効な送信予約名を照合し、`scheduled`なら初回を引き受ける。`sending`で`claimed_at`が10分以上前なら同じ回を引き受け直す。まだ10分たっていなければ`claimed_at`の10分1秒後に予約し直す。`sent`か`canceled`なら送らない。
 - 引き受け直したときは、`reminder_deliveries`を見て、送れていない端末だけに送る。
