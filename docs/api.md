@@ -235,7 +235,7 @@ APIの名前は、下の「APIの一覧」の表の1列目と同じ。
 
 | 名前 | メソッドとパス | 中身と決まり |
 |---|---|---|
-| 申込一覧 | `GET /groups/{g}/ticket-applications?concertId=&applicant=me` | どちらの絞り込みも任意。申込ごとに、保存した状態と、計算した`displayStatus`（`won`のまま入金期限を過ぎたら`expired`）と`pickupAvailable`。公演の題名と日付、申込者の表示名、受付名、枚数、結果発表日時・入金期限・受取開始日時、座席・整理番号（`seatOrEntryNumber`） |
+| 申込一覧 | `GET /groups/{g}/ticket-applications?concertId=&applicant=me` | どちらの絞り込みも任意。申込ごとに、保存した状態と、計算した`displayStatus`（`won`のまま入金期限を過ぎたら`expired`）と`pickupAvailable`。公演の題名と日付、申込者の表示名、受付名、枚数、結果発表日時・入金期限・受取開始日時、座席・整理番号（`seatOrEntryNumber`）、初回作成日時（`createdAt`） |
 | 申込を作る | `POST /groups/{g}/ticket-applications` | 本文は`{ id, concertId, saleName, quantity, pickupMethod, status, resultAnnouncedAt, paymentDeadline, pickupStartsAt, seatOrEntryNumber }`。`seatOrEntryNumber`（座席・整理番号）は任意。`status`は`applied`か`won`（先着）。作った人が申込者。リマインドは下の「申込とリマインド」の決まりで合わせる |
 | 申込を見る | `GET /groups/{g}/ticket-applications/{applicationId}` | 申込（座席・整理番号を含む）、計算した表示、分配。申込者が見るときだけ、リマインドの予約ごとに種類・届ける時刻・状態（`scheduled`・`sent`・`canceled`。`sending`は`scheduled`として返す）・端末の配信サービスが1台分でも受理したか（`sentToAnyDevice`）を足す（`docs/requirements/first-slice.md`のF-32）。チケットの公開関数が通知の公開関数から読む |
 | 申込を直す | `PATCH /groups/{g}/ticket-applications/{applicationId}` | 申込者だけ。座席・整理番号も直せる。期限を入れた・直した・空にしたときは、下の「申込とリマインド」の決まりで合わせる |

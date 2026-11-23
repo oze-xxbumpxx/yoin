@@ -107,7 +107,7 @@ HTTP APIからLambdaのHonoに渡す。Zodで未知キーと誤った型を拒�
 | PATCH /groups/{g}/concert-drafts/{draftId}、DELETE 同パス | 作成者だけ。PATCHは公演1件の更新 → 下書き、DELETEは204 |
 | POST /groups/{g}/concert-drafts/{draftId}/confirm | 作成者だけ。concertIds（UUIDv7を1件、tourIdなし）→ 200と確定した公演ID。再送は同一グループに全IDがあれば同じ応答 |
 | GET /groups/{g}/concerts、GET /groups/{g}/concerts/{concertId} | メンバー → 日付順の公演一覧（画面はwhen=upcomingを使用）、または日付・題名・会場・時刻・公式URL・出演順の詳細 |
-| GET /groups/{g}/ticket-applications | メンバー → 申込一覧。concertIdとapplicant=meで絞れる。表示用のdisplayStatus、pickupAvailableと座席・整理番号を含む |
+| GET /groups/{g}/ticket-applications | メンバー → 申込一覧。concertIdとapplicant=meで絞れる。displayStatus、pickupAvailable、座席・整理番号、DBで記録したcreatedAtを含む |
 | POST /groups/{g}/ticket-applications | id・concertId・枚数・受取方法・初期状態（applied/won）・任意の受付名・期限3種・座席/整理番号 → 作った人が申込者となる申込 |
 | GET /groups/{g}/ticket-applications/{applicationId} | メンバー → 申込と計算した表示。本人だけにリマインドの種類・実際の時刻・状態を返す。分配は対象外 |
 | PATCH /groups/{g}/ticket-applications/{applicationId}、DELETE 同パス | 申込者だけ。PATCHは編集可能な欄の部分更新 → 申込、DELETEは204 |
@@ -131,7 +131,7 @@ Drizzleの表定義は文脈ごとのinfrastructureに置く。型・null・外�
 | catalog.artists / catalog.venues | id PKとgroup_id。artistsは(group_id,name_key) UNIQUEと12色のCHECK。名称検索はgroup_idを先頭にする |
 | catalog.tours / catalog.concerts | id PKとgroup_id。concertsのvenue_id/tour_idは同じグループへの複合FK。tour_idはnull可。公演一覧は(group_id,日付,id) |
 | catalog.concert_artists / catalog.drafts | concert_artists PK(concert_id,artist_id)、同じグループへの複合FK、出演順。draftsはJSONBのpayloadを持ち、(group_id,created_by,created_at)で一覧 |
-| ticket.ticket_applications | id PK。公演への同グループ複合FK、申込者、各期限、状態、枚数、受取方法、座席・整理番号。CHECKで状態・受取方法・枚数を守り、(group_id,concert_id)、(group_id,申込者)で絞る |
+| ticket.ticket_applications | id PK。公演への同グループ複合FK、申込者、各期限、状態、枚数、受取方法、座席・整理番号。created_atは初回の挿入時にDBで記録し、編集・状態変更・作成の再送では変えない。CHECKで状態・受取方法・枚数を守り、(group_id,concert_id)、(group_id,申込者)で絞る |
 | notification.reminders | id PK、宛先、dedupe_key UNIQUE、send_at、schedule_name UNIQUE、status CHECK、claimed_at、sent_at、attempts smallint NOT NULL DEFAULT 0（0〜4）、retry_at、通知文とURL。宛先の索引 |
 | notification.push_subscriptions / notification.reminder_deliveries | subscriptionsのendpoint UNIQUE、user_id索引。deliveries PK(reminder_id,push_subscription_id)、status CHECK、attempted_at。FKで両親の削除時CASCADE、push_subscription_id側にも索引 |
 
@@ -171,7 +171,7 @@ flowchart LR
 
 - Safariとホーム画面のPWAは別のログイン状態を持つ。各環境のCognitoリフレッシュトークンは365日、ログアウト時に失効させて端末の保持分を消す。Service WorkerにJWTを渡さない。招待トークンや認証画面はオフラインキャッシュに置かない。
 - ホームは自分の申込と有効な期限から「次にすること」を作り、最も近い期日を帯にする。通知先0台またはlastFailedAt付きの端末があればS-23へ案内する。許可拒否でも帯を残す。
-- 7日ちょうどはカウントダウンなし。座席を出せる自分の申込が複数なら、座席が空でない入金済み/受取済みのうち、受取済みを優先し、同じ状態では作成日時が新しいもの（同時刻はID順）を1件使う。
+- 7日ちょうどはカウントダウンなし。座席を出せる自分の申込が複数なら、座席が空でない入金済み/受取済みのうち、受取済みを優先する。同じ状態では申込一覧のcreatedAtが新しいものを選び、同時刻ならIDの昇順で最初の1件を使う。
 - 通知はDeclarative Web Pushで出し、未対応端末はService Workerで表示する。開くのは同一オリジンの申込URLだけ。削除済みなら見つからない画面を出す。
 
 ## バックエンド設計
@@ -237,6 +237,7 @@ Cognitoのプール・発行者・アプリクライアントを環境で分離�
 - Playwrightは2つのcontextで、オーナーの招待発行、招待者の参加、公演確定、申込から受取済みまでを通す。CIではテスト用の認証代替を使い、本番構成に認証の迂回を置かない。結合検証で2人を用意するときは、初期データの手順がAdminCreateUser（SUPPRESS）で用意する。実プールへのメールなしの認証E2Eが要る場合のパスワードは結合検証専用設定に限り、本番では許可しない。
 - fast-checkで予約の時刻と状態遷移、再送上限、世代切替と引き受けの競合、旧見張り、同じ再送、端末ごとの再開を確かめる。Push成功直後に失敗させ、成功記録と端末の失敗印が別々に残らないことも確かめる。
 - 1月10日12時の入金期限で、1月9日20時の通知を送ったあと、同日21時に期限を翌日の1月11日12時へ延ばす。期限が保存され、1月10日20時は別IDで予約され、3時間前の予約が1月11日9時に切り替わることを確かめる。同じ変更を送り直しても予約を増やさない。
+- 同じ公演の受取済みの申込2件に座席を入れ、古い申込をあとで編集しても、券面が作成日時の新しい申込を選ぶことを確かめる。
 - 結合検証ではオーナーが実メール、拒否後のAdminGetUser不在と送信なし、初回1通、ホーム画面での再ログインを確かめる。初期データでオーナーと共有グループを作り、オーナーが確認用の宛先で招待・公演・期限付き申込を作る。ホーム画面に追加したiPhoneで許可・受信・通知タップからの申込表示を確かめる。CIの上限エラー画面テストは応答を模す。実AWSとiPhoneはこの設計作成時点では未検証。
 
 ## 移行とリリース
