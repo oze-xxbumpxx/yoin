@@ -440,7 +440,7 @@ Web Pushを受け取る端末
 | `auth` | text |  |
 | `label` | text | 端末の名前。登録したときのブラウザと端末の種類から作る（例「iPhone Safari」）。通知先の一覧で見分けるため（2026-11-21） |
 | `created_at` | timestamptz |  |
-| `last_failed_at` | timestamptz | null可。送れなかった端末を画面で示すため。再送を使い切っても送れなかったときに入れ、次にその端末へ送れたらnullに戻す。端末が登録を消していた（`gone`）ときは、この行を消す（2026-11-23、最初の1本の要件） |
+| `last_failed_at` | timestamptz | null可。送れなかった端末を画面で示すため。再送を使い切っても送れなかったときに入れ、次にその端末へ送れたらnullに戻す。nullに戻すのは、その端末の`reminder_deliveries`を`sent`にするのと同じトランザクションで行う。`sent`だけを保存して止まると、再開したときにその端末を飛ばし、届いたのに印が残るため。端末が登録を消していた（`gone`）ときは、この行を消す（2026-11-23、最初の1本の要件） |
 
 #### `notification.reminder_deliveries`端末ごとの送信結果
 
