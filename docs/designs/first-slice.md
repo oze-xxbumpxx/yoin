@@ -245,7 +245,9 @@ Powertoolsの構造化ログを7日保存する。操作種別・要求ID・エ�
 
 ADR-0006に従い、Budgetsは月5ドル、Gatewayは20回/秒・瞬間40回。CloudWatchはAPIの1時間125件を環境別2個、Lambdaの1時間150件をリージョン全体1個、C-4キューの可視件数>0を環境別2個で見る。失敗キューへの送付自体が失敗した場合は、SchedulerのInvocationsFailedToBeSentToDeadLetterCountとLambdaのDestinationDeliveryFailuresをそれぞれ環境別に1件以上で通知する（計4個）。
 
-SESは共有のアカウント／リージョンの集計値だけを見て、1時間のSendが20件以上、Rejectが1件以上、Reputation.BounceRateが5%以上、Reputation.ComplaintRateが0.1%以上を各1個の警報にする。オーナーに宛先も本文もない警報を送る。宛先入りのSESイベント通知は構成しない。恒久バウンス・苦情はアカウント単位の抑止リストで止め、安易に解除しない。オーナーが本人と宛先を別経路で確認し、原因が解消した場合のみ解除する。問い合わせや監視ログに抑止対象の一覧を転記しない。
+SESは共有のアカウント／リージョンの集計値だけを見て、1時間のSendが20件以上、24時間の送信割当の使用率が80%以上、Reputation.BounceRateが5%以上、Reputation.ComplaintRateが0.1%以上を各1個の警報にする。オーナーに宛先も本文もない警報を送る。宛先入りのSESイベント通知は構成しない。恒久バウンス・苦情はアカウント単位の抑止リストで止め、安易に解除しない。オーナーが本人と宛先を別経路で確認し、原因が解消した場合のみ解除する。問い合わせや監視ログに抑止対象の一覧を転記しない。
+
+送信割当の使用率は、共有の監視Lambdaが1時間ごとに[SES GetAccount](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_GetAccount.html)を呼び、`100 × SentLast24Hours / Max24HourSend`を標準解像度のカスタムメトリクス1個に出す。無制限の割当では使用率の警報を使わない。このLambdaはNeonを使わない。[SESのReject](https://docs.aws.amazon.com/ses/latest/dg/monitor-sending-activity.html)はウイルス検出で配信しなかったメールの指標で、割当超過の拒否は数えない。使用率の警報は日次枠が尽きる前に気づくためのもので、瞬間的な秒間枠の超過は自動検知できない。Cognito経由の画面では原因を断定せずE-16の案内を出す。問い合わせを受けたオーナーは時刻と操作種別から、SESの使用率・秒間枠（MaxSendRate）とCognitoのSignUpThrottles・SignInThrottlesを切り分けて確認する。Cognitoの指標もSESの拒否件数とはみなさない。
 
 ## セキュリティ
 
@@ -292,7 +294,7 @@ Drizzleで環境共通のSQLを生成し、表・制約・索引・世代シー�
 | 監視を含む試算 | 標準アラーム13個（環境別API・失敗キュー・キュー送付失敗で8個、Lambdaリージョン合計1個、共有SES4個）。各アラームは1メトリクス。無料枠10個をこの構成で使えるなら、超過3個 × 0.10ドル＝約45円。上記の比較値と合計で約49.50円（税込約54.45円） |
 | Neonが無料枠を超えた場合 | 2つの環境ともプロジェクトごとの無料枠内が上の合計の前提。片方が月120 CU時でLaunchに移れば、そのプロジェクトの計算だけで120 × 0.106ドル＝12.72ドル（約1,908円）。データ保存などの従量費は別 |
 
-試算は同じAWSアカウントの2環境で利用量を合わせた比較で、他のアラームや費用、WAF、税・クレジットは含めない。SESはà la carteとし、単価と無料枠は[AWS Cognito料金](https://aws.amazon.com/cognito/pricing/)・[Amazon SES料金](https://aws.amazon.com/ses/pricing/)・[CloudWatch料金](https://aws.amazon.com/cloudwatch/pricing/)・[Neon料金](https://neon.com/pricing)による。既定送信の50通/日はSESの枠ではない。
+試算は同じAWSアカウントの2環境で利用量を合わせた比較で、SES割当の監視Lambda（月約720回の起動）とカスタムメトリクス1個も各無料枠内とする。他のアラームや費用、WAF、税・クレジットは含めない。SESはà la carteとし、単価と無料枠は[AWS Cognito料金](https://aws.amazon.com/cognito/pricing/)・[Amazon SES料金](https://aws.amazon.com/ses/pricing/)・[CloudWatch料金](https://aws.amazon.com/cloudwatch/pricing/)・[Neon料金](https://neon.com/pricing)による。既定送信の50通/日はSESの枠ではない。
 
 ## リスク
 
