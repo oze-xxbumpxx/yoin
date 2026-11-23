@@ -12,6 +12,8 @@ Cognito Essentialsから同じシンガポールリージョンのAmazon SESを�
 
 TerraformでプールにEmailSendingAccount=DEVELOPER、検証済みSES identityのSourceArn、SignInPolicyのEMAIL_OTP、MfaConfiguration=OFFを設定する。ブラウザのクライアントにはシークレットを発行せず、ALLOW_USER_AUTH、PreventUserExistenceErrors=ENABLED、トークン失効を有効にする。初回はIaC適用ロールだけにCognitoのSES用サービスリンクロールの作成を許可し、iam:AWSServiceNameをemail.cognito-idp.amazonaws.comに限定する。プールのメール設定をコンソールで後から直す手順は作らない。
 
+[登録確認メールを送るプール設定](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-settings-email-phone-verification.html)として`AutoVerifiedAttributes=["email"]`を指定する。一方、登録前Lambdaの応答の`autoConfirmUser`と`autoVerifyEmail`は立てず、利用者がコードを入れてから確認する。
+
 結合検証と本番はAWSアカウント・シンガポールのSES割当を共有する。CIは実送信せず、結合検証の実送信は検証用宛先に1日10通まで、連続送信は1秒より間隔を空ける。解除前は受信先も事前に検証する。サンドボックスの上限は200通/24時間・1通/秒であり、解除後の枠はアカウントで確認する。
 
 ```mermaid
