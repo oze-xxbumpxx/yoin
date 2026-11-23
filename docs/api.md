@@ -38,7 +38,7 @@
 - 同じIDの行がパスのグループにあり、中身も同じなら、1回目と同じ応答を状態コード200で返す。1回目は201。
 - 同じIDの行があって中身が違う場合と、同じIDの行が別のグループにある場合は、`id_conflict`で断る。どちらも行の中身は返さない。
 - 作成のほかの操作は、2回送っても結果が同じになる形にする。状態を進める操作は「どの状態にするか」を送り、すでにその状態なら何もせず200を返す。一覧を丸ごと置き換える操作は`PUT`にする。
-- 消す操作（`DELETE`）は、行がもう無くても204を返す。1回目と2回目を同じ応答にするため。行が別のグループにあるときも同じ204にし、あることを知らせない。行があってその人が消せないとき（申込者でないなど）だけ`forbidden`にする。
+- グループ配下の資源を消す操作（`DELETE`）では、対象が無い・削除済み・別グループにある場合は同じ404 `not_found`を返す。操作先グループのメンバーに行が見えるが、その人が消せないときは`forbidden`にする。削除に成功した同期操作は204。送り直して404になっても副作用は重ならない。退会、解散、通知先など、下の一覧で個別に決めた操作は各行に従う。
 - 比べる「中身」は、サーバーが値を直したあとの形で比べる。例えば画像は、一時置き場のキーをコピー先のキーに直してから比べる。コピー先のキーは、下書きIDと一時置き場のキーから決まる形（`groups/<groupId>/drafts/<userId>/<draftId>/<一時置き場のキーの末尾>`）にする。
 
 2本の要求が重なったときは、次のように扱う。グループの行の`FOR SHARE`は書き込み同士を待たせないので、行ごとに決める。
@@ -237,7 +237,7 @@ APIの名前は、下の「APIの一覧」の表の1列目と同じ。
 |---|---|---|
 | 申込一覧 | `GET /groups/{g}/ticket-applications?concertId=&applicant=me` | どちらの絞り込みも任意。申込ごとに、保存した状態と、計算した`displayStatus`（`won`のまま入金期限を過ぎたら`expired`）と`pickupAvailable`。公演の題名と日付、申込者の表示名、受付名、枚数、結果発表日時・入金期限・受取開始日時、座席・整理番号（`seatOrEntryNumber`） |
 | 申込を作る | `POST /groups/{g}/ticket-applications` | 本文は`{ id, concertId, saleName, quantity, pickupMethod, status, resultAnnouncedAt, paymentDeadline, pickupStartsAt, seatOrEntryNumber }`。`seatOrEntryNumber`（座席・整理番号）は任意。`status`は`applied`か`won`（先着）。作った人が申込者。リマインドは下の「申込とリマインド」の決まりで合わせる |
-| 申込を見る | `GET /groups/{g}/ticket-applications/{applicationId}` | 申込（座席・整理番号を含む）、計算した表示、分配。申込者が見るときだけ、リマインドの予約ごとに種類・届ける時刻・状態（`scheduled`・`sent`・`canceled`。`sending`は`scheduled`として返す）を足す（`docs/requirements/first-slice.md`のF-32）。チケットの公開関数が通知の公開関数から読む |
+| 申込を見る | `GET /groups/{g}/ticket-applications/{applicationId}` | 申込（座席・整理番号を含む）、計算した表示、分配。申込者が見るときだけ、リマインドの予約ごとに種類・届ける時刻・状態（`scheduled`・`sent`・`canceled`。`sending`は`scheduled`として返す）・端末の配信サービスが1台分でも受理したか（`sentToAnyDevice`）を足す（`docs/requirements/first-slice.md`のF-32）。チケットの公開関数が通知の公開関数から読む |
 | 申込を直す | `PATCH /groups/{g}/ticket-applications/{applicationId}` | 申込者だけ。座席・整理番号も直せる。期限を入れた・直した・空にしたときは、下の「申込とリマインド」の決まりで合わせる |
 | 申込の状態を変える | `PUT /groups/{g}/ticket-applications/{applicationId}/status` | 本文は`{ status }`。申込者だけ。移れるのは`applied`→`won`・`lost`、`won`→`paid`、`paid`→`picked_up`。期限切れ（`won`のまま期限を過ぎた）から`paid`にも移れる。すでにその状態なら何もせず200。ほかは`invalid_transition`。リマインドは下の「申込とリマインド」の決まりで合わせる |
 | 申込を消す | `DELETE /groups/{g}/ticket-applications/{applicationId}` | 申込者だけ。まだ届いていないリマインドを取り消す |
@@ -267,7 +267,7 @@ APIの名前は、下の「APIの一覧」の表の1列目と同じ。
 | 通知先を登録する | `POST /me/push-subscriptions` | 本文はブラウザの`PushSubscription`の`endpoint`と鍵。同じ`endpoint`がすでに自分のものなら同じ行を返す。別の人のものなら`already_exists`で断り、その人の行は変えない。画面は購読を取り消してやり直し（新しい`endpoint`になる）、もう一度登録する。1台の端末を2人で使い回すときもこれで足りる（2026-11-21、大関さんが決定） |
 | 通知先を外す | `DELETE /me/push-subscriptions/{subscriptionId}` | 本人だけ。ほかの人の通知先のIDは、無いときと同じ204にする（`/me`の下では他人の行を無いものとして扱う）。まだ送っていないリマインドは、ほかの端末に送る |
 
-VAPIDの公開鍵は画面のビルドの設定に入れ、APIでは出さない。リマインドを作る・取り消すAPIは無い。チケットの公開関数が、同じトランザクションの中で通知の公開関数を呼ぶ。Schedulerの予約を作る・時刻を直すのはコミットの前、消すのはコミットのあとにする（ADR-0003の決定4）。
+VAPIDの公開鍵は画面のビルドの設定に入れ、APIでは出さない。リマインドを作る・取り消すAPIは無い。チケットの公開関数が、同じトランザクションの中で通知の公開関数を呼ぶ。新規・時刻変更ではSchedulerに新しい予約と見張りを作ってから、DBで有効な予約を確定する。旧予約を消すのはコミットのあと。時刻変更が保存されなければ、古い組を残す。
 
 ### 申込とリマインド
 

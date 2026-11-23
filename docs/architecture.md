@@ -16,6 +16,8 @@ flowchart LR
   subgraph aws[AWSシンガポールリージョン（ap-southeast-1）]
     cf[CloudFront + S3<br>画面のファイル]
     cognito[Cognito<br>ユーザープール]
+    ses[Amazon SES<br>確認済みの既存メールアドレス]
+    signup[登録前Lambda<br>有効な招待を確認]
     apigw[API Gateway<br>HTTP API]
     api[Lambda api]
     worker[Lambda erasure-worker]
@@ -30,6 +32,10 @@ flowchart LR
 
   device -->|画面を開く| cf
   device -->|ログイン| cognito
+  cognito -->|登録・ログインのコード| ses
+  ses -->|メール| device
+  cognito -->|登録の前| signup
+  signup --> neon
   device -->|操作 JWT付き| apigw
   device -->|画像 署名付きURL| img
   apigw -->|JWTを検証| api
@@ -61,7 +67,7 @@ flowchart LR
 | 要素 | 使うもの | 理由 | 決めた場所 |
 |---|---|---|---|
 | 画面 | PWA。CloudFront + S3に置く | 静的ファイルだけなので、サーバーが要らない。CloudFrontでHTTPSにする | このページ（B-1） |
-| 認証 | Cognitoユーザープール | PR/FAQで決めた。グループの文脈が腐敗防止層になる | PR/FAQ、ADR-0001 |
+| 認証 | Cognito Essentials、登録前Lambda、Amazon SES | 有効な招待からだけ登録し、確認済みの既存メールアドレスからコードを送る | [ADR-0007](decisions/ADR-0007-cognito-email.md)、[最初の1本の設計](designs/first-slice.md) |
 | API | API Gateway HTTP APIとLambda `api` | REST APIより安く、JWTの検証を組み込みで使える | ADR-0002 |
 | 解散・退会・外す | Lambda `erasure-worker` | HTTP APIの30秒の打ち切りを避け、本人がいなくても最後まで進めるため | ADR-0002 |
 | 通知 | EventBridge SchedulerとLambda `notification-sender`、Web Push | PR/FAQで決めた。リマインド1件ごとに1回限りの予約を作る（2026-11-07） | ADR-0002、データモデル |
@@ -93,7 +99,7 @@ C-1〜C-3は2026-11-13に大関さんが回答フォームで決めた。C-3の�
 
 ## 費用の見込み
 
-10人が使ったときの月の費用は、約3円（消費税を足して約3.3円）と見込んでいる。AWSのクレジットがあるあいだは0円である。内訳と、費用が増える3つの場合は、[ADR-0006](decisions/ADR-0006-region-and-cost.md)の「費用の試算」にある。
+従来は10人で月約3円（税抜き）と見込んだ。SESで月100通を送る想定では約1.50円増え、合計約4.50円（税込約4.95円、クレジット適用前）となる。元の内訳は[ADR-0006](decisions/ADR-0006-region-and-cost.md#費用の試算)、メールの通数と単価は[最初の1本の設計](designs/first-slice.md#sesを足した費用)を参照する。
 
 ## 決めないこと
 

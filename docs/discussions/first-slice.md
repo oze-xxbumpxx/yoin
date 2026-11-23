@@ -397,11 +397,132 @@ flowchart LR
 
 <!-- id: routing-data-tools -->
 
+```mermaid
+flowchart LR
+    URL["画面URL"] --> A["React Router"] --> Q["TanStack Query"] --> H["Honoクライアント"]
+    URL --> B["Reactだけで履歴と取得を自作"] --> H
+```
+
 - 工程: 設計
 - 優先度: 中
-- 状態: 後の工程へ
-- なぜ今: ADR-0004で、最初の1本の設計で決めることにしている。見た目と要件が決まってから、設計書の問いで出す。
+- 状態: 仮決定
+- なぜ今: 通知から詳細を直接開き、申込の更新後に一覧も読み直す。
 - 根拠: ADR-0004「この決定では決めないこと」
+- 選択肢:
+  - A) React RouterとTanStack Queryを使う
+    - 利点: 画面の移動と取得済みデータの管理を分けられる。
+    - 欠点: ライブラリが2つ増える。
+  - B) Reactだけで履歴とAPIの取得を管理する
+    - 利点: 依存を増やさない。
+    - 欠点: 通知のリンクとキャッシュの破棄を自作する。
+- 推奨: A（申込の更新を詳細と一覧に反映し、通知リンクも同じURLの規則で扱える）
+- 決定: A（技術提案。設計書の承認で確認する）
+- 選ばなかった理由: Bでは履歴と再取得の扱いを画面ごとにそろえる必要がある。
+- 反映先: docs/designs/first-slice.md
+
+### 送信時刻の変更でDBを保存できなかったとき、元の予約を残すか
+
+<!-- id: reminder-reschedule-rollback -->
+
+```mermaid
+sequenceDiagram
+    participant API as api
+    participant S as Scheduler
+    participant DB as Neon
+    Note over S,DB: 変更前は20:00に送る
+    alt A: 新しい予約を別に作る
+        API->>S: 翌日20:00の新しい予約を作る
+        API-xDB: 新しい時刻と予約の保存前に停止
+        Note over S,DB: 元の20:00の予約が残り、DBどおりに送れる
+    else B: 今の予約をその場で更新する
+        API->>S: 元の予約を翌日20:00に変更
+        API-xDB: 新しい時刻の保存前に停止
+        Note over S,DB: DBは20:00のまま。元の時刻には起動しない
+    end
+```
+
+- 工程: 設計
+- 種類: 設計
+- 優先度: 高
+- 状態: 決定
+- なぜ今: 時刻を後ろにずらす途中で関数が止まると、変更に失敗したにもかかわらず元の時刻に通知できない。見張りも先に変更されている場合、元の時刻に引き受け直す起動もない。
+- 根拠: [要件F-36](../requirements/first-slice.md#リマインド)、[データモデルのR11](../data-model.md#予約の作り方r11)、[ADR-0003の決定4](../decisions/ADR-0003-layers-in-contexts.md#決定)、[yoin DB Botの回答](#yoin-db-botの回答-リマインドの切り替えと再送)
+- 選択肢:
+  - A) 新しい送信予約と見張りを先に別名で作り、DBで有効な予約を切り替えたあとに古い組を消す
+    - 利点: 変更の途中で止まっても、DBで有効な組を残せる。起動時に予約IDを照合すれば、使われなかった組からは送らない。
+    - 欠点: R11の同名更新を変更する。変更中に2組が並び、コミット後の削除が失敗すると古い組も一度起動する。
+  - B) R11の同名更新を維持し、元の時刻に届かない場合を許す
+    - 利点: 既存の設計と要件の記述をそのまま使える。
+    - 欠点: DBの変更が確定していなくても、元の時刻の通知が遅れる。通常のエラーで元に戻す処理を足しても、関数自体が止まったときは戻せない。
+- 推奨: A（DBで確定した変更だけが送信時刻を変えるようにする）
+- 決定: A（元の予約を残す）
+- 選ばなかった理由: Bでは変更が保存されなくても元の時刻に送れない。
+- 反映先: docs/designs/first-slice.md、docs/data-model.md、docs/requirements/first-slice.md
+
+### 削除対象が存在しないとき、どちらの応答にそろえるか
+
+<!-- id: delete-missing-contract -->
+
+```mermaid
+flowchart LR
+    UI["DELETE: グループAの申込または下書き"]
+    UI --> missing["すでに削除済み・存在しない"]
+    UI --> foreign["IDはグループBにだけ存在"]
+    missing --> A["A: どちらも204"]
+    foreign --> A
+    missing --> B["B: どちらも404 not_found"]
+    foreign --> B
+```
+
+- 工程: 設計
+- 種類: API
+- 優先度: 高
+- 状態: 決定
+- なぜ今: 異常系E-07は別グループのIDを`not_found`としている。一方、API設計の削除の決まりは同じケースを204と明記している。応答を決めないと、契約と試験が食い違う。
+- 根拠: [要件のE-07](../requirements/first-slice.md#異常系)、[API設計の消す操作](../api.md#作成を2回送ったとき)
+- 選択肢:
+  - A) 操作先グループのメンバーであることを確かめたうえで、削除する行が無い場合は204にする。E-07は削除以外に適用する。
+    - 利点: 最初の削除の応答が途切れても、送り直した画面に同じ204が返る。別グループの行の存在も分からない。
+    - 欠点: E-07の記述に削除の例外を明記する必要がある。
+  - B) 行が無い場合は404とし、E-07を削除にも適用する。
+    - 利点: 削除も、読み取り・編集と同じエラーになる。
+    - 欠点: 削除できたのに応答が途切れた場合と、初めから対象が無い場合を画面で区別できない。既存のAPI設計を変える必要がある。
+- 推奨: A（E-07が参照するAPI設計の削除の決まりを保つ）
+- 決定: B（見つからないエラー）
+- 選ばなかった理由: オーナーの理由は確認中。設計上は削除もE-07に合わせる。
+- 反映先: docs/designs/first-slice.md、docs/api.md
+
+### メールのコードを送る仕組みをどれにするか
+
+<!-- id: cognito-mail-delivery -->
+
+```mermaid
+flowchart LR
+    A["A 推奨<br/>メールのコード"] --> A1["Cognito Essentials<br/>Amazon SESからコード送信"] --> A2["受信したコードでログイン"]
+    B["B<br/>メールのコード"] --> B1["Cognito Essentials<br/>既定送信だけ"] --> B2["ログイン用のメールOTPを送れない"]
+    C["C<br/>パスワード"] --> C1["Cognito Lite<br/>SESは登録確認・再設定だけ"] --> C2["パスワードでログイン"]
+```
+
+- 工程: 設計
+- 種類: 設計
+- 優先度: 高
+- 状態: 決定
+- なぜ今: F-05のメールOTPログインにはEssentials以上だけでなく、CognitoからAmazon SESを使う設定が必要。認証方式を保つなら、送信元とSESの準備担当を決めたい。AまたはCなら、オーナーが利用を許可できる既存の送信元アドレスを選び、承認後に確認と申請を行う案を提案する。既存ドメインを使いたい場合は、DNSを管理する人も指定してほしい。実アドレスはリポジトリに書かない。
+- 根拠: 要件F-05。AWS公式: Cognitoのメール設定 https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-email.html ／ 送信上限 https://docs.aws.amazon.com/cognito/latest/developerguide/quotas.html#quotas-resources ／ Cognito料金 https://aws.amazon.com/cognito/pricing/ ／ SES料金 https://aws.amazon.com/ses/pricing/ ／ SESサンドボックス解除 https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html
+- 選択肢:
+  - A) メールOTPを維持し、Cognito EssentialsからシンガポールのAmazon SESで送る
+    - 利点: F-05どおりパスワードは不要。Cognitoは固定費なし、直接ログインの無料枠は月1万MAU（AWSアカウントまたは組織単位）。SESは従量制で、à la carteは1,000通あたり0.10米ドル、SES Essentialsは最初の月1,000万通まで1,000通あたり0.16米ドルで、いずれも固定費なし。月100通なら送信料は約0.01〜0.016米ドル（無料枠・税・追加機能を除く試算）。新しいドメインや専用IPは買わない。
+    - 欠点: 送信元の確認が要る。オーナーが既存アドレスを選んで確認メールに応じ、または既存ドメインの所有者・DNS管理者がDNSで確認する。任意の招待客に送れるよう、オーナーまたは権限を委任されたAWS管理者がシンガポールでSESのサンドボックス解除を申請する。設定の文書化とTerraformは実装担当。AWSが承認するまでは未確認の宛先に送れない。
+  - B) メールOTPを維持し、Cognitoの既定送信だけを使う（実現不可）
+    - 利点: 既定送信には別のSES料金や固定費がなく、AWS提供の送信元（no-reply@verificationemail.com）を使うなら自前のアドレス・ドメインの確認やサンドボックス解除の担当は不要。Cognitoは固定費なし。既定送信はAWSアカウントあたり1日50通。
+    - 欠点: メールOTPのログインにはCognito Essentials以上が必要で、送信にはSESのメール設定も必須。Essentialsを選んでも既定送信のみでは登録確認メールは送れても、F-05のログイン用メールOTPを送れない。
+  - C) Cognito Liteでパスワードに変更し、登録確認とパスワード再設定はAmazon SESで送る
+    - 利点: Liteの固定費はなく、直接ログインの無料枠は月1万MAU（AWSアカウントまたは組織単位）。日常のログインではメールを送らない。SESの固定費・単価と送信元の選び方はAと同じ。
+    - 欠点: F-05のパスワードなしの方針を変え、入力・管理・再設定が増える。送信元アドレスまたはドメインの確認と、オーナーまたはAWS管理者によるSESのサンドボックス解除はAと同じく必要。
+- 推奨: A（パスワードなしの要件を保てる。オーナーに送信元の種類とSES解除の担当を決めてもらい、既存アドレスを使って固定費を増やさない）
+- 決定: A（コード＋SES。送信元は既存メールアドレス、解除申請者はオーナー）
+- 選ばなかった理由: BはメールOTPを送れず、Cはパスワードなしの要件を変える。
+- 反映先: docs/designs/first-slice.md、docs/architecture.md、docs/decisions/ADR-0007-cognito-email.md
 
 ### 要件定義書から先を、誰が書くか
 
@@ -741,6 +862,103 @@ flowchart LR
 - 選ばなかった理由: B（券の色が浮き、紙らしさが減る）、C（決めた「両方作る」と変わる）
 - 反映先: 色と部品の決まり、要件定義書
 - 決めた日: 2026-11-23
+
+## yoin DB Botの回答: リマインドの切り替えと再送
+
+[元の予約を残すか](#送信時刻の変更でdbを保存できなかったとき元の予約を残すか)の案Aを設計する場合のDB Botの回答。オーナーの選択は回答待ち。
+
+```mermaid
+sequenceDiagram
+    participant API as api
+    participant S as Scheduler
+    participant DB as Neon
+    participant Worker as notification-sender
+    API->>S: 新世代の送信予約と見張りを作る
+    alt 切り替えが先に確定
+        API->>DB: scheduled の行の send_at と schedule_name を更新
+        API->>S: コミット後に古い組を削除
+        S-->>Worker: 古い世代の見張りが起動
+        Worker->>DB: 世代が違い引き受け0行
+        Worker->>S: 古い見張りだけ削除
+    else 元の予約の引き受けが先に確定
+        S->>Worker: 元の予約が起動
+        Worker->>DB: 一致する予約を sending に更新
+        API->>DB: scheduled ではないので更新0行
+        API->>S: 新しい組だけ削除
+    end
+```
+
+- 有効な予約は`reminders.schedule_name`で示す。送信予約名は`reminder-<id>-<n>`、見張り名は`reminder-watch-<id>-<n>`とし、Schedulerの入力に照合用の送信予約名も渡す。既存の`schedule_name`のUNIQUEと`status`のCHECKで、切り替えに必要な制約は足りる。
+- 切り替えも引き受けも、追加の`FOR UPDATE`やadvisory lockを使わず、それぞれ条件つきの`UPDATE`1文で行う。新しい組を作ったあと、対象IDと`status = 'scheduled'`を条件に`send_at`と`schedule_name`を同時に更新する。コミットできたら古い組を、元の予約に先に引き受けられて更新0行なら新しい組を消す。
+- 送信予約・見張りの引き受けには`schedule_name`の一致条件を加える。見張りは`scheduled`も引き受けるため、照合しないと旧世代の見張りが新しい時刻より前に送ってしまう。世代が一致しない見張りは送らず、自分の予約だけを消す。
+- 再送の回数は`reminders.attempts smallint NOT NULL DEFAULT 0`に持ち、引き受けの条件つき更新で1増やす。端末ごとの回数は持たない。再送の予約名は`reminder-retry-<id>-<回数>`とし、同じ名前の作成が`ConflictException`になることを使って二重予約を防ぐ。
+
+設計書では、新しい組の作成途中で止まって送り直したときの世代名の扱いと、見張りが途中停止した送信を引き受け直しても、未送信端末への送信機会を失わないようにする回数の扱いを詰める。
+
+## yoin バックエンド Botの回答: Cognitoの招待制登録と試験
+
+推奨は、Cognitoの登録前トリガーで招待を確かめ、利用回数は参加が確定したときにだけ減らす案。登録前に減らす案では、メールを確認せずに離脱した人が最後の1回を使ってしまう。
+
+```mermaid
+sequenceDiagram
+    actor Guest as 招待客
+    participant C as Cognito
+    participant T as 登録前トリガー
+    participant DB as Neon
+    participant API as api
+    Guest->>C: SignUp（招待の証明を渡す）
+    C->>T: PreSignUp_SignUp
+    T->>DB: 招待ハッシュ・期限・利用残数を読む
+    alt 無効または確認失敗
+        T--xC: 登録を拒否
+        C--xGuest: 登録エラー
+    else 有効
+        T-->>C: 登録を続ける（利用回数は減らさない）
+        C-->>Guest: 確認コードをメールで送る
+        Guest->>C: ConfirmSignUp（確認コード）
+        C-->>Guest: Session
+        Guest->>C: InitiateAuth（USER_AUTH、Session）
+        C-->>Guest: JWT
+        Guest->>API: POST /invites/{token}/accept
+        API->>DB: 参加と利用回数の更新を同じトランザクションで確定
+    end
+```
+
+- `PreSignUp_SignUp`では、トークンのハッシュに対応する招待が期限内で、利用回数が残っているかを1本の問い合わせで確かめる。確かめられなければ登録を断り、`autoConfirmUser`と`autoVerifyEmail`は使わない。IAMで許可された初期データの`PreSignUp_AdminCreateUser`では、この確認をしない（F-03）。招待の残数を確定するのは既存の参加APIだけにし、最後の1回の競合は参加時のトランザクションで解決する（B-08）。
+- 残るリスク: 有効な招待を知っている人は、参加を確定せずに別アドレスで登録を繰り返せる。招待の有効期限を短くする案を推奨するが、それだけでは送信数に上限は付かない。既存の未確認アカウント向けの`ResendConfirmationCode`には登録前トリガーがない。
+- 試験の提案: 通常のCIはメールを送らず、登録前イベントで無効・期限切れ・使い切りの拒否、APIでJWTなしの401・登録行なしの`not_registered`・非メンバーの拒否・非オーナーの招待発行拒否・すでに参加済みの場合を確かめる。Playwrightの2コンテキストでAC-01の操作を通し、メール上限エラーは画面試験で模す。実際のコード入力・登録直後のログイン・iPhoneのホーム画面からの再ログインは結合検証のAC-07で人が見る。
+- Botの結合検証案: `AdminCreateUser`の`MessageAction=SUPPRESS`と`email_verified=true`で試験ユーザーを作る。メール0通で実CognitoのJWTを使う場合は、結合検証プールだけで`AdminSetUserPassword`と`USER_AUTH`のパスワード方式を許し、同環境の通常アプリクライアントとJWT検証設定を使う。本番にはパスワード方式を持ち込まない。メールのカスタム送信トリガーとE2E専用アプリクライアントは推奨しない。実Cognitoでの拒否後に`AdminGetUser`で不在を確かめる試験も、クラウドにつながない通常のCIとは分ける。
+
+```mermaid
+flowchart LR
+    AC["メール0通の自動試験"]
+    AC --> Local["通常CI: 登録前イベント・JWTとAPIの拒否・2人の操作"]
+    AC --> Cloud["結合検証の別案: 実Cognito・管理者が作った試験専用ユーザー"]
+    Human["結合検証で人が操作"] --> Email["実メール・Safariで参加・PWAから再ログイン"]
+```
+
+### AWS公式文書で確かめたこと
+
+| 項目 | 確認結果と出典 |
+| --- | --- |
+| 登録前の拒否 | [Pre sign-up trigger](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-pre-sign-up.html)はユーザー作成前に登録を拒否できると明記。[Lambda triggers](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-working-with-lambda-triggers.html)は関数エラー時に登録を続けない、[SignUp](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_SignUp.html)は検証エラー`UserLambdaValidationException`（400）を挙げる。[メールの送信条件](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-email.html)と合わせると、登録前の拒否で作成・確認メール送信まで進まない設計にできる。拒否後のアカウント不在・メール0通はこの環境では実測していない。 |
+| トリガーの起動元と応答時間 | [Lambda triggers](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-working-with-lambda-triggers.html)の表では`SignUp`は`PreSignUp_SignUp`、`AdminCreateUser`は`PreSignUp_AdminCreateUser`。関数は同期で**5秒以内**に応答する必要があり、変更できない。条件によって再試行があるので、副作用を持たせない。`ResendConfirmationCode`には登録前トリガーの記載がなく、[API文書](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ResendConfirmationCode.html)は登録済みの未確認アカウント向けの操作と説明している。 |
+| 招待の証明の渡し方 | [Pre sign-up trigger](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-pre-sign-up.html)では、`SignUp`の`ValidationData`は`request.validationData`に、`ClientMetadata`は`request.clientMetadata`に渡る。`ValidationData`はユーザー属性にならない。[SignUp](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_SignUp.html)は`ClientMetadata`を検証・暗号化・保存せず、機密情報を送らないよう明記している。招待トークンの生値は`ClientMetadata`に入れない。 |
+| 登録直後のメール通数 | [ConfirmSignUp](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ConfirmSignUp.html)の応答`Session`を[InitiateAuth](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_InitiateAuth.html)の`USER_AUTH`に渡すと、セッション有効中の初回に同じコードが認証に使われる。したがって登録とそのままログインは通常**1通**で、Botの2通見込みとは異なる。PWAを開いて行う別のログインにはさらに1通が要る。 |
+| 50通の単位と適用範囲 | [Cognitoのクォータ](https://docs.aws.amazon.com/cognito/latest/developerguide/quotas.html#quotas-resources)では既定送信が**AWSアカウントあたり1日50通**、09:00 UTCにリセットされる。同じアカウントにプールを分けても、各50通とは数えない。さらに[メール設定の表の脚注1](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-email.html)では、メールOTPによるログインには**Essentials以上に加えてAmazon SESのメール設定が必要**。既定送信の50通は、この構成の送信上限ではない。 |
+| 試験ユーザーの作成 | [AdminCreateUser](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_AdminCreateUser.html)は`SUPPRESS`ならメールを送らず、メールOTPを許したプールでは一時パスワードを省けると明記。[AdminSetUserPassword](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_AdminSetUserPassword.html)は`Permanent=true`で直ちにパスワードで入れると説明している。実Cognitoやメール送信を使う試験はここでは実行していない。 |
+
+### 設計に入る前に確認すること
+
+```mermaid
+flowchart LR
+    Login["F-05: メールのコードでログイン"]
+    Login --> A["推奨: Cognitoから確認済みのAmazon SES送信元で送る"]
+    Login -.-> B["非推奨: Cognito既定メールのまま。メールOTPの要件を満たせない"]
+```
+
+- F-05のメールOTPは、CognitoからAmazon SESの確認済み送信元を使う。オーナーが既存アドレスを選び、[SESのサンドボックス解除](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html)を申請する。カスタムメール送信Lambdaは追加しない。
+- 拒否時のメール送信なし、登録直後の1通でのログイン、結合検証のみで許すパスワード方式は、文書で確認できる契約と実環境で確認する項目を分ける。`SignUp`の`LimitExceededException`は、登録前の拒否と違い、未確認アカウントが作られたあとに返る場合がある（[SignUp](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_SignUp.html)）。
 
 ## 見本の画面（2026-11-22 大関さんが「いったんこの画面で」と了承）
 
