@@ -424,7 +424,7 @@ yoinに登録した人。Cognitoの言葉はこのテーブルの`cognito_sub`�
 | `schedule_name` | text | 一意。有効な送信予約の名前（`reminder-<id>-<n>`）。予約は起動後に自動で消える |
 | `attempts` | smallint | NOT NULL DEFAULT 0、CHECK (attempts BETWEEN 0 AND 4)。同じ回の再開では増やさない |
 | `retry_at` | timestamptz | null可。次の再送を待っている時刻。CHECK (retry_at IS NULL OR status = 'sending') |
-| `recover_until` | timestamptz | NOT NULL。呼ぶ側が決める失敗キューから復旧してよい最終時刻 |
+| `recover_until` | timestamptz | NOT NULL。呼ぶ側が決める復旧・送信の期限。この時刻ちょうどから復旧・送信しない |
 | `title` | text |  |
 | `body` | text |  |
 | `url` | text | null可。通知を押したときに開く画面 |
@@ -557,10 +557,11 @@ Web Pushを受け取る端末
 
 ### 送り方（F5、Q4）
 
-- 送信の関数は、有効な`schedule_name`と状態が一致する予約だけを`sending`に更新し、`claimed_at`に今の時刻を入れる。初回と再送回の初めての引き受けは`attempts < 4`も条件にして、同じ更新で1増やす。
+- 送信の関数は、有効な`schedule_name`と状態が一致し、DBの現在時刻が`recover_until`より前の予約だけを`sending`に更新し、`claimed_at`に今の時刻を入れる。この条件は初回・再送・見張りで共通。初回と再送回の初めての引き受けは`attempts < 4`も条件にして、同じ更新で1増やす。
 - 引き受けられるのは、`scheduled`の予約と、`sending`で`claimed_at`がnullか10分より前の予約。10分は送信の関数のタイムアウトより長くする。送信の途中で関数が止まっても、10分たてば引き受け直せる。
 - 送る前に、その世代の見張りを10分後に動かし直す。見張りも有効な送信予約名を照合し、`scheduled`なら初回を引き受ける。`sending`で`claimed_at`が10分以上前なら同じ回を引き受け直す。まだ10分たっていなければ`claimed_at`の10分1秒後に予約し直す。`sent`か`canceled`なら送らない。
 - 引き受け直したときは、`reminder_deliveries`を見て、送れていない端末だけに送る。
+- 端末ごとのWeb Push要求を始める直前も期限を確認する。期限切れなら新たな送信・再送をせず、有効名が一致し他の実行が引き受けていない未完了行を`sent`にする。`retry_at`と`claimed_at`を空にし、成功時刻と端末ごとの結果を保持する。
 - 取り消しは`scheduled`の予約だけを`canceled`にする。引き受けより先に取り消せば送らない。同じ起動が2回届いても、2回目は引き受けに失敗して送らない。
 - 端末ごとの結果を`reminder_deliveries`に残し、送れていない端末だけをやり直す。
 - 端末に送れたら、その端末の`reminder_deliveries`を`sent`にし、`push_subscriptions.last_failed_at`をnullに戻す。2つの更新は同じトランザクションで行う。
