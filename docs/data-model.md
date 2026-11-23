@@ -163,6 +163,7 @@ yoinに登録した人。Cognitoの言葉はこのテーブルの`cognito_sub`�
 | `group_id` | uuid | groups.groups.id（RESTRICT） |
 | `name` | text | 入力されたままの名前 |
 | `name_key` | text | 名前を正規化した値（NFKC、小文字、空白を除く）。(group_id, name_key)で一意。グループをまたぐまとめにも使う（Q1） |
+| `color` | text | アーティストの色。決めた12色のどれか。色は`docs/ui-guidelines.md`の「アーティストの色」。作るときに名前から決めて保存し、公演の券と画面の上の色に使う（2026-11-23、最初の1本の要件。ADR-0002の追記） |
 
 #### `catalog.venues`会場`Venue`
 
@@ -318,6 +319,7 @@ yoinに登録した人。Cognitoの言葉はこのテーブルの`cognito_sub`�
 | `result_announced_at` | timestamptz | null可。結果発表日時 |
 | `payment_deadline` | timestamptz | null可。入金期限`PaymentDeadline`。過ぎても`won`なら期限切れ。期限切れでも申込者は`paid`に直せる |
 | `pickup_starts_at` | timestamptz | null可。受取開始日時`PickupStartsAt`。受取できるかは保存せず計算する |
+| `seat_or_entry_number` | text | null可。座席・整理番号`SeatOrEntryNumber`。指定席の座席かスタンディングの整理番号を自由に書き、券面に出す（2026-11-23、最初の1本の要件。ADR-0002の追記） |
 | `updated_at` | timestamptz |  |
 
 #### `ticket.distributions`分配`Distribution`
@@ -438,7 +440,7 @@ Web Pushを受け取る端末
 | `auth` | text |  |
 | `label` | text | 端末の名前。登録したときのブラウザと端末の種類から作る（例「iPhone Safari」）。通知先の一覧で見分けるため（2026-11-21） |
 | `created_at` | timestamptz |  |
-| `last_failed_at` | timestamptz | null可。送れなかった端末を画面で示すため |
+| `last_failed_at` | timestamptz | null可。送れなかった端末を画面で示すため。再送を使い切っても送れなかったときに入れ、次にその端末へ送れたらnullに戻す。端末が登録を消していた（`gone`）ときは、この行を消す（2026-11-23、最初の1本の要件） |
 
 #### `notification.reminder_deliveries`端末ごとの送信結果
 

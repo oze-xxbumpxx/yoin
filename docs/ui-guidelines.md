@@ -18,7 +18,7 @@ yoinの画面は、Spotifyの骨組み（暗い地、丸いボタン、下のタ
 | 色と部品の決まり（暗い表示） | [tokens-dark.png](design-assets/screens/tokens-dark.png) |
 | 明るい表示の色 | [tokens-light.png](design-assets/screens/tokens-light.png) |
 
-ホームの下のタブの「自分」は、見本では置いてあるが、行き先（自分の参戦と自分の設定）は最初の1本の範囲に入っていない。作るか後に回すかは要件定義書で決める。
+ホームの下のタブの「自分」は、最初の1本では自分の設定の一部（表示名、通知先の一覧、ログアウト）を開く（`docs/requirements/first-slice.md`。論点「『自分』タブの行き先」は回答待ち）。
 
 ## 色
 
@@ -128,7 +128,7 @@ function shade(hex: string, t: number): string {
 ## 文言
 
 案内や結果の文はです・ます調にし、ボタンは短い動詞にする（「保存」「参加する」「入金済みにする」）。
-この決まりは`docs/discussions/first-slice.md`の「画面の文言を、です・ます調にするか」で仮決定で、要件定義書のレビューで確定する。
+この決まりは`docs/discussions/first-slice.md`の「画面の文言を、です・ます調にするか」で仮決定で、要件定義書（`docs/requirements/first-slice.md`）の承認で確定する。
 
 ## アプリのアイコン
 
@@ -141,4 +141,4 @@ function shade(hex: string, t: number): string {
 | `icon-maskable-192.png`、`icon-maskable-512.png` | Web App Manifestの`icons`（`purpose: maskable`） |
 | `yoin-icon.svg`、`yoin-icon-maskable.svg` | 書き出しの元 |
 
-ホーム画面の名前（manifestの`short_name`）は、見本では「yoin」にしてある。名前はまだ問いとして決めていないので、要件定義書で決める。
+ホーム画面の名前（manifestの`name`と`short_name`）は「yoin」にする（`docs/requirements/first-slice.md`のF-48）。
