@@ -88,7 +88,7 @@ sequenceDiagram
 
 - 招待なしのS-01はSignUpを呼ばず、[USER_AUTH](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_InitiateAuth.html)のEMAIL_OTPだけを使う。招待付きでは暗号化した証明でSignUpを試す。UsernameExistsExceptionなら同じ入力でUSER_AUTHへ進む。UserNotConfirmedExceptionなら、招待付きの場合だけ確認入力へ戻り、利用者の操作でResendConfirmationCodeを呼ぶ。招待なしなら招待リンクから開き直すよう案内する。PreventUserExistenceErrorsはENABLED。画面はアカウントの存在を表示しない。CognitoのSignUp自体では既存アドレスの応答を完全には隠せない。
 - [登録前Lambda](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-pre-sign-up.html)は招待トークンと正規化したメールのSHA-256を照合する。ブラウザは配布済みの公開鍵（RSA-OAEP/SHA-256、2048ビット）で暗号化し、版付き暗号文だけをSignUpのValidationDataに入れる。TLSに加え、Cognito・監査やイベントの照会箇所で任意のValidationDataに生の招待が残らないための対策であり、リンクを知る人による別メールの登録は防がない。生トークンも暗号文もアプリのログに出さない。鍵を替えるときはSSMに新旧を置いて新しい公開鍵を配布し、旧PWAの入れ替えを確認してから旧鍵を削除する。
-- 同期Lambdaは復号・メール照合後、有効期限・取り消し・残り参加枠・グループ状態を条件に、登録開始数だけを1文のUPDATEで増やす。登録開始数の上限は参加上限の3倍。開始数はCognitoの失敗やトリガー再試行で戻さない。招待は有効24時間以内・参加1〜10人。参加のときだけ参加数を増やし、登録開始枠の不足で既存会員のログインや確認済みの招待参加は拒まない。枠を使い切ったときはオーナーが必要に応じてリンクを発行し直す。
+- 同期Lambdaは復号・メール照合後、有効期限・取り消し・残り参加枠・グループ状態を条件に、登録開始数だけを1文のUPDATEで増やす。このLambdaのDBロールは招待検査と開始数の更新に必要な権限だけを持つ。登録開始数の上限は参加上限の3倍。開始数はCognitoの失敗やトリガー再試行で戻さない。招待は有効24時間以内・参加1〜10人。参加のときだけ参加数を増やし、登録開始枠の不足で既存会員のログインや確認済みの招待参加は拒まない。枠を使い切ったときはオーナーが必要に応じてリンクを発行し直す。
 - [ConfirmSignUpのSession](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ConfirmSignUp.html)は初回ログインで再利用する。通常は確認メール1通、再ログインは[EMAIL_OTPのコード入力](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_RespondToAuthChallenge.html)。自動確認・メールの自動検証は無効。PreSignUp_AdminCreateUserは初期データ用に通す。
 
 | SDKで受ける結果 | S-01の案内と次の操作 |
@@ -261,7 +261,7 @@ Cognitoのプール・発行者・アプリクライアントを環境で分離�
 
 ## テスト方針
 
-- CIはメールを送らない。Playwrightはランナー内のPWAとHono、使い捨てPostgreSQLを使う。試験専用の入口がランナー内の短命な鍵とテストissuerで2人のJWTを発行し、試験用アダプターがHonoの認証済み入力に渡す。画面の試験用コード入力はランナー内の代替だけで扱う。試験用の入口・鍵・発行者を製品ビルドの依存から外し、成果物に試験用の入口が無く、試験JWTを受けないことを検査する。結合検証も実際のメールOTPのみとし、パスワード方式は足さない。
+- CIはメールを送らない。Playwrightはランナー内のPWAとHono、使い捨てPostgreSQLを使う。2つのcontextで、オーナーの招待発行、招待者の参加、公演確定、申込から受取済みまでを通す。試験専用の入口がランナー内の短命な鍵とテストissuerで2人のJWTを発行し、試験用アダプターがJWTを検証してHonoの認証済み入力に渡す。画面の試験用コード入力はランナー内の代替だけで扱う。試験用の入口・鍵・発行者を製品ビルドの依存から外し、成果物に試験用の入口が無く、試験JWTを受けないことを検査する。結合検証は実際のメールOTPのみとし、パスワード方式は足さない。
 - ローカルのHonoではusers行なし・非メンバー・非オーナー、招待の最後の1回、他人の下書きIDへ同じ／違う内容を送った場合の応答、DELETE不在と別グループの404を確かめる。Gatewayの401はローカルHonoの試験に含めず、Terraformでissuer・client・全ルートのauthorizerを照合し、実環境でJWTなし・別issuer・別clientを拒否することを確かめる。同じブラウザで会員を交代し、旧会員の下書きや通知状態が一瞬も表示されないことも確かめる。
 - 登録前のイベント試験は招待の無効・期限・登録開始枠・AdminCreateUserを確認する。SDKの境界に上の例外を注入し、特にSignUpのLimitExceededExceptionから未確認ユーザーの確認を再開できることを確かめる。結合検証で休止したNeonを使う初回登録の応答時間を測り、登録開始枠を超えた新規登録は送信されず、既存会員のログインは継続することを確かめる。
 - fast-checkで予約の時刻と状態遷移、再送上限、世代切替と引き受けの競合、旧見張り、同じ再送、端末ごとの再開を確かめる。Push成功直後に失敗させ、成功記録と端末の失敗印が別々に残らないことも確かめる。
