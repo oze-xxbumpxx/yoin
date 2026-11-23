@@ -37,7 +37,7 @@
 | ------------------------------ | ------------------------------------------------------- |
 | `guard-dangerous`              | 破壊的なgit操作、本番相当の操作                         |
 | `check-deliverables`           | L2/L3でソースを変えたとき、設計・計画・試験計画があるか |
-| `permissions.deny`（settings） | `.env`や秘密鍵の読み書き                                |
+| `permissions.deny`（settings） | `.env`、秘密鍵、ホームの設定、`.git/hooks`、`.git/config`の読み書き |
 | `validate-agent-config`        | エージェント定義とスキルのfrontmatter                   |
 | `record-subagent`              | 検証役が動いたことの記録                                |
 
