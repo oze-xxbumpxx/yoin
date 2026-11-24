@@ -456,8 +456,20 @@ sequenceDiagram
     - 欠点: DBの変更が確定していなくても、元の時刻の通知が遅れる。通常のエラーで元に戻す処理を足しても、関数自体が止まったときは戻せない。
 - 推奨: A（DBで確定した変更だけが送信時刻を変えるようにする）
 - 決定: A（元の予約を残す）
-- 選ばなかった理由: Bでは変更が保存されなくても元の時刻に送れない。入金リマインドは、締切前の登録で、1分後の予約の起動幅が締切前に収まらないとき（残り60秒ちょうども含む）、保存確定後にAPIから`notification-sender`を直接起動する。送らない案では、締切前に登録しても通知を受け取る機会がない。
+- 選ばなかった理由: Bでは変更が保存されなくても元の時刻に送れない。
 - 反映先: docs/designs/first-slice.md、docs/data-model.md、docs/requirements/first-slice.md
+
+### 締切直前の入金通知を作るか
+
+<!-- id: payment-reminder-near-deadline -->
+
+- 工程: 設計
+- 種類: 設計
+- 優先度: 高
+- 状態: 決定
+- 根拠: [オーナーの判断](https://github.com/oze-xxbumpxx/yoin/pull/32#issuecomment-7118825604)
+- 決定: 予約が入金締切に間に合わないときは通知を作らない。締切の1分前を切って保存した人は、通知が無くても締切を知っているため。
+- 反映先: docs/designs/first-slice.md、docs/api.md、docs/data-model.md、docs/requirements/first-slice.md
 
 ### 削除対象が存在しないとき、どちらの応答にそろえるか
 
