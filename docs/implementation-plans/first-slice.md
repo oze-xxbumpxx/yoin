@@ -12,19 +12,19 @@
 
 下表は新規作成先です。画面の置き場所・CI・DBの設定など、先行タスクで作った共有ファイルへの配線は、先行タスクがマージされてから行います。依存とファイルが重ならないタスクだけを、別々の作業用クローンで並行して進めます。SWE-2 Flashのeffortを表に示します。「人が読む」は[REVIEW.md](../../REVIEW.md)の対象で、画面の見た目だけの変更には広げません。
 
-| タスク | 区分 | 主に触るファイル | 先に要るタスク | effort | 人が読む差分 |
-| --- | --- | --- | --- | --- | --- |
-| 初回準備 | 土台 | `infra/terraform/bootstrap/main.tf`、`scripts/bootstrap-ssm.ts` | なし | high | S3状態、IAM、OIDC、SSM |
-| 環境と監視 | 土台 | `infra/terraform/main.tf`、`infra/terraform/environments/` | 初回準備の名前・ARNの取り決め | high | IaC、権限、費用、通知 |
-| CIと成果物 | 土台 | `package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`、`vitest.config.ts`、`.github/workflows/ci.yml` | なし | medium | CIと境目の検査 |
-| DB変更の仕組み | 土台 | `db/drizzle.config.ts`、`db/migrations/`の検査設定、`scripts/check-migrations.ts`・`scripts/migrate.ts` | CIと成果物 | high | SQL、削除条件、適用権限 |
-| オーナーと招待参加 | 製品 | `src/contexts/group/`、`src/functions/pre-sign-up/`、`src/functions/api/`、`scripts/seed-initial-data.ts`、`apps/web/src/features/join/` | DB変更の仕組み | high | 登録、認可、グループのSQL・個人情報 |
-| 公演を下書きから確定 | 製品 | `src/contexts/catalog/`、`apps/web/src/features/concert/` | オーナーと招待参加 | high | SQL、グループの参照・更新権限 |
-| チケット申込から受取 | 製品 | `src/contexts/ticket/`、`apps/web/src/features/ticket/`・`home/` | 公演を下書きから確定 | high | SQL、他人の申込の更新拒否 |
-| iPhoneへの通知 | 製品 | `src/contexts/notification/`、`src/functions/notification-sender/`、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts` | チケット申込から受取 | high | 購読情報、送信権限、DBと予約 |
-| 変更を確かめる道具 | 確認 | `.agents/skills/verify-first-slice/SKILL.md` | オーナーと招待参加 | medium | 要約で足りる |
-| 2人で通す試験 | 確認 | `playwright.config.ts`、`tests/e2e/`、`tests/support/` | iPhoneへの通知・変更を確かめる道具 | high | 試験専用の認証が本番に混ざらない差分 |
-| 結合検証と承認付き本番配置 | 土台・最終確認 | `.github/workflows/deploy.yml`、`scripts/check-deployment-sha.ts`、`scripts/write-release-config.ts` | 初回準備・環境と監視・全製品成果物と2人の自動試験 | high | 承認、デプロイ、OIDC、DB |
+| タスク | 区分 | 主に触るファイル | 先に要るタスク | effort | 受け持つ試験 | 人が読む差分 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 初回準備 | 土台 | `infra/terraform/bootstrap/main.tf`、`scripts/bootstrap-ssm.ts` | なし | high | なし | S3状態、IAM、OIDC、SSM |
+| 環境と監視 | 土台 | `infra/terraform/main.tf`、`infra/terraform/environments/` | 初回準備の名前・ARNの取り決め | high | I10 | IaC、権限、費用、通知 |
+| CIと成果物 | 土台 | `package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`、`vitest.config.ts`、`.github/workflows/ci.yml` | なし | medium | なし | CIと境目の検査 |
+| DB変更の仕組み | 土台 | `db/drizzle.config.ts`、`db/migrations/`の検査設定、`scripts/check-migrations.ts`・`scripts/migrate.ts` | CIと成果物 | high | I03 | SQL、削除条件、適用権限 |
+| オーナーと招待参加 | 製品 | `src/contexts/group/`、`src/functions/pre-sign-up/`、`src/functions/api/`、`scripts/seed-initial-data.ts`、`apps/web/src/features/join/` | DB変更の仕組み | high | I01 | 登録、認可、グループのSQL・個人情報 |
+| 公演を下書きから確定 | 製品 | `src/contexts/catalog/`、`apps/web/src/features/concert/` | オーナーと招待参加 | high | I11 | SQL、グループの参照・更新権限 |
+| チケット申込から受取 | 製品 | `src/contexts/ticket/`、`apps/web/src/features/ticket/`・`home/` | 公演を下書きから確定 | high | U01、U04、U06、I02 | SQL、他人の申込の更新拒否 |
+| iPhoneへの通知 | 製品 | `src/contexts/notification/`、`src/functions/notification-sender/`、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts` | チケット申込から受取 | high | U02、U03、U05、I04〜I07、I09 | 購読情報、送信権限、DBと予約 |
+| 変更を確かめる道具 | 確認 | `.agents/skills/verify-first-slice/SKILL.md` | オーナーと招待参加 | medium | なし | 要約で足りる |
+| 2人で通す試験 | 確認 | `playwright.config.ts`、`tests/e2e/`、`tests/support/` | iPhoneへの通知・変更を確かめる道具 | high | E2E-01、E2E-02 | 試験専用の認証が本番に混ざらない差分 |
+| 結合検証と承認付き本番配置 | 土台・最終確認 | `.github/workflows/deploy.yml`、`scripts/check-deployment-sha.ts`、`scripts/write-release-config.ts` | 初回準備・環境と監視・全製品成果物と2人の自動試験 | high | I08 | 承認、デプロイ、OIDC、DB |
 
 ## 実装手順
 
@@ -34,6 +34,9 @@
 ### 初回準備: 環境ごとの状態、権限、設定を用意する
 
 - 対象: `infra/terraform/bootstrap/`、`scripts/bootstrap-ssm.ts`。旧#35に対応します。
+- effort: high
+- 先に要るタスク: なし
+- 受け持つ試験: なし
 - やること: オーナーがNeonをシンガポールに2つ作り、Macの暗号化された場所で初回のTerraformを適用します。作ったS3の初回専用キーへ `terraform init -migrate-state` で移します。初回・結合検証・本番の状態キーとTerraform用ロックを分け、CIに初回分を許しません。GitHub ActionsはOIDCの短期認証だけを使います。SSMの秘密はオーナーが登録し、Terraformは名前とARNだけを使います。ランタイム・DB変更・初期データが読める名前を範囲ごとに分けます。
 - 完了条件: 移行後に状態が読めて `terraform plan` に意図しない差分がなく、CIから初回用の読み書きが拒まれます。確認後にローカル状態と一時バックアップを破棄します。秘密や状態をログ・成果物に置きません。
 <!-- /delegation-task -->
@@ -42,6 +45,9 @@
 ### 環境と監視: 同じ定義から結合検証と本番を作る
 
 - 対象: `infra/terraform/`の初回構成以外。旧#36に対応します。
+- effort: high
+- 先に要るタスク: 初回準備の名前・ARNの取り決め
+- 受け持つ試験: I10
 - やること: AWSをシンガポールに置き、API Gateway、3つのLambda、Cognito、Scheduler、S3・CloudFront、失敗キューを環境別に用意します。全APIルートに対象環境のJWT検査を付け、CORSも対象のPWAに限ります。SESの送信元と利用申請はオーナーが担当します。CognitoはADR-0007のメールOTPを使い、プールを手で直しません。月5ドルのBudgets、SES抑止、Lambda・SESの共有警報は結合検証のTerraformだけで管理し、変更は適用前に個別承認を取ります。
 - 完了条件: 両環境のTerraform定義を検査し、秘密値が設定に入らず、共有資源が結合検証側にだけ出ます。最初の実配置でLambdaのSHA・時刻のタグと設計の警報・流量・ログ保持の設定を確認できます。Lambdaの配置は製品成果物がそろってから行います。
 <!-- /delegation-task -->
@@ -50,6 +56,9 @@
 ### CIと成果物: 外部サービスなしで検査し、一度だけビルドする
 
 - 対象: `.github/workflows/ci.yml`、ルートのpnpm設定とVitestの設定、`apps/web/`のビルド設定。旧#37に対応します。
+- effort: medium
+- 先に要るタスク: なし
+- 受け持つ試験: なし
 - やること: PRとmainで、lint、型、境目、Vitest、使い捨てPostgreSQL、Playwright、ビルドの実在する検査を必須にします。製品の試験は各タスクから追加します。最初はランナー内の検査だけを有効にし、未実装の製品試験を成功扱いにしません。LambdaとPWAの成果物をテスト済みの完全SHAにひも付けます。PWAは環境値なしで1回ビルドし、結合検証と本番は同じものを使います。
 - 完了条件: 一つでも失敗したSHAはデプロイへ渡らず、別SHAの成果物は使えません。試験の入口・JWTの発行者・鍵が製品に入らない検査を後続のE2Eとつなぎ、試験ファイルが実際に検出されることを確かめます。CIからAWS、Neon、実メール、実Pushへ接続しません。
 <!-- /delegation-task -->
@@ -58,6 +67,9 @@
 ### DB変更の仕組み: SQLをデプロイの流れだけで流す
 
 - 対象: `db/drizzle.config.ts`、`db/migrations/`、`scripts/check-migrations.ts`、`scripts/migrate.ts`。旧#38に対応します。
+- effort: high
+- 先に要るタスク: CIと成果物
+- 受け持つ試験: I03
 - やること: drizzle-kitの設定と生成・適用の入口を作ります。CIは `drizzle-kit check` とjournalの時刻順を確かめます。適用前にはDBに未記録の古いSQLがないか確認します。削除するSQLの `requires-deployed` は各Lambdaの版と切替時刻、旧版の最大実行時間15分の経過を確かめてから適用します。利用をやめる変更と削除を分けます。
 - 完了条件: 空のDBへの適用、同じSQLの再実行、時刻違反と削除条件の未成立を使い捨てDBで確かめます。環境の設定はデプロイが渡し、手で実環境にSQLを流す手順は作りません。
 <!-- /delegation-task -->
@@ -66,6 +78,9 @@
 ### オーナーと招待参加: 2人が同じグループを開ける
 
 - 対象: `src/contexts/group/`、`src/functions/api/`・`pre-sign-up/`、`scripts/seed-initial-data.ts`、`apps/web/src/features/join/`。
+- effort: high
+- 先に要るタスク: DB変更の仕組み
+- 受け持つ試験: I01
 - やること: 環境別の初期データ、S-01のメールOTP、S-02の参加、S-21の招待を作ります。初期データの再実行ではCognitoの既存subを使い、DB側は1トランザクションで重複なく作ります。登録前Lambdaは招待のハッシュ、期限、残り枠とグループ状態を検査し、登録開始数だけを1文で更新します。参加枠は参加の取引で使い、登録開始とは分けます。ログにはトークンや個人情報を出しません。
 - 完了条件: オーナーの招待から2人目の登録・参加・ホーム表示まで通ります。招待なしの新規登録、使えない招待、権限のない発行を拒み、最後の1枠を2人で使えません。実メールと実プールの確認は結合検証でオーナーが行います。
 <!-- /delegation-task -->
@@ -74,6 +89,9 @@
 ### 公演を下書きから確定し、一覧と詳細に出す
 
 - 対象: `src/contexts/catalog/`、`apps/web/src/features/concert/`、対応API・SQL。
+- effort: high
+- 先に要るタスク: オーナーと招待参加
+- 受け持つ試験: I11
 - やること: 会場・アーティストを選ぶ／追加する、単発公演を下書きから確定する、S-06〜S-08で一覧と詳細を開く流れを作ります。下書きは本人だけが読み書きでき、確定済み公演は同じグループで読めます。
 - 完了条件: 保存や確定の再送で行が増えず、別グループ・不在・本人でない場合を契約どおりに区別します。今日を日本時間の「これから」に入れ、足りない欄を画面で示します。
 <!-- /delegation-task -->
@@ -82,6 +100,9 @@
 ### チケット申込を作り、受取済みまで進める
 
 - 対象: `src/contexts/ticket/`、`apps/web/src/features/ticket/`・`home/`、対応API・SQL。
+- effort: high
+- 先に要るタスク: 公演を下書きから確定
+- 受け持つ試験: U01、U04、U06、I02
 - やること: 申込の作成・編集・状態変更・削除を作ります。本人の期限と受取可否は表示時に計算します。S-05のホームには最も近い公演、本人の次の行動と期限の帯を出します。券は設計と画面見本を使い、12色の明暗で読みやすさを保ちます。
 - 完了条件: 申込から当選、入金済み、受取済みまで通ります。別のメンバーは読めても編集できません。状態遷移と期限の境目、再送、券の文字の配置とコントラストを試験計画どおりに確認します。
 <!-- /delegation-task -->
@@ -90,6 +111,9 @@
 ### 期限の予約とiPhoneへの通知をつなぐ
 
 - 対象: `src/contexts/notification/`、`src/functions/notification-sender/`、`apps/web/src/features/push/`・`service-worker.ts`、対応API・SQL。
+- effort: high
+- 先に要るタスク: チケット申込から受取
+- 受け持つ試験: U02、U03、U05、I04〜I07、I09
 - やること: チケットの変更とSchedulerの世代切替をつなぎ、登録端末へのPush、見張り、端末別の再開を作ります。予約の引き受け・端末別の送信結果・失敗表示を設計の取引単位で扱います。S-03・S-23の案内とホームの通知先の帯、ログアウト後の通知からの復帰をつなぎます。
 - 完了条件: 各期限から正しい予約が作られ、取り消し済み・古い世代は送信しません。一部の失敗で他端末を飛ばさず、再送上限と締切を守ります。試験計画の固定時計・並行実行で確かめ、実着信は結合検証のホーム画面から開くiPhoneで確認します。
 <!-- /delegation-task -->
@@ -98,6 +122,9 @@
 ### 変更を確かめる道具を、招待の流れから使う
 
 - 対象: `.agents/skills/verify-first-slice/SKILL.md`。
+- effort: medium
+- 先に要るタスク: オーナーと招待参加
+- 受け持つ試験: なし
 - やること: アプリの起動・試験データ・招待の操作・証拠の残し方をスキルにします。確認できる流れが伸びるたびに手順を更新します。
 - 完了条件: DevinとClaude CodeがPRを出す前に、スキルに従ってローカルで動作を確かめられます。
 <!-- /delegation-task -->
@@ -106,6 +133,9 @@
 ### 2人のE2Eを自動で通す
 
 - 対象: `playwright.config.ts`、`tests/e2e/`、`tests/support/`。確かめの道具に全体の操作順を追記します。
+- effort: high
+- 先に要るタスク: iPhoneへの通知・変更を確かめる道具
+- 受け持つ試験: E2E-01、E2E-02
 - やること: Playwrightでは2つの独立したcontextで、招待から受取済みまで操作します。ランナー内だけで署名した試験JWTを使い、製品の認証設定を緩めません。
 - 完了条件: 使い捨てDBから再現でき、製品ビルドが試験入口と鍵を含まず、試験JWTを受けないことを検査できます。
 <!-- /delegation-task -->
@@ -114,6 +144,9 @@
 ### 結合検証を通した版を、承認後に本番に出す
 
 - 対象: `.github/workflows/deploy.yml`、`scripts/check-deployment-sha.ts`、`scripts/write-release-config.ts`。旧#39に対応します。
+- effort: high
+- 先に要るタスク: 初回準備・環境と監視・全製品成果物と2人の自動試験
+- 受け持つ試験: I08
 - やること: 試験・ビルド → 結合検証のSQL → Terraform → 初期データ → PWA配置・キャッシュ更新の順に進めます。配置時に公開の `config.json`（API URL、CognitoのプールIDとクライアントID、VAPID公開鍵）を環境別に置きます。秘密鍵は配らず、設定をCloudFrontやService Workerでキャッシュしません。結合検証が `main` の先頭を選び直すなら、そのSHAで試験を通した成果物だけを使います。
 - 本番の承認: 配置した完全SHAを承認画面に表示します。本番ジョブだけに本番用の同時実行グループ（`cancel-in-progress: false`）を設定し、古い承認待ちはオーナーが断ります。本番では `main` を取り直しません。権限取得前にDeployments APIを読み、`integration`の最新成功SHAと不一致・取得不能なら停止します。`production`の最新成功SHAより古い、または順序・履歴が不明なら停止します。本番の成功履歴が0件でも、履歴が取得でき、オーナーが初回と確認した場合だけ進めます。
 - 完了条件: `integration`の配置記録のSHAが、実際に配置したSHAであることを確かめる。ワークフロー起動時と実配置のSHAが異なる場合も確かめます。最初の本番配置前に、成果物がそろって結合検証を通った候補を2〜3件続けて送り、承認画面と待ち列、古い実行を断った後の動きを記録します。成果物をそろえた最初の実デプロイで、承認しない間は本番を触らず、拒否や照合失敗では権限を取らず、承認した版だけを出すことを確認します。承認だけの実行やS3の本番デプロイ用ロックは作りません。
