@@ -108,7 +108,7 @@ sequenceDiagram
 | 送信操作がTooManyRequestsException、LimitExceededException、CodeDeliveryFailureException、または送信設定エラー | 要求数・送信量・配信の問題として「時間をおいてやり直してください」。自動再送しない。設定エラーが続く場合は運用側で調べる |
 | ConfirmSignUpまたはRespondToAuthChallengeがCodeMismatchException / ExpiredCodeException | 誤り・期限切れの案内からコード入力や再送へ。認証セッション切れはUSER_AUTHからやり直す |
 
-確認メールの再送と既存アカウントへの認証コード送信は登録前Lambdaを通らない。PWAが直接呼ぶCognitoにGatewayの流量制限は効かず、既存会員への送信や共有SES枠に負荷がかかる残余リスクがある。[監視](#ログと監視)を入れ、追加の送信制限を有料のAWS WAFで行うかは運用費の判断として残す。
+確認メールの再送と既存アカウントへの認証コード送信は登録前Lambdaを通らない。PWAが直接呼ぶCognitoにGatewayの流量制限は効かず、既存会員への送信や共有SES枠に負荷がかかる残余リスクがある。AWS WAFは付けず、招待ごとの登録開始数の上限と、[SESの送信数のアラーム](#ログと監視)で始める。
 
 ## API 設計
 
