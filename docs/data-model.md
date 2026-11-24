@@ -129,6 +129,7 @@ yoinに登録した人。Cognitoの言葉はこのテーブルの`cognito_sub`�
 | `expires_at` | timestamptz | 有効期限 |
 | `max_uses` | smallint | 利用回数の上限 |
 | `used_count` | smallint |  |
+| `registration_starts` | smallint | NOT NULL DEFAULT 0。登録前Lambdaの受付回数。CHECK (registration_starts BETWEEN 0 AND max_uses * 3)。参加数を減らさない |
 | `revoked_at` | timestamptz | null可。解散の1段階目でここに時刻を入れる |
 
 #### `groups.erasure_jobs`解散・退会の進み具合
@@ -320,6 +321,7 @@ yoinに登録した人。Cognitoの言葉はこのテーブルの`cognito_sub`�
 | `payment_deadline` | timestamptz | null可。入金期限`PaymentDeadline`。過ぎても`won`なら期限切れ。期限切れでも申込者は`paid`に直せる |
 | `pickup_starts_at` | timestamptz | null可。受取開始日時`PickupStartsAt`。受取できるかは保存せず計算する |
 | `seat_or_entry_number` | text | null可。座席・整理番号`SeatOrEntryNumber`。指定席の座席かスタンディングの整理番号を自由に書き、券面に出す（2026-11-23、最初の1本の要件。ADR-0002の追記） |
+| `created_at` | timestamptz | NOT NULL DEFAULT now()。初回にDBで記録し、編集・状態変更・作成の再送では変えない |
 | `updated_at` | timestamptz |  |
 
 #### `ticket.distributions`分配`Distribution`
@@ -417,15 +419,20 @@ yoinに登録した人。Cognitoの言葉はこのテーブルの`cognito_sub`�
 |---|---|---|
 | `id` | uuid | PK |
 | `user_id` | uuid | 宛先 |
-| `dedupe_key` | text | 一意。呼ぶ側が決める文字列（例：`ticket:<申込ID>:payment_deadline`）。同じキーで予約し直すと上書きし、キーで取り消せる |
+| `dedupe_key` | text | 一意。呼ぶ側が決める文字列（例：`ticket:<申込ID>:payment:eve`）。現行の予約を示す。失効した行は`history:<旧予約ID>`に移す |
 | `send_at` | timestamptz | 届ける時刻。期限の種類ごとに呼ぶ側が決める（Q3）。この時刻にEventBridge Schedulerの1回限りの予約を作る（R11） |
-| `schedule_name` | text | 一意。Schedulerの予約の名前（`reminder-<id>`）。送ったら予約は自動で消える |
+| `schedule_name` | text | 一意。有効な送信世代の名前（`reminder-<id>-<n>`）。送信予約は起動後に自動で消える |
+| `attempts` | smallint | NOT NULL DEFAULT 0、CHECK (attempts BETWEEN 0 AND 4)。同じ回の再開では増やさない |
+| `retry_at` | timestamptz | null可。次の再送を待っている時刻。CHECK (retry_at IS NULL OR status = 'sending') |
+| `recover_until` | timestamptz | NOT NULL。呼ぶ側が決める自動送信の期限。初回・再送・見張りの引き受けに使い、この時刻ちょうどから送信しない |
 | `title` | text |  |
 | `body` | text |  |
 | `url` | text | null可。通知を押したときに開く画面 |
 | `status` | text | `scheduled` → `sending` → `sent`、または`canceled`。取り消せるのは`scheduled`だけ（F5） |
 | `claimed_at` | timestamptz | null可。送信の関数が引き受けた時刻。1回の送信を終えて、送れていない端末が残っていればnullに戻す |
-| `sent_at` | timestamptz | null可 |
+| `sent_at` | timestamptz | null可。最初に端末の配信サービスが受理した時刻。sentでnullなら、1台も受理されず完了。別IDで作り直す行はnullから始める |
+
+`notification.reminder_generation_seq`は正のbigintのシーケンス（NO CYCLE）。APIはSchedulerを作る前に短い独立のDB呼び出しでnextvalを取得する。欠番は許す。世代を作るAPIと保守用DBロールにだけUSAGEを付ける。送信関数は既存世代を使うので不要。
 
 #### `notification.push_subscriptions`通知先`PushSubscription`
 
@@ -440,17 +447,18 @@ Web Pushを受け取る端末
 | `auth` | text |  |
 | `label` | text | 端末の名前。登録したときのブラウザと端末の種類から作る（例「iPhone Safari」）。通知先の一覧で見分けるため（2026-11-21） |
 | `created_at` | timestamptz |  |
-| `last_failed_at` | timestamptz | null可。送れなかった端末を画面で示すため。再送を使い切っても送れなかったときに入れ、次にその端末へ送れたらnullに戻す。nullに戻すのは、その端末の`reminder_deliveries`を`sent`にするのと同じトランザクションで行う。`sent`だけを保存して止まると、再開したときにその端末を飛ばし、届いたのに印が残るため。端末が登録を消していた（`gone`）ときは、この行を消す（2026-11-23、最初の1本の要件） |
+| `last_failed_at` | timestamptz | null可。送れなかった端末を画面で示すため。その回を終え、再送回数の上限または期限で次の再送ができず、一時失敗が残った端末に記録し、次にその端末へ送れたらnullに戻す。nullに戻すのは、その端末の`reminder_deliveries`を`sent`にするのと同じトランザクションで行う。`sent`だけを保存して止まると、再開したときにその端末を飛ばし、届いたのに印が残るため。端末が登録を消していた（`gone`）ときは、この行を消す（2026-11-23、最初の1本の要件） |
 
 #### `notification.reminder_deliveries`端末ごとの送信結果
 
-送れていない端末だけをやり直すため（F5・Q4）
+対象端末ごとに最新の送信結果を1行で持ち、送信済みの端末と、その回で試した端末を見分けるため（F5・Q4）
 
 | 列 | 型 | 説明 |
 |---|---|---|
 | `reminder_id` | uuid | PK・reminders.id |
 | `push_subscription_id` | uuid | PK・push_subscriptions.id |
 | `status` | text | `sent` / `failed` / `gone`（端末が登録を消していた） |
+| `attempt_no` | smallint | NOT NULL、CHECK (attempt_no BETWEEN 1 AND 4)。この結果を記録した回の `reminders.attempts` の値。結果を記録するとき、`status`・`attempted_at`と同じ更新で保存する |
 | `attempted_at` | timestamptz |  |
 
 ## 解散と退会
@@ -477,6 +485,7 @@ Web Pushを受け取る端末
 - 残すもの：グループの全員のデータ。公演、セトリ、確定した品目と画像は残し、作った人の情報は持たない（`setlists.updated_by`はnullにする）。
 - ほかの人のデータの中の本人：同行者は人数に置き換える。分配先は空に戻す。購入担当は担当なしに戻す。
 - ログには個人の情報を書かない。DBを戻せる期間は削除が終わってから最大6時間で、Neonのバックアップには最大30日残る（ADR-0006の決定3）。このことを外部FAQに書く。
+- SESのアカウント単位の送信抑止リストには、恒久バウンスや苦情の宛先がCognitoとは別に残り得る。このリストも退会で確認する消去対象とする。
 - 画像のS3のバケットはバージョニングを使わない。消した画像が古い版として残らず、完全に消えるようにする（2026-11-21）。
 
 ### 退会の手順（YADR-04）
@@ -484,7 +493,7 @@ Web Pushを受け取る端末
 1. `users.status`を`withdrawing`にする（F2のロック）。画面には「退会を受け付けました」と出す。
 2. Cognitoでサインアウトさせ、アカウントを無効にする。
 3. `erasure-worker`がアプリのデータを消す。本人のセッションは要らない。
-4. Cognitoのアカウントを削除する。
+4. Cognitoを削除する前に本人の宛先を取得し、SESのアカウント単位の抑止リストから本人の宛先を消してからCognitoのアカウントを削除する。抑止項目の不在は成功と扱う。宛先の値はジョブ行やログに保存しない。実装は退会の回。
 5. `users`の行を消す。最後の段で、見張りの予約を消してから`erasure_jobs`の行を消す（R17）。
 
 - 仲間と使うグループのオーナーなら、1の前に一番前から参加しているメンバーへ引き継ぐ。ほかにメンバーがいなければ、そのグループを解散する。自分用グループは解散と同じ順で消す。
@@ -524,7 +533,7 @@ Web Pushを受け取る端末
 | 受取開始日時 | 受取開始の時刻 | `ticket:<申込ID>:pickup` |
 | 入金期限 | 前日の20時と、締切の3時間前の2回 | `ticket:<申込ID>:payment:eve`、`ticket:<申込ID>:payment:3h` |
 
-- 予約したときに送信時刻がもう過ぎていたら、期限前なら次の起動で送り、期限を過ぎていれば予約しない。
+- 予約したときに送信時刻がもう過ぎていた場合は、下の「予約の作り方」の期限判定に従う。
 
 ### チケットの状態と予約（R9）
 
@@ -535,27 +544,30 @@ Web Pushを受け取る端末
 
 ### 予約の作り方（R11）
 
-リマインドは1件ずつ、EventBridge Schedulerの1回限りの予約（`at(送信時刻)`）にする。15分ごとの定期の起動はしない。Neonが起きるのは、通知を送るときだけになる。
+リマインドは1件ずつEventBridge Schedulerの1回限りの予約（`at(送信時刻)`）にする。15分ごとの定期の起動はしない。Neonが起きるのは、通知を送るときだけになる。
 
-- 予約するとき：先にSchedulerの予約（名前は`reminder-<予約ID>`）と、送信時刻の10分後に動く見張りの予約（`reminder-watch-<予約ID>`）を作り、そのあとDBに`reminders`の行を書く。DBの書き込みが失敗しても、予約が起動したときに行がないので何も送らない。見張りを予約のときに作るのは、送信の関数が見張りを作る前に止まっても起動し直せるようにするため（2026-11-21、PR #15のCodexの指摘）。
+- 予約するとき：先にSchedulerの送信予約（`reminder-<id>-<n>`）と10分後の見張り（`reminder-watch-<id>-<n>`）を同じ世代で作り、そのあとDBに`reminders`の行を書く。両方の入力に有効名の照合に使う送信予約名を入れる。DBに行がないか名前が合わない場合は送らない。
 - 取り消すとき：先にDBの行を`canceled`にし、そのあとSchedulerの予約と見張りの予約を消す。予約を消せなくても、起動したときに`canceled`を見て送らない。
-- 時刻を直すとき：Schedulerの予約と見張りの予約を新しい時刻に更新してから、DBの`send_at`を直す。予約がもう無いとき（起動して自動で消えたあと）は、新しい時刻で作り直してからDBを直す（2026-11-21）。起動した時刻がDBの`send_at`より前なら、送らずに`send_at`で予約を作り直す。
-- 予約したときに送信時刻を過ぎていたら、期限前なら1分後に予約し、期限を過ぎていれば予約しない。
-- 送れなかった端末があれば、5分後に1回限りの再送の予約を作る（3回まで）。3回やっても送れない端末が残ったら、送信の関数がAWS構成のC-4のキューに1件入れ、メールで知らせる。関数が正常に終わっても、届いていないことを見落とさないため（2026-11-21）。
-- 予約は送ったあと自動で消える設定にする。Schedulerの予約の作成と削除はAPIから呼ぶので、`api`と`erasure-worker`にその権限を与える。`notification-sender`も見張りと再送の予約を作る・動かす・消すので、同じ権限を与える（2026-11-21）。
+- 未送信（`scheduled`）の予約の時刻を直すとき：新しい世代の送信と見張りを作る。`status = 'scheduled'`かつ旧名が一致する行だけを条件付きUPDATEし、`send_at`、`recover_until`、`schedule_name`を同時に替える。コミット後に旧世代を消す。更新が0行かロールバックなら新しい組だけを消す。名前が合わない送信・見張りは送らず、自分の古い予約だけを片づける。
+- 状態・期限が変わって旧予約が無効なら、後継の予約がなくても旧行の`dedupe_key`を`history:<旧予約ID>`へ移す。未送信の行は取り消すか、新しい時刻へ切り替える場合は現行キーを保つ。差分の計算時点で`sending`・`sent`・`canceled`なら時刻・送信結果は更新しない。後継が必要なときだけ、元のキーで別IDの行を作る。旧行の送信結果は別IDに引き継がない。
+- 予約したときに送信時刻を過ぎていたら、期限前なら原則1分後に予約し、期限ちょうど以降は予約しない。入金では1分後の予約とSchedulerの起動幅（60秒未満）が締切前に収まらない場合は通知を作らない。
+- その回の送信を終えても一時失敗が残り、5分後が送信期限より前なら、再送（`reminder-retry-<id>-<n>-<回数>`）を予約する（3回まで）。idはハイフンなし32桁、nは小文字36進数にし、全予約名を64文字以内にする。入力に有効名と回数を入れ、同じ世代・回の重複を防ぐ。再送回数を使い切るか期限で打ち切ったときは、下の「送り方」の完了処理に進む。
+- 送信予約と再送予約は起動後に自動で消える。見張りは時刻を動かすので自動では消さず、不要になった時に消す。`api`と`notification-sender`に担当する予約だけを作る・動かす・消す権限を与える。後の工程の`erasure-worker`にも、担当する予約の権限を与える。
 - 予約は自動で消えるので、取り消すときに予約がもう無くても、失敗と扱わない（2026-11-21）。
 - Schedulerの予約から起動したLambdaの自動の再試行は、既定の2回のままにする。引き受けは条件つきの更新なので、再試行や見張りと重なっても2本同時には送らない。1時間を過ぎた再試行は捨てる。起動できなかったときと、再試行を使い切ったか捨てたときは、AWS構成のC-4のキューに入り、メールで知らせる（2026-11-21）。
 
 ### 送り方（F5、Q4）
 
-- 送信の関数は、送る前に予約を`sending`に更新し、`claimed_at`に今の時刻を入れて引き受ける。更新できた予約だけを送る。
+- 送信の関数は、有効な`schedule_name`と状態が一致し、DBの現在時刻が`recover_until`より前の予約だけを`sending`に更新し、`claimed_at`に今の時刻を入れる。この条件は初回・再送・見張りで共通。初回と再送回の初めての引き受けは`attempts < 4`も条件にして、同じ更新で1増やす。
 - 引き受けられるのは、`scheduled`の予約と、`sending`で`claimed_at`がnullか10分より前の予約。10分は送信の関数のタイムアウトより長くする。送信の途中で関数が止まっても、10分たてば引き受け直せる。
-- 引き受けるときは、送る前に見張りの予約（`reminder-watch-<予約ID>`）を10分後に動かし直す。送り終えたら消す。関数が止まったときは、この予約で起動し直す。見張りが起動したとき、予約が`scheduled`のままなら最初の起動が届かなかったとみなして引き受け、`sending`で`claimed_at`が10分より前なら引き受け直し、`sending`で`claimed_at`がまだ10分たっていなければ、`claimed_at`の10分1秒後に見張りを予約し直す。`sent`か`canceled`なら何もしない。見張りは、予約を引き受けるか、`sent`か`canceled`を見るまで、自分を消さずに予約し直す（2026-11-21、PR #15のCodexの指摘）。
-- 引き受け直したときは、`reminder_deliveries`を見て、送れていない端末だけに送る。
+- 送る前に、その世代の見張りを10分後に動かし直す。見張りも有効な送信予約名を照合し、`scheduled`なら初回を引き受ける。`sending`で`claimed_at`が10分以上前なら同じ回を引き受け直す。まだ10分たっていなければ`claimed_at`の10分1秒後に予約し直す。`sent`か`canceled`なら送らない。
+- 送る端末を選ぶときは、`reminder_deliveries`の`sent`・`gone`を回に関係なく除く。同じ回を再開するときは`reminders.attempts`を増やさず、`attempt_no`がその回と一致する`failed`も除く。結果がまだない端末と、前の回の`failed`だけがその回の対象となる。次の再送回は`attempts`を増やすので、前の回で`failed`だった端末も試せる。
+- 端末ごとのWeb Push要求を始める直前も期限を確認する。一時失敗があっても、期限前なら同じ回でまだ試していない対象端末に送る。全対象を試すか、期限ちょうど以降になって残りの送信を止めたあとにだけ、次の再送を判断する。再送回数の上限または期限で次の再送ができなければ完了処理に進む。有効名・状態・引き受け時刻を照合し、他の実行と同時に完了処理をしない。結果が`failed`のままの登録済み端末にだけ`last_failed_at`を保存し、C-4に報告する。報告に失敗したら見張りが完了処理を再開する。成功時刻・結果・回数は保持し、完了時に`sent`に変更して`retry_at`と`claimed_at`を空にする。
 - 取り消しは`scheduled`の予約だけを`canceled`にする。引き受けより先に取り消せば送らない。同じ起動が2回届いても、2回目は引き受けに失敗して送らない。
-- 端末ごとの結果を`reminder_deliveries`に残し、送れていない端末だけをやり直す。
+- 端末ごとの送信結果は、送信のたびに`reminder_deliveries`の同じ行に記録する。結果を記録する前に処理が止まった場合は、同じ回でその端末をもう一度試すことがある。
 - 端末に送れたら、その端末の`reminder_deliveries`を`sent`にし、`push_subscriptions.last_failed_at`をnullに戻す。2つの更新は同じトランザクションで行う。
 - 避けるのは取りこぼし。送信の直後に処理が止まったときの重複と、引き受けたあとに取り消された通知が届くことは許す。
+- 申込詳細を読むときは、DBの現在時刻が`recover_until`ちょうど以降の`scheduled`・`sending`を表示上だけ`sent`として返す。予約行は更新せず、受理記録は`sent_at`の有無で返す。
 
 ## 前の決定から変える点
 

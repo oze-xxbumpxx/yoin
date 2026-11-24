@@ -16,6 +16,8 @@ flowchart LR
   subgraph aws[AWSシンガポールリージョン（ap-southeast-1）]
     cf[CloudFront + S3<br>画面のファイル]
     cognito[Cognito<br>ユーザープール]
+    ses[Amazon SES<br>確認済みのyoin専用メールアドレス]
+    signup[登録前Lambda<br>有効な招待を確認]
     apigw[API Gateway<br>HTTP API]
     api[Lambda api]
     worker[Lambda erasure-worker]
@@ -30,6 +32,10 @@ flowchart LR
 
   device -->|画面を開く| cf
   device -->|ログイン| cognito
+  cognito -->|登録・ログインのコード| ses
+  ses -->|メール| device
+  cognito -->|登録の前| signup
+  signup --> neon
   device -->|操作 JWT付き| apigw
   device -->|画像 署名付きURL| img
   apigw -->|JWTを検証| api
@@ -61,7 +67,7 @@ flowchart LR
 | 要素 | 使うもの | 理由 | 決めた場所 |
 |---|---|---|---|
 | 画面 | PWA。CloudFront + S3に置く | 静的ファイルだけなので、サーバーが要らない。CloudFrontでHTTPSにする | このページ（B-1） |
-| 認証 | Cognitoユーザープール | PR/FAQで決めた。グループの文脈が腐敗防止層になる | PR/FAQ、ADR-0001 |
+| 認証 | Cognito Essentials、登録前Lambda、Amazon SES | 有効な招待からだけ登録し、確認済みのyoin専用メールアドレスからコードを送る | [ADR-0007](decisions/ADR-0007-cognito-email.md)、[最初の1本の設計](designs/first-slice.md) |
 | API | API Gateway HTTP APIとLambda `api` | REST APIより安く、JWTの検証を組み込みで使える | ADR-0002 |
 | 解散・退会・外す | Lambda `erasure-worker` | HTTP APIの30秒の打ち切りを避け、本人がいなくても最後まで進めるため | ADR-0002 |
 | 通知 | EventBridge SchedulerとLambda `notification-sender`、Web Push | PR/FAQで決めた。リマインド1件ごとに1回限りの予約を作る（2026-11-07） | ADR-0002、データモデル |
@@ -70,6 +76,8 @@ flowchart LR
 | 設定と秘密 | SSM Parameter Store（SecureString） | Neonの接続文字列とWeb PushのVAPID鍵を置く。標準のパラメーターは無料 | このページ（C-1） |
 | 失敗の知らせ | SQSのキュー、CloudWatchのアラーム、メール | リマインドと削除の処理の失敗を見落とさないため | このページ（C-4） |
 | ログ | CloudWatch Logs。保存は7日 | 個人の情報は書かない。保存期間を短く決める | データモデル（ログの方針）、期間はこのページ（C-3） |
+
+結合検証と本番で共有するSESのアカウント単位の抑止設定は、Terraformの`aws_sesv2_account_suppression_attributes`で`BOUNCE`と`COMPLAINT`を明示し、シンガポールで1つだけ管理する。
 
 ## 決めたこと
 
@@ -84,7 +92,7 @@ C-1〜C-3は2026-11-13に大関さんが回答フォームで決めた。C-3の�
 | C-1 | Neonの接続文字列とWeb PushのVAPID鍵は、SSM Parameter Store（SecureString）に置く | 標準のパラメーターは無料のため | Secrets Manager（1つごとに月額がかかる） |
 | C-2 | リージョンはシンガポール（ap-southeast-1）。Neonもシンガポール（aws-ap-southeast-1）に作る（2026-11-22、ADR-0006の決定1。2026-11-13の決定は東京だった） | Neonに東京が無く、往復の多いLambdaとNeonを近くに置くほうが速いため | AWSは東京でNeonだけシンガポール、DBを東京にあるもの（Aurora DSQL、Supabase）に替える |
 | C-3 | CloudWatch Logsの保存期間は7日にする | 個人で作るアプリなので7日で足りると判断し、費用も抑えるため（大関さんの判断。お勧めは14日） | 14日、30日 |
-| C-4 | Schedulerが起動できなかったときと、Lambda（`notification-sender`と`erasure-worker`）が再試行を使い切ったときの送り先を、同じSQSのキューにする。再送を3回しても届かない端末が残ったときも、`notification-sender`がこのキューに入れる。キューに1件でも入ったら、CloudWatchのアラームからメールで知らせる。Lambdaの自動の再試行は既定の2回のままにし、1時間を過ぎた再試行は捨てる。見張りの予約は、リマインドを予約するときに一緒に作る（2026-11-21） | リマインドが知らないうちに失敗すると、発券忘れを防ぐ目的が成り立たないため。関数の失敗と、関数は終わったが届かなかったことの両方を見る | CloudWatch Logsを見に行ったときだけ気づく |
+| C-4 | Schedulerが起動できなかったときと、Lambda（`notification-sender`と`erasure-worker`）が再試行を使い切ったときの送り先を、同じSQSのキューにする。その回の送信を終え、回数の上限または期限で次の再送ができず、一時失敗が残ったときも、`notification-sender`がこのキューに入れる。CloudWatchはキューの可視メッセージ数（`ApproximateNumberOfMessagesVisible`）が0を超えて`ALARM`に変わったらメールで知らせる。欠測は正常とみなす（`TreatMissingData=notBreaching`）。メッセージは4日で自動的に消える。キューからの通知の再送は行わず、オーナーは必要に応じて本人に伝える。Lambdaの自動の再試行は既定の2回のままにし、1時間を過ぎた再試行は捨てる。見張りの予約は、リマインドを予約するときに一緒に作る（2026-11-21） | リマインドが知らないうちに失敗すると、発券忘れを防ぐ目的が成り立たないため。キューに入った関数の失敗と、関数は終わったが届かなかったことの両方を見る | CloudWatch Logsを見に行ったときだけ気づく |
 | C-5 | 通知の中身はDeclarative Web Pushの形にする。Service Workerは対応していない環境のために残し、同じ中身を読んで表示する（2026-11-21） | iOSでService Workerが通知を出し損ねると、購読ごと取り消されることがあるため | 今の形のまま、Service Workerがすべて表示する |
 | C-6 | ログはPowertools for AWS LambdaのLoggerで書く。Idempotencyの機能は使わない（2026-11-21） | 二重送信はNeonの行の引き受けで防いでいて、記録用の表を増やさずに済むため | Idempotencyも使う（DynamoDBなどの表が増える） |
 | C-7 | 費用はAWS Budgetsの月5ドルの予算でメールを送る。Neonの計算時間は週に1回コンソールで見て、上限の半分を超えたらLaunchプランに移す（2026-11-22、ADR-0006の決定5） | 通知だけの予算は無料のため。Neonは操作が1日に散ると無料の上限を超えることがあるので、週に1回見る（Neonを見る間隔は大関さんが決めた。2026-11-22のADR-0006のマージで確定） | Neonの使った量を定期に読む関数を作る |
@@ -93,7 +101,7 @@ C-1〜C-3は2026-11-13に大関さんが回答フォームで決めた。C-3の�
 
 ## 費用の見込み
 
-10人が使ったときの月の費用は、約3円（消費税を足して約3.3円）と見込んでいる。AWSのクレジットがあるあいだは0円である。内訳と、費用が増える3つの場合は、[ADR-0006](decisions/ADR-0006-region-and-cost.md)の「費用の試算」にある。
+従来は10人で月約3円（税抜き）と見込んだ。SESで月100通を送り、失敗キュー2個・API Gateway2個・Lambda起動数1個・SESの1時間の送信数1個を合わせた標準アラーム6個が無料枠10個に収まる場合、比較値は月約4.50円（税・クレジット適用前）。Neonも無料枠内とする。元の内訳は[ADR-0006](decisions/ADR-0006-region-and-cost.md#費用の試算)、前提と枠を超えた場合は[最初の1本の設計](designs/first-slice.md#sesを足した費用)を参照する。
 
 ## 決めないこと
 
