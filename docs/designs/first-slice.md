@@ -152,7 +152,7 @@ Drizzleの表定義は文脈ごとのinfrastructureに置く。型・null・外�
 | catalog.concert_artists / catalog.drafts | concert_artists PK(concert_id,artist_id)、同じグループへの複合FK、出演順。draftsはJSONBのpayloadを持ち、(group_id,created_by,created_at)で一覧 |
 | ticket.ticket_applications | id PK。公演への同グループ複合FK、申込者、各期限、状態、枚数、受取方法、座席・整理番号。created_atは初回の挿入時にDBで記録し、編集・状態変更・作成の再送では変えない。CHECKで状態・受取方法・枚数を守り、(group_id,concert_id)、(group_id,申込者)で絞る |
 | notification.reminders | id PK、宛先、dedupe_key UNIQUE、send_at、recover_until、schedule_name UNIQUE、status CHECK、claimed_at、sent_at、attempts smallint NOT NULL DEFAULT 0（0〜4をCHECK）、retry_at、通知文とURL。宛先の索引 |
-| notification.push_subscriptions / notification.reminder_deliveries | subscriptionsのendpoint UNIQUE、user_id索引。deliveries PK(reminder_id,push_subscription_id)、status CHECK、attempted_at。FKで両親の削除時CASCADE、push_subscription_id側にも索引 |
+| notification.push_subscriptions / notification.reminder_deliveries | subscriptionsのendpoint UNIQUE、user_id索引。deliveries PK(reminder_id,push_subscription_id)、status CHECK、attempt_no smallint NOT NULL（1〜4をCHECK）、attempted_at。FKで両親の削除時CASCADE、push_subscription_id側にも索引 |
 
 ```mermaid
 erDiagram
@@ -228,7 +228,7 @@ sequenceDiagram
 - 送信・見張り・再送にはDB上の有効名を渡す。旧名や未確定の名前では送らない。初回予約がDB確定前に起動した場合も、確定後に起動する見張りがscheduledを引き受ける。送信と再送は起動後に自動削除する。見張りは同名で時刻を動かすため自動削除を無効にし、不要になった時点で明示的に消す。古い見張りは自分の世代の予約だけを消す。
 - 引き受けは状態とclaimed_atも見る条件付きUPDATE。新しい回だけはattempts < 4を条件に1増やす。見張りはclaimed_atが10分以上古ければ同じ回を再開し、10分未満ならclaimed_atの10分1秒後に見張りを移す。作成と移動で同じ設定を使い、[UpdateSchedule](https://docs.aws.amazon.com/scheduler/latest/APIReference/API_UpdateSchedule.html)にもターゲット、実行ロール、入力、DLQ、再試行設定、FlexibleTimeWindow=OFF、自動削除なしを毎回渡す。
 - 初回・再送・見張りのすべてで（失敗キューから復旧した場合も）、引き受けの条件付きUPDATEに「DBの現在時刻 < recover_until」を入れる。引き受け後も端末ごとにWeb Push要求の直前に時刻を確認し、期限ちょうど以降は新たに要求も再送予約も作らない。その回で一時失敗があっても、期限前なら残りの対象端末への送信を続ける。
-- 記録がsentの端末は再送しない。端末ごとの成功とlast_failed_atの解除、初回の成功時刻sent_atは同じトランザクションで保存する。404/410の端末はgoneとして扱ってから削除する。通知先が0台なら再送待ちにせず、完了状態sentにする。申込詳細はsent_atから得たsentToAnyDeviceを使い、1台分も受理されなかった完了を「送信なし」と表示する。後から通知先を足しても過去の通知は出さない。
+- 端末の最新結果に、その結果を記録した回の`reminders.attempts`を`attempt_no`として保存する。`sent`・`gone`の端末は以後送らない。見張りが同じ回を再開するときは、同じ`attempt_no`で`failed`を記録済みの端末も飛ばし、その回で結果がない端末に送る。次の再送回では回数が増えるため、前の回で`failed`だった端末を再び試せる。端末ごとの成功とlast_failed_atの解除、初回の成功時刻sent_atは同じトランザクションで保存する。404/410の端末はgoneとして扱ってから削除する。通知先が0台なら再送待ちにせず、完了状態sentにする。申込詳細はsent_atから得たsentToAnyDeviceを使い、1台分も受理されなかった完了を「送信なし」と表示する。後から通知先を足しても過去の通知は出さない。
 - その回で全対象端末を試すか、実際に期限に達して残りの送信を止めたあとに、次の再送を判断する。一時失敗が残り、再送時刻が送信期限より前なら5分後に3回まで再送する。`reminder-retry-<id>-<n>-<回数>`で世代と回ごとの重複を止める。停止後に作り直すとき同名があれば、入力も一致する既存予約の時刻を使う。再送予約と見張り（再送の10分後）を確保してから、retry_atを保存しclaimed_atを空にする。再送はretry_at以降、attempts < 4かつ入力の回数がattemptsの次のときだけ引き受ける。次の再送が来なければ見張りが同じ条件で引き受ける。引き受け時はretry_atを空にする。再送回数を使い切ったか、次の再送時刻が期限ちょうど以降なら、再送を作らず完了処理に進む。
 - 再送を使い切ったときと期限で打ち切ったときは、同じ完了処理を使う。有効名・状態・引き受け時刻を照合し、送信中の実行または条件付きUPDATEで引き受けた1実行だけが完了処理を行う。このための引き受けではPushを送らず、attemptsも増やさない。最新の結果がfailedのままの登録済み端末だけにlast_failed_atを保存する。成功・gone・未試行の端末は対象外。該当端末があればC-4へ通知してから状態をsentにし、retry_atとclaimed_atを空にし、その世代の残りの予約を消す。送信結果とsent_atは変えない。通知に失敗したら完了にせず、見張りが10分以上経過した引き受けを取り直し、Pushせずに完了処理を再開する。C-4の同一予約に対する重複報告は許す。Web Pushの受理直後に停止した場合も重複を許す。
 
@@ -284,6 +284,7 @@ Cognitoのプール・発行者・アプリクライアントを環境で分離�
 - ローカルのHonoではusers行なし・非メンバー・非オーナー、招待の最後の1回、他人の下書きIDへ同じ／違う内容を送った場合の応答、DELETE不在と別グループの404を確かめる。Gatewayの401はローカルHonoの試験に含めず、Terraformでissuer・client・全ルートのauthorizerを照合し、実環境でJWTなし・別issuer・別clientを拒否することを確かめる。同じブラウザで会員を交代し、旧会員の下書きや通知状態が一瞬も表示されないことも確かめる。
 - 登録前のイベント試験は招待の無効・期限・登録開始枠・AdminCreateUserを確認する。SDKの境界に上の例外を注入し、特にSignUpのLimitExceededExceptionから未確認ユーザーの確認を再開できることを確かめる。結合検証で休止したNeonを使う初回登録の応答時間を測り、登録開始枠を超えた新規登録は送信されず、既存会員のログインは継続することを確かめる。
 - fast-checkで予約の時刻と状態遷移、再送上限、世代切替と引き受けの競合、旧見張り、同じ再送、端末ごとの再開を確かめる。Push成功直後に失敗させ、成功記録と端末の失敗印が別々に残らないことも確かめる。
+- 固定時計で12:00締切の通知を11:40に開始し、端末Aの一時失敗を`attempt_no=1`で保存した直後、端末Bへの送信前に停止させる。11:50に見張りが同じ回を再開して、Aを再試行せずBに送ること、Bが成功したら11:55の再送（2回目）ではAだけに送ることを確かめる。
 - 1月10日12時の入金期限で、1月9日20時の通知を送ったあと、同日21時に期限を翌日の1月11日12時へ延ばす。期限が保存され、1月10日20時は別IDで予約され、3時間前の予約が1月11日9時に切り替わることを確かめる。同じ変更を送り直しても予約を増やさない。
 - 送信済みの期限を過去に直したときは、申込詳細に旧予約の時刻や結果がなく、新規予約もないことを確かめる。取り消した期限の入れ直し、旧世代の送信結果の分離、5回目の拒否も確かめる。結合検証で見張り移動後の設定、SchedulerとLambdaの各失敗経路、停止中のDBが戻った後のキュー処理を確認する。
 - 同じ公演の受取済みの申込2件に座席を入れ、古い申込をあとで編集しても、券面が作成日時の新しい申込を選ぶことを確かめる。

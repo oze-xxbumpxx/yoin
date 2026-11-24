@@ -451,13 +451,14 @@ Web Pushを受け取る端末
 
 #### `notification.reminder_deliveries`端末ごとの送信結果
 
-送れていない端末だけをやり直すため（F5・Q4）
+対象端末ごとに最新の送信結果を1行で持ち、送信済みの端末と、その回で試した端末を見分けるため（F5・Q4）
 
 | 列 | 型 | 説明 |
 |---|---|---|
 | `reminder_id` | uuid | PK・reminders.id |
 | `push_subscription_id` | uuid | PK・push_subscriptions.id |
 | `status` | text | `sent` / `failed` / `gone`（端末が登録を消していた） |
+| `attempt_no` | smallint | NOT NULL、CHECK (attempt_no BETWEEN 1 AND 4)。この結果を記録した回の `reminders.attempts` の値。結果を記録するとき、`status`・`attempted_at`と同じ更新で保存する |
 | `attempted_at` | timestamptz |  |
 
 ## 解散と退会
@@ -560,10 +561,10 @@ Web Pushを受け取る端末
 - 送信の関数は、有効な`schedule_name`と状態が一致し、DBの現在時刻が`recover_until`より前の予約だけを`sending`に更新し、`claimed_at`に今の時刻を入れる。この条件は初回・再送・見張りで共通。初回と再送回の初めての引き受けは`attempts < 4`も条件にして、同じ更新で1増やす。
 - 引き受けられるのは、`scheduled`の予約と、`sending`で`claimed_at`がnullか10分より前の予約。10分は送信の関数のタイムアウトより長くする。送信の途中で関数が止まっても、10分たてば引き受け直せる。
 - 送る前に、その世代の見張りを10分後に動かし直す。見張りも有効な送信予約名を照合し、`scheduled`なら初回を引き受ける。`sending`で`claimed_at`が10分以上前なら同じ回を引き受け直す。まだ10分たっていなければ`claimed_at`の10分1秒後に予約し直す。`sent`か`canceled`なら送らない。
-- 引き受け直したときは、`reminder_deliveries`を見て、送れていない端末だけに送る。
+- 送る端末を選ぶときは、`reminder_deliveries`の`sent`・`gone`を回に関係なく除く。同じ回を再開するときは`reminders.attempts`を増やさず、`attempt_no`がその回と一致する`failed`も除く。結果がまだない端末と、前の回の`failed`だけがその回の対象となる。次の再送回は`attempts`を増やすので、前の回で`failed`だった端末も試せる。
 - 端末ごとのWeb Push要求を始める直前も期限を確認する。一時失敗があっても、期限前なら同じ回でまだ試していない対象端末に送る。全対象を試すか、期限ちょうど以降になって残りの送信を止めたあとにだけ、次の再送を判断する。再送回数の上限または期限で次の再送ができなければ完了処理に進む。有効名・状態・引き受け時刻を照合し、他の実行と同時に完了処理をしない。結果が`failed`のままの登録済み端末にだけ`last_failed_at`を保存し、C-4に報告する。報告に失敗したら見張りが完了処理を再開する。成功時刻・結果・回数は保持し、完了時に`sent`に変更して`retry_at`と`claimed_at`を空にする。
 - 取り消しは`scheduled`の予約だけを`canceled`にする。引き受けより先に取り消せば送らない。同じ起動が2回届いても、2回目は引き受けに失敗して送らない。
-- 端末ごとの結果を`reminder_deliveries`に残し、送れていない端末だけをやり直す。
+- 端末ごとの送信結果は、送信のたびに`reminder_deliveries`の同じ行に記録する。結果を記録する前に処理が止まった場合は、同じ回でその端末をもう一度試すことがある。
 - 端末に送れたら、その端末の`reminder_deliveries`を`sent`にし、`push_subscriptions.last_failed_at`をnullに戻す。2つの更新は同じトランザクションで行う。
 - 避けるのは取りこぼし。送信の直後に処理が止まったときの重複と、引き受けたあとに取り消された通知が届くことは許す。
 
