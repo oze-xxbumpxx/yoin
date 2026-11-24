@@ -62,7 +62,7 @@ API Gatewayの要求の数と、Lambdaの起動の数（関数を分けずに、
 
 ## 費用の試算
 
-以下は認証メールのAmazon SES導入前の試算。[最初の1本の設計](../designs/first-slice.md#sesを足した費用)では、同じ利用規模でSESを月100通と置いた比較値（税抜き約4.50円）と、2環境の監視まで加えた試算を分けた。
+以下は認証メールのAmazon SES導入前の試算。[最初の1本の設計](../designs/first-slice.md#sesを足した費用)では、同じ利用規模でSESを月100通と置く。環境ごとの失敗キューとAPI Gatewayが各2個、リージョン全体のLambda起動数と共有SESの1時間の送信数が各1個で、標準アラームは計6個。無料枠10個が使えれば監視の追加料金はなく、比較値は税抜き月約4.50円になる。
 
 10人が1日に30回ずつ操作したときの、月の費用の推測である。1ドル150円で計算した。API GatewayとS3の単価は、AWSが公開している料金の一覧のデータ（シンガポール。https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonApiGateway/current/ap-southeast-1/index.json とS3の同じ形のURL）で確かめた。
 

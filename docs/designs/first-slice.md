@@ -260,11 +260,11 @@ sequenceDiagram
 
 Powertoolsの構造化ログを7日保存する。操作種別・要求ID・エラー分類・回数・経過時間のみとし、招待URLやヘッダー、氏名、メール、JWT、Push endpointと鍵、通知文を記録しない。Gatewayのログに実パスや本文を入れない。
 
-ADR-0006に従い、Budgetsは月5ドル、Gatewayは20回/秒・瞬間40回。CloudWatchはAPIの1時間125件を環境別2個、Lambdaの1時間150件をリージョン全体1個、C-4キューの可視件数>0を環境別2個で見る。失敗キューへの送付自体が失敗した場合は、SchedulerのInvocationsFailedToBeSentToDeadLetterCountとLambdaのDestinationDeliveryFailuresをそれぞれ環境別に1件以上で通知する（計4個）。
+ADR-0006に従い、Budgetsは月5ドル、Gatewayは20回/秒・瞬間40回。CloudWatchはC-4キューの可視件数>0を環境別2個、API Gatewayの要求数1時間125件を環境別2個、Lambdaの起動数1時間150件をリージョン合計1個で見る。
 
-SESは共有のアカウント／リージョンの集計値だけを見て、1時間のSendが20件以上、24時間の送信割当の使用率が80%以上、Reputation.BounceRateが5%以上、Reputation.ComplaintRateが0.1%以上を各1個の警報にする。オーナーに宛先も本文もない警報を送る。宛先入りのSESイベント通知は構成しない。恒久バウンス・苦情はアカウント単位の抑止リストで止め、安易に解除しない。オーナーが本人と宛先を別経路で確認し、原因が解消した場合のみ解除する。問い合わせや監視ログに抑止対象の一覧を転記しない。
+SESは共有のアカウント／リージョンで、1時間のSendが20件以上ならアラーム1個で知らせる。オーナーに宛先も本文もない警報を送る。宛先入りのSESイベント通知は構成しない。恒久バウンスと苦情は、SESの既定の動きに任せ、[アカウント単位の抑止リスト](https://docs.aws.amazon.com/ses/latest/dg/sending-email-suppression-list.html)で該当する宛先への送信を止める。オーナーが本人と宛先を別経路で確認し、原因が解消した場合のみ解除する。問い合わせや監視ログに抑止対象の一覧を転記しない。
 
-送信割当の使用率は、共有の監視Lambdaが1時間ごとに[SES GetAccount](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_GetAccount.html)を呼び、`100 × SentLast24Hours / Max24HourSend`を標準解像度のカスタムメトリクス1個に出す。無制限の割当では使用率の警報を使わない。このLambdaはNeonを使わない。[SESのReject](https://docs.aws.amazon.com/ses/latest/dg/monitor-sending-activity.html)はウイルス検出で配信しなかったメールの指標で、割当超過の拒否は数えない。使用率の警報は日次枠が尽きる前に気づくためのもので、瞬間的な秒間枠の超過は自動検知できない。Cognito経由の画面では原因を断定せずE-16の案内を出す。問い合わせを受けたオーナーは時刻と操作種別から、SESの使用率・秒間枠（MaxSendRate）とCognitoのSignUpThrottles・SignInThrottlesを切り分けて確認する。Cognitoの指標もSESの拒否件数とはみなさない。
+SESの送信割当超過はこのアラームでは検知できない。Cognito経由の画面では原因を断定せずE-16の案内を出す。問い合わせを受けたオーナーは時刻と操作種別から、SESの送信割当とCognitoのSignUpThrottles・SignInThrottlesを切り分けて確認する。Cognitoの指標はSESの拒否件数とはみなさない。
 
 ## セキュリティ
 
@@ -298,7 +298,7 @@ Cognitoのプール・発行者・アプリクライアントを環境で分離�
 - 結合検証では、本番で使うyoin専用の送信元から送った認証メールが、GmailとiCloudの両方で迷惑メールではなく受信トレイに入ることを確かめる。
 - AC-10bでは2人目が受取開始の通知を予約してからS-22でログアウトする。通知先を残したまま、そのiPhoneの未ログイン状態で通知を押す。S-01で同じ人が再ログインし、ホームではなく押した通知の申込詳細へ戻ることを確かめる。
 - AC-09の予約時刻は固定時計で厳密に比べる。結合検証ではFlexibleTimeWindowなしの予約時刻、Scheduler起動、Push受理、端末着信を別々に記録する。通常経路の試験目安は、Scheduler起動が予約の分内（60秒未満）、Push受理が起動から60秒以内、着信が受理から2分以内。端末は通信可能な状態にし、範囲を外れた段を記録する。試験計画にもこの判定を引き継ぐ。
-- 大関さんはTerraform適用後の実プールで、登録拒否後のAdminGetUser不在・メール0通、正常な初回1通、メールOTPによる再ログインを確認する。SESのバウンス／苦情は結合検証のSESシミュレーターと監視試験で、実宛先を使わずに確認する。シミュレーターだけでは実際の抑止リスト入りや評判指標を検証できないため、抑止の検査は同意済みの検証専用宛先を明示登録し、送信停止と解除を別に確かめる。実AWSとiPhoneはこの設計作成時点では未検証。
+- 大関さんはTerraform適用後の実プールで、登録拒否後のAdminGetUser不在・メール0通、正常な初回1通、メールOTPによる再ログインを確認する。結合検証では専用の宛先でSESの送信数アラームを確かめ、バウンスと苦情は実宛先に送らずSESシミュレーターで確かめる。シミュレーターの宛先は抑止リストに入らないため、抑止の検査は同意済みの検証専用宛先を明示登録し、送信停止と解除を別に確かめる。実AWSとiPhoneはこの設計作成時点では未検証。
 
 ## 移行とリリース
 
@@ -329,11 +329,10 @@ Drizzleで環境共通のSQLを生成し、表・制約・索引・世代シー�
 |---|---|
 | Cognito Essentials | 10 MAUは直接ログイン月1万MAUの無料枠内（アカウント/組織で共有）。0円、固定費なし |
 | SES à la carte | 100通 × 0.10ドル/1,000通 = 0.01ドル = 約1.50円。固定費なし。専用IPや新規ドメインは購入しない |
-| SESだけを足した比較値 | ADR-0006の約3円＋約1.50円＝約4.50円（10%税込で約4.95円）。運用全体の見積もりではない |
-| 監視を含む試算 | 標準アラーム13個（環境別API・失敗キュー・キュー送付失敗で8個、Lambdaリージョン合計1個、共有SES4個）。各アラームは1メトリクス。無料枠10個をこの構成で使えるなら、超過3個 × 0.10ドル＝約45円。上記の比較値と合計で約49.50円（税込約54.45円） |
+| 監視を含む比較値 | ADR-0006の約3円＋SESの約1.50円＝約4.50円（税込約4.95円）。標準アラームは失敗キュー2個・API Gateway2個・Lambdaのリージョン合計1個・共有SES1個の計6個で、無料枠10個が使えれば追加料金なし |
 | Neonが無料枠を超えた場合 | 2つの環境ともプロジェクトごとの無料枠内が上の合計の前提。片方が月120 CU時でLaunchに移れば、そのプロジェクトの計算だけで120 × 0.106ドル＝12.72ドル（約1,908円）。データ保存などの従量費は別 |
 
-試算は同じAWSアカウントの2環境で利用量を合わせた比較で、SES割当の監視Lambda（月約720回の起動）とカスタムメトリクス1個も各無料枠内とする。他のアラームや費用、WAF、税・クレジットは含めない。SESはà la carteとし、単価と無料枠は[AWS Cognito料金](https://aws.amazon.com/cognito/pricing/)・[Amazon SES料金](https://aws.amazon.com/ses/pricing/)・[CloudWatch料金](https://aws.amazon.com/cloudwatch/pricing/)・[Neon料金](https://neon.com/pricing)による。既定送信の50通/日はSESの枠ではない。
+試算は同じAWSアカウントの2環境で利用量を合わせた比較で、他のアラームや費用、WAF、税・クレジットは含めない。SESはà la carteとし、単価と無料枠は[AWS Cognito料金](https://aws.amazon.com/cognito/pricing/)・[Amazon SES料金](https://aws.amazon.com/ses/pricing/)・[CloudWatch料金](https://aws.amazon.com/cloudwatch/pricing/)・[Neon料金](https://neon.com/pricing)による。既定送信の50通/日はSESの枠ではない。
 
 ## リスク
 
