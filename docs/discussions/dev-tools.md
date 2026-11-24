@@ -295,6 +295,28 @@ flowchart LR
 - 反映先: docs/decisions/ADR-0004-dev-tools.mdの決定3と決定5
 - 決めた日: 2026-11-17
 
+### 本番の承認待ちを残し、変更を1本ずつにする方法
+
+<!-- id: production-deploy-serialization -->
+
+- 工程: 設計
+- 種類: 設計
+- 優先度: 高
+- 状態: 決定
+- なぜ今: 本番への配置を待つ実行が新しい実行で消えると、オーナーが結合検証を通った版を選べない。
+- 根拠: [#39でのSoftware Factory Botの回答](https://github.com/oze-xxbumpxx/yoin/issues/39#issuecomment-7129599233)、[S3の条件付き書き込み](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html)と[条件付き削除](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-deletes.html)
+- 選択肢:
+  - A) 承認後に既存のTerraform状態用S3の専用キーで順番を取る。
+  - B) DynamoDBに専用のロック表を作る。
+  - C) GitHub Actionsの待機枠だけで順番を取る。
+- 推奨: A
+- 決定: A。本番だけ承認待ちを置き換えず、本番ロールへの追加権限は専用キー1つの条件付き操作に限る。途中で残ったロックはオーナーが状態を確かめて対象だけを外す。
+- 推奨と同じか: 同じ
+- 理由: AWS資源を増やさず、承認待ちと本番変更の順番を分けられる。
+- 選ばなかった理由: BはAWS資源が増える。Cは`queue: max`でも待機枠の上限で後続が取り消される。承認だけの試行は3回行う。
+- 反映先: [ADR-0004の2026-11-24の追記](../decisions/ADR-0004-dev-tools.md#2026-11-24の追記)、#35、#36、#39
+- 決めた日: 2026-11-24
+
 ### 監視とアラートを、どこまで置くか
 
 <!-- id: monitoring -->
