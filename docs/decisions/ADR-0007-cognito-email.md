@@ -16,6 +16,8 @@ TerraformでプールにEmailSendingAccount=DEVELOPER、検証済みSES identity
 
 結合検証と本番はAWSアカウント・シンガポールのSES割当を共有する。CIは実送信せず、結合検証の実送信は検証用宛先に1日10通まで、連続送信は1秒より間隔を空ける。解除前は受信先も事前に検証する。サンドボックスの上限は200通/24時間・1通/秒であり、解除後の枠はアカウントで確認する。
 
+両環境が共有するSESのアカウント単位の抑止設定は、Terraformの`aws_sesv2_account_suppression_attributes`で`suppressed_reasons`を`BOUNCE`と`COMPLAINT`に明示する。アカウントとリージョンの組につき1つだけ管理する。既定値の根拠と確認手順は[最初の1本の設計](../designs/first-slice.md#ログと監視)を参照する。
+
 ```mermaid
 flowchart LR
     C["Cognito Essentials"] --> S["Amazon SES: 確認済みのyoin専用アドレス"]

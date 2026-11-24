@@ -77,6 +77,8 @@ flowchart LR
 | 失敗の知らせ | SQSのキュー、CloudWatchのアラーム、メール | リマインドと削除の処理の失敗を見落とさないため | このページ（C-4） |
 | ログ | CloudWatch Logs。保存は7日 | 個人の情報は書かない。保存期間を短く決める | データモデル（ログの方針）、期間はこのページ（C-3） |
 
+結合検証と本番で共有するSESのアカウント単位の抑止設定は、Terraformの`aws_sesv2_account_suppression_attributes`で`BOUNCE`と`COMPLAINT`を明示し、シンガポールで1つだけ管理する。
+
 ## 決めたこと
 
 C-1〜C-3は2026-11-13に大関さんが回答フォームで決めた。C-3のほかは、お勧めの案のとおりである。C-4〜C-6は、2026-11-21に大関さんが出した構成の見直しを、Claudeが確かめて決めた。選択肢ごとの利点と欠点は、論点の記録（[aws-architecture](discussions/aws-architecture.md)）にある。C-2は2026-11-22に東京からシンガポールに変え、C-7〜C-9を足した。この4つは工程6の論点の記録（[cost-and-region](discussions/cost-and-region.md)）とADR-0006で決めた。

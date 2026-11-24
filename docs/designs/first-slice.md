@@ -264,7 +264,9 @@ ADR-0006に従い、Budgetsは月5ドル、Gatewayは20回/秒・瞬間40回。C
 
 SchedulerやLambdaが失敗キューへの書き込み自体に失敗しても、その失敗ではキューの件数が増えず、C-4の警報は鳴らない。[オーナーの判断](https://github.com/oze-xxbumpxx/yoin/pull/32#issuecomment-7118722857)に従い、書き込みの失敗は監視対象外とする。通知が届かなかったという問い合わせを受けたら、端末ごとの送信結果と残っているログを調べる。
 
-SESは共有のアカウント／リージョンで、1時間のSendが20件以上ならアラーム1個で知らせる。オーナーに宛先も本文もない警報を送る。宛先入りのSESイベント通知は構成しない。恒久バウンスと苦情は、SESの既定の動きに任せ、[アカウント単位の抑止リスト](https://docs.aws.amazon.com/ses/latest/dg/sending-email-suppression-list.html)で該当する宛先への送信を止める。オーナーが本人と宛先を別経路で確認し、原因が解消した場合のみ解除する。問い合わせや監視ログに抑止対象の一覧を転記しない。
+SESは共有のアカウント／リージョンで、1時間のSendが20件以上ならアラーム1個で知らせる。オーナーに宛先も本文もない警報を送る。宛先入りのSESイベント通知は構成しない。
+
+恒久バウンスと苦情があった宛先は、SESの[アカウント単位の抑止リスト](https://docs.aws.amazon.com/ses/latest/dg/sending-email-suppression-list.html)に自動登録し、以後の送信を止める。AWSによると、2019年11月25日より後にSESを使い始めたアカウントでは両方が既定で有効になる。利用開始時期や既存の設定に頼らず、Terraformの`aws_sesv2_account_suppression_attributes`で`suppressed_reasons = ["BOUNCE", "COMPLAINT"]`を明示する。結合検証と本番で共有するため、AWSアカウントとリージョンの組につき1つだけ管理する。オーナーが本人と宛先を別経路で確認し、原因が解消した場合のみ解除する。問い合わせや監視ログに抑止対象の一覧を転記しない。
 
 SESの送信割当超過はこのアラームでは検知できない。Cognito経由の画面では原因を断定せずE-16の案内を出す。問い合わせを受けたオーナーは時刻と操作種別から、SESの送信割当とCognitoのSignUpThrottles・SignInThrottlesを切り分けて確認する。Cognitoの指標はSESの拒否件数とはみなさない。
 
@@ -301,6 +303,7 @@ Cognitoのプール・発行者・アプリクライアントを環境で分離�
 - AC-10bでは2人目が受取開始の通知を予約してからS-22でログアウトする。通知先を残したまま、そのiPhoneの未ログイン状態で通知を押す。S-01で同じ人が再ログインし、ホームではなく押した通知の申込詳細へ戻ることを確かめる。
 - AC-09の予約時刻は固定時計で厳密に比べる。結合検証ではFlexibleTimeWindowなしの予約時刻、Scheduler起動、Push受理、端末着信を別々に記録する。通常経路の試験目安は、Scheduler起動が予約の分内（60秒未満）、Push受理が起動から60秒以内、着信が受理から2分以内。端末は通信可能な状態にし、範囲を外れた段を記録する。試験計画にもこの判定を引き継ぐ。
 - 大関さんはTerraform適用後の実プールで、登録拒否後のAdminGetUser不在・メール0通、正常な初回1通、メールOTPによる再ログインを確認する。結合検証では専用の宛先でSESの送信数アラームを確かめ、バウンスと苦情は実宛先に送らずSESシミュレーターで確かめる。シミュレーターの宛先は抑止リストに入らないため、抑止の検査は同意済みの検証専用宛先を明示登録し、送信停止と解除を別に確かめる。実AWSとiPhoneはこの設計作成時点では未検証。
+- 大関さんは結合検証のTerraform適用後に、対象のAWSアカウントで[SESのアカウント設定](https://docs.aws.amazon.com/cli/latest/reference/sesv2/get-account.html)を読み取る。`aws sesv2 get-account --region ap-southeast-1 --query 'SuppressionAttributes.SuppressedReasons'`の結果が、順不同で`BOUNCE`と`COMPLAINT`の2つであることを確かめる。宛先の手動登録とは別に、自動登録の設定を確かめる試験とする。
 
 ## 移行とリリース
 
