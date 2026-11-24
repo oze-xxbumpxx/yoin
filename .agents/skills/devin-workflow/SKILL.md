@@ -12,7 +12,7 @@ description: >
 
 ## 1. 着手する前
 
-L2 / L3の実装計画と試験計画は、呼び出し側（Claude Code）が承認済みの設計書からIssueを作って頼む。そのIssueでは`.agents/skills/create-implementation-plan/SKILL.md`と`.agents/skills/create-test-plan/SKILL.md`の手順で書き、PRにする。計画はユーザーがマージしてから実装に入る。
+L2 / L3の実装計画と試験計画は、呼び出し側（Claude Code）が承認済みの設計書からIssueを作って頼む。そのIssueでは`.agents/skills/create-implementation-plan/SKILL.md`と`.agents/skills/create-test-plan/SKILL.md`の手順で書き、PRにする。委譲する各タスクの本文は`<!-- delegation-task:<タスク名> -->`と`<!-- /delegation-task -->`で囲み、PRの本文に`Closes #<Issue番号>`を書く。計画はユーザーがマージしてから実装に入る。
 
 呼び出し側は、承認済み計画のタスクからIssueを作り、専用クローンのロックを取って起動する。Devinから別セッションを作らず、起動結果不明やstallは呼び出し側へ渡す。
 
