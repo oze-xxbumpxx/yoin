@@ -22,7 +22,7 @@
 | オーナーと招待参加 | 製品 | `src/contexts/group/`、`src/functions/pre-sign-up/`、`src/functions/api/`、`scripts/seed-initial-data.ts`、`apps/web/src/features/join/` | DB変更の仕組み・画面の共通部分 | high | U08、U09、I01 | 登録、認可、グループのSQL・個人情報 |
 | 公演を下書きから確定 | 製品 | `src/contexts/catalog/`、`apps/web/src/features/concert/` | オーナーと招待参加 | high | I11 | SQL、グループの参照・更新権限 |
 | チケット申込から受取 | 製品 | `src/contexts/ticket/`、`apps/web/src/features/ticket/`・`home/` | 公演を下書きから確定 | high | U01、U04、U06、I02、I12 | SQL、他人の申込の更新拒否 |
-| iPhoneへの通知 | 製品 | `src/contexts/notification/`、`src/functions/notification-sender/`、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts` | チケット申込から受取 | high | U02、U03、U05、I04〜I07、I09 | 購読情報、送信権限、DBと予約 |
+| iPhoneへの通知 | 製品 | `src/contexts/notification/`、`src/functions/notification-sender/`、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts` | チケット申込から受取 | high | U02、U03、U05、I04〜I07、I09、I13 | 購読情報、送信権限、DBと予約 |
 | 変更を確かめる道具 | 確認 | `.claude/skills/verify-first-slice/SKILL.md`、`.agents/skills/verify-first-slice`（リンク） | オーナーと招待参加 | medium | なし | PR前に使う検査の手順と両方の入口 |
 | 2人で通す試験 | 確認 | `playwright.config.ts`、`tests/e2e/`、`tests/support/` | iPhoneへの通知 | high | E2E-01、E2E-02 | 試験専用の認証が本番に混ざらない差分 |
 | 2人の操作手順を道具に足す | 確認 | `.claude/skills/verify-first-slice/SKILL.md` | 変更を確かめる道具・2人で通す試験 | medium | なし | PR前に使う2人の検査の手順 |
@@ -120,7 +120,7 @@
 - 先に要るタスク: 公演を下書きから確定
 - 受け持つ試験: U01、U04、U06、I02、I12
 - やること: 申込の作成・編集・状態変更・削除を作ります。本人の期限と受取可否は表示時に計算します。S-05のホームには最も近い公演、本人の次の行動と期限の帯を出します。券は設計と画面見本を使い、12色の明暗で読みやすさを保ちます。
-- 完了条件: 申込から当選、入金済み、受取済みまで通ります。別のメンバーは読めても編集できません。状態遷移と期限の境目、券の文字の配置とコントラストを試験計画どおりに確認します。I12では申込の作成・削除を送り直しても、申込と通知の予約が重複しないことを確かめます。
+- 完了条件: 申込から当選、入金済み、受取済みまで通ります。別のメンバーは読めても編集できません。状態遷移と期限の境目、券の文字の配置とコントラストを試験計画どおりに確認します。I12では作成を送り直しても申込が1行のままで、削除を送り直しても申込が残らないことを確かめます。
 <!-- /delegation-task -->
 
 <!-- delegation-task:reminders -->
@@ -129,9 +129,9 @@
 - 対象: `src/contexts/notification/`、`src/functions/notification-sender/`、`apps/web/src/features/push/`・`service-worker.ts`、対応API・SQL。
 - effort: high
 - 先に要るタスク: チケット申込から受取
-- 受け持つ試験: U02、U03、U05、I04〜I07、I09
+- 受け持つ試験: U02、U03、U05、I04〜I07、I09、I13
 - やること: チケットの変更とSchedulerの世代切替をつなぎ、登録端末へのPush、見張り、端末別の再開を作ります。予約の引き受け・端末別の送信結果・失敗表示を設計の取引単位で扱います。S-03・S-23の案内とホームの通知先の帯、ログアウト後の通知からの復帰をつなぎます。
-- 完了条件: 各期限から正しい予約が作られ、取り消し済み・古い世代は送信しません。一部の失敗で他端末を飛ばさず、再送上限と締切を守ります。試験計画の固定時計・並行実行で確かめ、実着信は結合検証のホーム画面から開くiPhoneで確認します。
+- 完了条件: 各期限から正しい予約が作られ、取り消し済み・古い世代は送信しません。一部の失敗で他端末を飛ばさず、再送上限と締切を守ります。I13では、申込の作成・削除を送り直しても送信と見張りの予約が重複しないことを確かめます。試験計画の固定時計・並行実行で確かめ、実着信は結合検証のホーム画面から開くiPhoneで確認します。
 <!-- /delegation-task -->
 
 <!-- delegation-task:verification-skill -->
