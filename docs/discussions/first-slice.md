@@ -615,6 +615,18 @@ flowchart LR
 - 選ばなかった理由: 初回はこの対策で始め、WAFの固定費は負担しない。
 - 反映先: docs/designs/first-slice.md
 
+### 招待リンクは最長何日使えるか
+
+<!-- id: invite-max-expiry -->
+
+- 工程: 設計
+- 種類: API
+- 優先度: 高
+- 状態: 決定
+- 根拠: [2026-11-24のオーナー判断](https://github.com/oze-xxbumpxx/yoin/pull/32#issuecomment-7118422508)
+- 決定: 発行時点より後で最長7日。24時間から延ばす。
+- 反映先: docs/designs/first-slice.md、docs/api.md
+
 ### 要件定義書から先を、誰が書くか
 
 <!-- id: who-writes -->

@@ -98,7 +98,7 @@ sequenceDiagram
 
 - 招待なしのS-01はSignUpを呼ばず、[USER_AUTH](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_InitiateAuth.html)のEMAIL_OTPだけを使う。招待付きでは暗号化した証明でSignUpを試す。UsernameExistsExceptionなら同じ入力でUSER_AUTHへ進む。UserNotConfirmedExceptionなら、招待付きの場合だけ確認入力へ戻り、利用者の操作でResendConfirmationCodeを呼ぶ。招待なしなら招待リンクから開き直すよう案内する。PreventUserExistenceErrorsはENABLED。画面はアカウントの存在を表示しない。CognitoのSignUp自体では既存アドレスの応答を完全には隠せない。
 - [登録前Lambda](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-pre-sign-up.html)は招待トークンと正規化したメールのSHA-256を照合する。ブラウザは配布済みの公開鍵（RSA-OAEP/SHA-256、2048ビット）で暗号化し、版付き暗号文だけをSignUpのValidationDataに入れる。TLSに加え、Cognito・監査やイベントの照会箇所で任意のValidationDataに生の招待が残らないための対策であり、リンクを知る人による別メールの登録は防がない。生トークンも暗号文もアプリのログに出さない。鍵を替えるときはSSMに新旧を置いて新しい公開鍵を配布し、旧PWAの入れ替えを確認してから旧鍵を削除する。
-- 同期Lambdaは復号・メール照合後、有効期限・取り消し・残り参加枠・グループ状態を条件に、登録開始数だけを1文のUPDATEで増やす。このLambdaのDBロールは招待検査と開始数の更新に必要な権限だけを持つ。登録開始数の上限は参加上限の3倍。開始数はCognitoの失敗やトリガー再試行で戻さない。招待は有効24時間以内・参加1〜10人。参加のときだけ参加数を増やし、登録開始枠の不足で既存会員のログインや確認済みの招待参加は拒まない。枠を使い切ったときはオーナーが必要に応じてリンクを発行し直す。
+- 同期Lambdaは復号・メール照合後、有効期限・取り消し・残り参加枠・グループ状態を条件に、登録開始数だけを1文のUPDATEで増やす。このLambdaのDBロールは招待検査と開始数の更新に必要な権限だけを持つ。登録開始数の上限は参加上限の3倍。開始数はCognitoの失敗やトリガー再試行で戻さない。招待は有効7日以内・参加1〜10人。参加のときだけ参加数を増やし、登録開始枠の不足で既存会員のログインや確認済みの招待参加は拒まない。枠を使い切ったときはオーナーが必要に応じてリンクを発行し直す。
 - プールは`AutoVerifiedAttributes=["email"]`を設定し、Cognitoに登録確認コードを送らせる。登録前Lambdaの応答では`autoConfirmUser`と`autoVerifyEmail`を立てない。利用者が届いたコードで確認するまでは未確認のままとする。[ConfirmSignUpのSession](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ConfirmSignUp.html)は初回ログインで再利用する。通常は確認メール1通、再ログインは[EMAIL_OTPのコード入力](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_RespondToAuthChallenge.html)。PreSignUp_AdminCreateUserは初期データ用に通す。
 
 | SDKで受ける結果 | S-01の案内と次の操作 |
@@ -137,7 +137,7 @@ HTTP APIからLambdaのHonoに渡す。Zodで未知キーと誤った型を拒�
 - グループIDと資源IDを組で照会する。非メンバー・不在・別グループIDは404 not_found。メンバーに見える資源があり、操作する権限だけが無いなら403 forbidden。グループの削除対象が不在なら再送でも404。初回が成功して応答が失われた場合も、画面は一覧を読み直す。他のグループでの存在は調べない。初回204、再送404でも副作用は重ならない。
 - 作成は画面が作るUUIDv7で重複を見分ける。初回201。同じ操作・グループ・認証済み作成者に属する同じIDと内容だけを再送として200にする。ただし、グループの全員が読めるアーティストと会場の作成には作成者を持たず、同じグループのメンバーなら、操作・グループ・ID・入力の一致で再送とする。他人の非公開下書きの同一IDには、本文の一致にかかわらず汎用の409 id_conflictを返し、作成者・内容・所属を出さない。通知先はendpointを重複の印にし、同じ本人なら200。PATCHの省略は維持、nullは任意欄だけを消す。APIで申込者IDを入力させない。
 - エラーはRFC 9457のapplication/problem+json。422 invalid_inputはerrorsに欄を入れる。409はinvite_unusable、already_exists、invalid_transition、group_closing、id_conflict、reminder_conflictを区別する。退会開始は403 account_closing。未知の失敗は内容を伏せて500 internal。Gatewayの401と流量制限の429は画面で別扱いにする。
-- 境界値は招待期限が現在より後で24時間以内・1〜10回、枚数1〜99、受付名100字・座席と整理番号200字まで。空欄をnullにそろえ、文字数はUnicodeコードポイントで数える。
+- 境界値は招待期限が現在より後で7日以内・1〜10回、枚数1〜99、受付名100字・座席と整理番号200字まで。空欄をnullにそろえ、文字数はUnicodeコードポイントで数える。
 
 ## DB 設計
 
