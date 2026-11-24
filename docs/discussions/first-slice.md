@@ -471,6 +471,18 @@ sequenceDiagram
 - 決定: 予約が入金締切に間に合わないときは通知を作らない。締切の1分前を切って保存した人は、通知が無くても締切を知っているため。
 - 反映先: docs/designs/first-slice.md、docs/api.md、docs/data-model.md、docs/requirements/first-slice.md
 
+### 失敗キューから通知を手で復旧するか
+
+<!-- id: reminder-dlq-manual-recovery -->
+
+- 工程: 設計
+- 種類: 設計
+- 優先度: 高
+- 状態: 決定
+- 根拠: [オーナーの判断](https://github.com/oze-xxbumpxx/yoin/pull/32#issuecomment-7118825604)
+- 決定: 手動復旧の手順は作らない。キューに入ったらアラームのメールで知らせ、メッセージは4日で自動的に消える。通知はキューから送り直さず、オーナーが必要なら本人に伝える。
+- 反映先: docs/designs/first-slice.md、docs/architecture.md、docs/data-model.md
+
 ### 削除対象が存在しないとき、どちらの応答にそろえるか
 
 <!-- id: delete-missing-contract -->

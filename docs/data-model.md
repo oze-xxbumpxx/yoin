@@ -424,7 +424,7 @@ yoinに登録した人。Cognitoの言葉はこのテーブルの`cognito_sub`�
 | `schedule_name` | text | 一意。有効な送信世代の名前（`reminder-<id>-<n>`）。送信予約は起動後に自動で消える |
 | `attempts` | smallint | NOT NULL DEFAULT 0、CHECK (attempts BETWEEN 0 AND 4)。同じ回の再開では増やさない |
 | `retry_at` | timestamptz | null可。次の再送を待っている時刻。CHECK (retry_at IS NULL OR status = 'sending') |
-| `recover_until` | timestamptz | NOT NULL。呼ぶ側が決める復旧・送信の期限。この時刻ちょうどから復旧・送信しない |
+| `recover_until` | timestamptz | NOT NULL。呼ぶ側が決める自動送信の期限。初回・再送・見張りの引き受けに使い、この時刻ちょうどから送信しない |
 | `title` | text |  |
 | `body` | text |  |
 | `url` | text | null可。通知を押したときに開く画面 |
