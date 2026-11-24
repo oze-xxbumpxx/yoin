@@ -295,7 +295,7 @@ flowchart LR
 - 反映先: docs/decisions/ADR-0004-dev-tools.mdの決定3と決定5
 - 決めた日: 2026-11-17
 
-### 本番の承認待ちを最新の1件にし、変更を1本ずつにする方法
+### 古い本番の承認待ちをどう扱うか
 
 <!-- id: production-deploy-serialization -->
 
@@ -304,17 +304,18 @@ flowchart LR
 - 優先度: 高
 - 状態: 決定
 - なぜ今: 2回続けてマージすると、結合検証で動く版は新しい版に入れ替わる。本番の承認画面にどの版を残すか決める。
-- 根拠: [オーナーの判断](https://github.com/oze-xxbumpxx/yoin/pull/40#issuecomment-7132905362)、[GitHub Actionsの同時実行の仕様](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)
+- 根拠: [オーナーの判断](https://github.com/oze-xxbumpxx/yoin/pull/40#discussion_r4681098816)、[GitHub Actionsの同時実行の仕様](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)
 - 選択肢:
   - A) 承認待ちを全部残し、承認後にS3の専用キーで順番を取る。
-  - B) 本番の承認待ちは新しい実行で置き換え、最新の検証済みの版だけを残す。
+  - B) 本番の変更を1本ずつ進め、古い承認待ちはオーナーが断る。
 - 推奨: B
-- 決定: B。本番のジョブにだけ同時実行グループをかけ、進行中の変更は取り消さない。承認後は最後に本番に出たSHAと照合し、古い版のときは本番の権限を取る前に止める。承認は成果物がそろった最初の実デプロイで確かめる。
+- 決定: B。本番のジョブにだけ同時実行グループをかけ、進行中の変更は取り消さない。承認後、本番の権限を取る前に、結合検証に最後に配置して成功したSHAと照合し、不一致か取得できない場合は止める。最後に本番に出たSHAより古い場合も止める。承認は成果物がそろった最初の実デプロイで確かめる。
 - 推奨と同じか: 同じ
-- 理由: オーナーは、いま結合検証で動いている版を承認できる。本番の順番を取るためにAWSの設定を足さなくてよい。
+- 理由: 承認した版が結合検証に最後に配置できた版と違う場合は、本番に出さない。本番の順番を取るためにAWSの設定を足さなくてよい。承認待ちのジョブが枠を持ち続ける動きは[GitHubの利用者報告 #17401](https://github.com/orgs/community/discussions/17401)にあり、公式文書には載っていない。
 - 選ばなかった理由: S3のロックは、2回続けてマージすると結合検証が新しい版に上書きされ、古い承認待ちのSHAを結合検証で確かめられないうえ、1人で承認する間は要らない。承認だけの試行は、試行用の分岐が残り、実デプロイで使う本番の権限を確かめられない。
 - 反映先: [ADR-0004の2026-11-24の追記](../decisions/ADR-0004-dev-tools.md#2026-11-24の追記)、#39
 - 決めた日: 2026-11-24
+- 前の決定: [新しい実行で古い承認待ちを置き換える](https://github.com/oze-xxbumpxx/yoin/pull/40#issuecomment-7132905362)。
 
 ### 初回用Terraformの状態をどこに置くか
 
