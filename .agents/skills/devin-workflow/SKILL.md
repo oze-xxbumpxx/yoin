@@ -12,12 +12,14 @@ description: >
 
 ## 1. 着手する前
 
-呼び出し側（Claude Code）は、承認済み計画のタスクからIssueを作り、専用クローンのロックを取って起動する。Devinから別セッションを作らず、起動結果不明やstallは呼び出し側へ渡す。
+L2 / L3の実装計画と試験計画は、呼び出し側（Claude Code）が承認済みの設計書からIssueを作って頼む。そのIssueでは`.agents/skills/create-implementation-plan/SKILL.md`と`.agents/skills/create-test-plan/SKILL.md`の手順で書き、PRにする。委譲する各タスクの本文は`<!-- delegation-task:<タスク名> -->`と`<!-- /delegation-task -->`で囲み、PRの本文に`Closes #<Issue番号>`を書く。計画はユーザーがマージしてから実装に入る。
+
+呼び出し側は、承認済み計画のタスクからIssueを作り、専用クローンのロックを取って起動する。Devinから別セッションを作らず、起動結果不明やstallは呼び出し側へ渡す。
 
 1. `AGENTS.md`と、`logs/`の最新の日付ファイルを読む。
 2. `.agents/skills/classify-change/SKILL.md`で変更レベル（L0〜L3）を判定する。
    - L0 / L1（文言、テスト追加、lint修正、小さな修正）: そのまま進める。
-   - L2 / L3（複数モジュール、API・DBスキーマの変更、新機能）: `docs/designs/`の設計書がユーザーに承認されていなければ、実装しない。設計案を示して止まる。
+   - L2 / L3（複数モジュール、API・DBスキーマの変更、新機能）: `docs/designs/`の設計書がユーザーに承認されていなければ、実装しない。設計書はClaude Codeが書くので、呼び出し側に渡して止まる。
    - 技術スタック・アーキテクチャの決定（ADR級）: 候補と比較を示すところまで。決めるのはユーザー。
 3. `main`から`devin/<内容>`のブランチを切る。他のツール（Claude Codeの`claude/`など）が使っているブランチにはpushしない。
 
