@@ -16,7 +16,7 @@ flowchart LR
   subgraph aws[AWSシンガポールリージョン（ap-southeast-1）]
     cf[CloudFront + S3<br>画面のファイル]
     cognito[Cognito<br>ユーザープール]
-    ses[Amazon SES<br>確認済みの既存メールアドレス]
+    ses[Amazon SES<br>確認済みのyoin専用メールアドレス]
     signup[登録前Lambda<br>有効な招待を確認]
     apigw[API Gateway<br>HTTP API]
     api[Lambda api]
@@ -67,7 +67,7 @@ flowchart LR
 | 要素 | 使うもの | 理由 | 決めた場所 |
 |---|---|---|---|
 | 画面 | PWA。CloudFront + S3に置く | 静的ファイルだけなので、サーバーが要らない。CloudFrontでHTTPSにする | このページ（B-1） |
-| 認証 | Cognito Essentials、登録前Lambda、Amazon SES | 有効な招待からだけ登録し、確認済みの既存メールアドレスからコードを送る | [ADR-0007](decisions/ADR-0007-cognito-email.md)、[最初の1本の設計](designs/first-slice.md) |
+| 認証 | Cognito Essentials、登録前Lambda、Amazon SES | 有効な招待からだけ登録し、確認済みのyoin専用メールアドレスからコードを送る | [ADR-0007](decisions/ADR-0007-cognito-email.md)、[最初の1本の設計](designs/first-slice.md) |
 | API | API Gateway HTTP APIとLambda `api` | REST APIより安く、JWTの検証を組み込みで使える | ADR-0002 |
 | 解散・退会・外す | Lambda `erasure-worker` | HTTP APIの30秒の打ち切りを避け、本人がいなくても最後まで進めるため | ADR-0002 |
 | 通知 | EventBridge SchedulerとLambda `notification-sender`、Web Push | PR/FAQで決めた。リマインド1件ごとに1回限りの予約を作る（2026-11-07） | ADR-0002、データモデル |

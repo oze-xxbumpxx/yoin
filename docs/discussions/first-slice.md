@@ -520,7 +520,7 @@ flowchart LR
     - 利点: Liteの固定費はなく、直接ログインの無料枠は月1万MAU（AWSアカウントまたは組織単位）。日常のログインではメールを送らない。SESの固定費・単価と送信元の選び方はAと同じ。
     - 欠点: F-05のパスワードなしの方針を変え、入力・管理・再設定が増える。送信元アドレスまたはドメインの確認と、オーナーまたはAWS管理者によるSESのサンドボックス解除はAと同じく必要。
 - 推奨: A（パスワードなしの要件を保てる。オーナーに送信元の種類とSES解除の担当を決めてもらい、既存アドレスを使って固定費を増やさない）
-- 決定: A（コード＋SES。送信元は既存メールアドレス、解除申請者はオーナー）
+- 決定: A（コード＋SES。解除申請者はオーナー。送信元は当初、既存メールアドレスを選んだが、下の論点でyoin専用の無料メールのアドレスに更新）
 - 選ばなかった理由: BはメールOTPを送れず、Cはパスワードなしの要件を変える。
 - 反映先: docs/designs/first-slice.md、docs/architecture.md、docs/decisions/ADR-0007-cognito-email.md
 
@@ -540,7 +540,7 @@ flowchart LR
 - 種類: 設計
 - 優先度: 高
 - 状態: 回答待ち
-- なぜ今: 個人のアドレスがFromと返信先に出ると、招待した利用者に公開される。既存アドレスを使う方式は変更せず、実値を書かずに使うアドレスの用途を決めたい。
+- なぜ今: 個人のアドレスがFromと返信先に出ると、招待した利用者に公開される。実値を書かず、使うアドレスの用途を決めたい。
 - 根拠: [法務レビュー](https://github.com/oze-xxbumpxx/yoin/pull/32#discussion_r4673444693)
 - 選択肢:
   - A) オーナー個人の既存アドレスをFromと返信先にする
@@ -549,7 +549,10 @@ flowchart LR
   - B) yoin専用に使えるアドレスをFrom・返信先・問い合わせ先にそろえる
     - 利点: 個人の受信箱と分けられ、新規ドメインは必須ではない。
     - 欠点: 確認・受信確認と、専用受信箱の確認が要る。
-- 推奨: B（個人アドレスを公開せず、問い合わせも分けられる。候補はDMARCの受信条件を確かめる）
+- 推奨: B（個人アドレスを公開せず、問い合わせも分けられる。GmailとiCloudで受信トレイに入るか確かめる）
+- 決定: B（yoin専用に作る無料メールのアドレスを送信元・返信先・問い合わせ先にする。独自ドメインは取らない）
+- 選ばなかった理由:
+- 反映先: docs/designs/first-slice.md、docs/decisions/ADR-0007-cognito-email.md、docs/architecture.md
 
 ### 退会機能がない期間に本番で誰が参加するか
 
@@ -1039,7 +1042,7 @@ flowchart LR
     Login -.-> B["非推奨: Cognito既定メールのまま。メールOTPの要件を満たせない"]
 ```
 
-- F-05のメールOTPは、CognitoからAmazon SESの確認済み送信元を使う。オーナーが既存アドレスを選び、[SESのサンドボックス解除](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html)を申請する。カスタムメール送信Lambdaは追加しない。
+- F-05のメールOTPは、CognitoからAmazon SESの確認済み送信元を使う。オーナーがyoin専用の無料メールのアドレスをSESで確認し、[SESのサンドボックス解除](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html)を申請する。カスタムメール送信Lambdaは追加しない。
 - 拒否時のメール送信なし、登録直後の1通でのログイン、結合検証のみで許すパスワード方式は、文書で確認できる契約と実環境で確認する項目を分ける。`SignUp`の`LimitExceededException`は、登録前の拒否と違い、未確認アカウントが作られたあとに返る場合がある（[SignUp](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_SignUp.html)）。
 
 ## 見本の画面（2026-11-22 大関さんが「いったんこの画面で」と了承）
