@@ -37,9 +37,9 @@ description: >
 | E2E  | 日付は今日から数えて作り、年や日を決め打ちしない。要素は役割・見出し・ラベルで探し、クラス名で探さない。APIを模擬したら、外す条件をPRの説明に書く | 配布元の実績 |
 
 1. 承認済みの計画（mainにマージされた`docs/implementation-plans/<機能名>.md`）に、`<!-- delegation-task:<タスク名> -->`から`<!-- /delegation-task -->`までの区間を1つずつ置く。本文には秘密や非公開の指摘を入れない。
-2. `node .claude/scripts/delegation.mjs open-task docs/implementation-plans/<機能名>.md <機能名>:<タスク名> --title <題> --model swe-2-<effort>`でIssueと委譲の記録を作る。本文の先頭に印（タスク名と本文のdigest）が入り、同じ印の開いたIssueがあれば作らずにその番号を返す。digestが違えば止まるので、計画を変えたら古いIssueを閉じてから作り直す。
-3. 専用クローンに前のプロセスや変更が残っていないか先に確認する。残っていたら捨てずにユーザーへ渡す。非公開prompt fileを0600で作る。SWE-2のeffortは難しさで選び、依頼時にユーザーへ伝える。
-4. `node .claude/scripts/delegation-launch.mjs <Issue番号> --runner local --model swe-2-<effort> --prompt-file <非公開ファイル> --clone <専用クローン>`で起動する。runner/modelは省かない。クラウドは起動の確かめが済むまで使えない（`cloud_launch_verified:false`）。
+2. `node .claude/scripts/delegation.mjs open-task docs/implementation-plans/<機能名>.md <機能名>:<タスク名> --title <題> --model <SWE-2.1の名前>`でIssueと委譲の記録を作る（名前は`devin models list`に出るもの。effortの付け方もその出力に合わせる）。本文の先頭に印（タスク名と本文のdigest）が入り、同じ印の開いたIssueがあれば作らずにその番号を返す。digestが違えば止まるので、計画を変えたら古いIssueを閉じてから作り直す。
+3. 専用クローンに前のプロセスや変更が残っていないか先に確認する。残っていたら捨てずにユーザーへ渡す。非公開prompt fileを0600で作る。SWE-2.1のeffortは難しさで選び、依頼時にユーザーへ伝える。
+4. `node .claude/scripts/delegation-launch.mjs <Issue番号> --runner local --model <SWE-2.1の名前> --prompt-file <非公開ファイル> --clone <専用クローン>`で起動する。runner/modelは省かない。クラウドは起動の確かめが済むまで使えない（`cloud_launch_verified:false`）。
 5. promptにはリポジトリ内での作業、`AGENTS.md`の「コマンドの範囲」（作業クローンの外への書き込み、`.git`のフックと設定の変更、AWS・Neon・Cognito・SSM・本番・結合検証への通信を、確認なしにしないこと。`--permission-mode dangerous`はこの範囲を広げない）、force push・ブランチ削除・履歴改変・mainへのpushの禁止、PR後の監視を含める。生ログは状態の置き場の`devin-logs/issue-<n>.log`（0600）に残る。
 6. 起動の結果は1行のJSONで出る。`running`ならセッションのIDが確定している。`launch_unknown`やエラーでは、自動で起動し直さず、`devin list`とログで確かめてからユーザーに渡す。
 7. `wait-for-pr.mjs <Issue>`と、セッション1本の`wait-for-devin-pr.mjs --since <UTC時刻>`でPRを待つ。複数の対応候補から番号の小さいPRを選ばない。

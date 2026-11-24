@@ -10,7 +10,7 @@ Devinに渡したIssueごとに1ファイル（`<Issue 番号>.yml`）を置く�
 
 | いつ                      | コマンド                                                                                                                                                                |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Issueを渡したとき         | `node .claude/scripts/delegation.mjs init <Issue> --model <swe-2-medium\|swe-2-high\|swe-2-max> [--runner cloud] [--level 0-3] [--follow-up-of <前の委譲>]`             |
+| Issueを渡したとき         | `node .claude/scripts/delegation.mjs init <Issue> --model <devin models listのSWEのモデル名> [--runner cloud] [--level 0-3] [--follow-up-of <前の委譲>]`             |
 | レビューのroundごと       | `node .claude/scripts/delegation.mjs review <Issue> --round <n> --sha <head> --verdict <merge\|fix\|escalate> [--posted] --finding '<severity>:<category>:<summary>' …` |
 | マージ・クローズの後      | `node .claude/scripts/delegation.mjs finalize <Issue> [--pr <n>]`                                                                                                       |
 | 集計                      | `node .claude/scripts/delegation.mjs summary`                                                                                                                           |
@@ -35,7 +35,7 @@ Devinに渡したIssueごとに1ファイル（`<Issue 番号>.yml`）を置く�
 | `issue` / `title` / `delegated_at` | init（gh）              | Issueの番号・題・作成日時。IssueなしPRは`issue: null`で、`delegated_at`はPRの作成日時                                                                                                                        |
 | `pr` / `origin`                    | init（IssueなしPRだけ） | PR番号と`self`（Devinが自分から出した）。項目が無い記録は`origin: issue`として集計する                                                                                                                       |
 | `agent`                            | init                    | いまは常に`devin`                                                                                                                                                                                            |
-| `model`                            | init                    | `swe-2-medium` / `swe-2-high` / `swe-2-max` / `unknown`（記録を始める前の委譲。IssueなしPRの既定）                                                                                                           |
+| `model`                            | init                    | `devin models list`に出るSWEのモデル名（`swe-`で始まる。2026-11-24からはSWE-2.1）/ `unknown`（記録を始める前の委譲。IssueなしPRの既定）                                                                                                           |
 | `runner`                           | init                    | Devinを動かした場所。`local`（既定）/ `cloud`。作成者による推定は旧履歴の表示だけに使う。新規起動では明示する。項目が無い古い記録は集計で`unknown`                                                           |
 | `shared_seq` / `shared_fetched_at` | 共有状態の写し（任意）  | 共有履歴の版と取得日時。旧記録のreviews数より優先する                                                                                                                                                        |
 | `change_level`                     | init                    | 0〜3。分からなければ`null`                                                                                                                                                                                   |

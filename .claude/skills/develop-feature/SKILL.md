@@ -33,7 +33,7 @@ description: >
    - L3は[create-requirements-document](../create-requirements-document/SKILL.md)。
    - [create-design-document](../create-design-document/SKILL.md)。契約が変わる条件はorchestration-policy。外部入出力か大量データを扱うL3は、設計書の性能の節を厚く書く。
    - ユーザーの設計承認を待つ。承認の前にアプリのコードを変えない。
-6. L2/L3は設計の承認のあと、実装計画・試験計画・実装をDevinに委譲する（`AGENTS.md`の「進め方の決まり」）。承認済みの設計書を起点に、実装計画と試験計画を頼むIssueを作る。Issueには、[create-implementation-plan](../create-implementation-plan/SKILL.md)と[create-test-plan](../create-test-plan/SKILL.md)の手順で書くこと、分け方の表にタスクごとの主に触るファイルとeffortを書くこと、委譲する各タスクの本文を`<!-- delegation-task:<タスク名> -->`と`<!-- /delegation-task -->`で囲むこと（`delegation.mjs open-task`が読む区間）、PRの本文に`Closes #<Issue番号>`を書くことを入れる。Issueを作ったら`node .claude/scripts/delegation.mjs init <Issue番号> --model swe-2-<effort>`で委譲の記録を作る。計画がマージされたら、実装のタスクを[review-devin-pr](../review-devin-pr/SKILL.md)の手順で委譲し、DevinのPRも同じ手順でレビューする。
+6. L2/L3は設計の承認のあと、実装計画・試験計画・実装をDevinに委譲する（`AGENTS.md`の「進め方の決まり」）。承認済みの設計書を起点に、実装計画と試験計画を頼むIssueを作る。Issueには、[create-implementation-plan](../create-implementation-plan/SKILL.md)と[create-test-plan](../create-test-plan/SKILL.md)の手順で書くこと、分け方の表にタスクごとの主に触るファイルとeffortを書くこと、委譲する各タスクの本文を`<!-- delegation-task:<タスク名> -->`と`<!-- /delegation-task -->`で囲むこと（`delegation.mjs open-task`が読む区間）、PRの本文に`Closes #<Issue番号>`を書くことを入れる。Issueを作ったら`node .claude/scripts/delegation.mjs init <Issue番号> --model <SWE-2.1の名前>`で委譲の記録を作る（名前は`devin models list`に出るもの）。計画がマージされたら、実装のタスクを[review-devin-pr](../review-devin-pr/SKILL.md)の手順で委譲し、DevinのPRも同じ手順でレビューする。
 7. 実装のあと`reviewer`を起動する。渡すのは目的、範囲、`feature-name`、差分の場所。返ってきた指摘の表を、自分の文脈でコードと突き合わせてから直す。指摘を無条件では採用しない。
 8. `security-reviewer`を起動しなかったL2は、省略理由を報告に1行書く。判断に迷うときは起動する。
 9. 改善サイクルは`AGENTS.md`の「振り返りと改善」に従う。L2/L3のPRがマージされたら、このセッションが[reflect-task](../reflect-task/SKILL.md)を読んで振り返りを書く。
