@@ -21,7 +21,7 @@
 | 画面の共通部分 | 製品 | `apps/web/index.html`、`apps/web/package.json`、`apps/web/components.json`、`apps/web/public/`、`apps/web/src/app/`・`styles/`・`components/ui/`、`apps/web/tests/app/` | CIと成果物 | high | U07 | ログイン状態、通信とキャッシュの分離 |
 | オーナーと招待参加 | 製品 | `src/contexts/group/`、`src/functions/pre-sign-up/`、`src/functions/api/`、`scripts/seed-initial-data.ts`、`apps/web/src/features/join/` | DB変更の仕組み・画面の共通部分 | high | I01 | 登録、認可、グループのSQL・個人情報 |
 | 公演を下書きから確定 | 製品 | `src/contexts/catalog/`、`apps/web/src/features/concert/` | オーナーと招待参加 | high | I11 | SQL、グループの参照・更新権限 |
-| チケット申込から受取 | 製品 | `src/contexts/ticket/`、`apps/web/src/features/ticket/`・`home/` | 公演を下書きから確定 | high | U01、U04、U06、I02 | SQL、他人の申込の更新拒否 |
+| チケット申込から受取 | 製品 | `src/contexts/ticket/`、`apps/web/src/features/ticket/`・`home/` | 公演を下書きから確定 | high | U01、U04、U06、I02、I12 | SQL、他人の申込の更新拒否 |
 | iPhoneへの通知 | 製品 | `src/contexts/notification/`、`src/functions/notification-sender/`、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts` | チケット申込から受取 | high | U02、U03、U05、I04〜I07、I09 | 購読情報、送信権限、DBと予約 |
 | 変更を確かめる道具 | 確認 | `.claude/skills/verify-first-slice/SKILL.md`、`.agents/skills/verify-first-slice`（リンク） | オーナーと招待参加 | medium | なし | PR前に使う検査の手順と両方の入口 |
 | 2人で通す試験 | 確認 | `playwright.config.ts`、`tests/e2e/`、`tests/support/` | iPhoneへの通知 | high | E2E-01、E2E-02 | 試験専用の認証が本番に混ざらない差分 |
@@ -118,9 +118,9 @@
 - 対象: `src/contexts/ticket/`、`apps/web/src/features/ticket/`・`home/`、対応API・SQL。
 - effort: high
 - 先に要るタスク: 公演を下書きから確定
-- 受け持つ試験: U01、U04、U06、I02
+- 受け持つ試験: U01、U04、U06、I02、I12
 - やること: 申込の作成・編集・状態変更・削除を作ります。本人の期限と受取可否は表示時に計算します。S-05のホームには最も近い公演、本人の次の行動と期限の帯を出します。券は設計と画面見本を使い、12色の明暗で読みやすさを保ちます。
-- 完了条件: 申込から当選、入金済み、受取済みまで通ります。別のメンバーは読めても編集できません。状態遷移と期限の境目、再送、券の文字の配置とコントラストを試験計画どおりに確認します。
+- 完了条件: 申込から当選、入金済み、受取済みまで通ります。別のメンバーは読めても編集できません。状態遷移と期限の境目、券の文字の配置とコントラストを試験計画どおりに確認します。I12では申込の作成・削除を送り直しても、申込と通知の予約が重複しないことを確かめます。
 <!-- /delegation-task -->
 
 <!-- delegation-task:reminders -->
