@@ -51,7 +51,7 @@
 - effort: high
 - 先に要るタスク: 初回準備の名前・ARNの取り決め
 - 受け持つ試験: I10
-- やること: AWSをシンガポールに置き、API Gateway、3つのLambda、Cognito、Scheduler、S3・CloudFront、失敗キューを環境別に用意します。全APIルートに対象環境のJWT検査を付け、CORSも対象のPWAに限ります。SESの送信元と利用申請はオーナーが担当します。CognitoはADR-0007のメールOTPを使い、プールを手で直しません。月5ドルのBudgets、SES抑止、Lambda・SESの共有警報は結合検証のTerraformだけで管理し、変更は適用前に個別承認を取ります。
+- やること: AWSをシンガポールに置き、API Gateway、3つのLambda、Cognito、Scheduler、S3・CloudFront、失敗キューを環境別に用意します。全APIルートに対象環境のJWT検査を付け、CORSも対象のPWAに限ります。SESの送信元と利用申請はオーナーが担当します。CognitoはADR-0007のメールOTPを使い、プールを手で直しません。月5ドルのBudgets、SES抑止、Lambda・SESの共有警報は結合検証のTerraformだけで管理します。これらの共有資源は本番にも効くため、オーナーが公開されないTerraform planで対象の差分を確認し、その変更を承認するまでは適用しません。GitHubの本番環境の承認とは別です。
 - Devinの完了条件（PRとCIで確かめる）: I10で両環境のTerraform定義を検査します。秘密値を含めず、共有資源は結合検証側にだけ定義します。Lambdaは製品成果物がそろってから配置する手順を用意します。
 - オーナーが実環境で確かめること（要るデータと、それを誰が作るか）: M06・M07・M10。オーナーが検証用宛先、招待、失敗試験のデータを用意し、CIが対象SHAの成果物を作ります。最初の実配置の後にLambdaのSHA・時刻のタグ、警報、流量、ログ保持と、認証・監視の動作を確かめます。
 <!-- /delegation-task -->
