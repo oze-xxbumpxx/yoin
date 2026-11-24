@@ -46,7 +46,7 @@ export function createdIssues(input) {
 const isoSeconds = (date) => date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 
 export function buildContext(issues, now = new Date()) {
-  const lines = issues.map((n) => `- Issue #${n}: Devinに渡すなら、委譲の記録を確かめてから\`node .claude/scripts/delegation-launch.mjs ${n} --runner local --model swe-2-<effort> --prompt-file <非公開ファイル>\`で起動し、\`node .claude/scripts/wait-for-pr.mjs ${n}\`をrun_in_backgroundでPRを待つ`);
+  const lines = issues.map((n) => `- Issue #${n}: Devinに渡すなら、委譲の記録を確かめてから\`node .claude/scripts/delegation-launch.mjs ${n} --runner local --model <SWE-2.1の名前> --prompt-file <非公開ファイル>\`で起動し、\`node .claude/scripts/wait-for-pr.mjs ${n}\`をrun_in_backgroundでPRを待つ`);
   return [
     '承認済み計画のタスクは、delegation.mjs open-taskでIssueと委譲の記録を作る（同じタスクの二重起票を防ぐため）。',
     ...lines,

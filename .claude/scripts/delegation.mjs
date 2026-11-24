@@ -2,7 +2,7 @@
 // 委譲（Issue → Devin → PR）ごとの記録を作り、集計する。
 //
 // 使い方:
-//   node .claude/scripts/delegation.mjs init <issue> --model <swe-2-medium|swe-2-high|swe-2-max|unknown>
+//   node .claude/scripts/delegation.mjs init <issue> --model <`devin models list`のSWEのモデル名|unknown>
 //     [--runner <local|cloud>] [--level 0-3] [--title <題>] [--delegated-at <ISO 8601>] [--follow-up-of <issue|pr-n>]
 //       --runnerはDevinを動かした場所。既定はlocal（2026-09-26ユーザー指示: 既定はローカル、出先の指示時だけクラウド）。
 //       記録を作る。--titleと --delegated-atを省くとghからIssueの題と作成日時を取る。
@@ -53,7 +53,13 @@ import { findLinkedPr, listPrs } from './wait-for-pr.mjs';
 export const DEFAULT_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../docs/claude-code/improvements/delegations');
 const GH_TIMEOUT_MS = 30_000;
 
-export const MODELS = ['swe-2-medium', 'swe-2-high', 'swe-2-max', 'unknown'];
+// DevinのSWEのモデル名（`devin models list`に出る名前。例: SWE-2.1）。名前は増えるので一覧で固定せず、形だけを確かめる。
+// unknownは、記録を始める前の委譲とIssueなしのPRに使う。
+export const MODEL_PATTERN = /^swe-[0-9a-z][0-9a-z.-]{0,40}$/;
+export const MODEL_HINT = '`devin models list`に出るSWEのモデル名（swe-で始まる）か unknown';
+export function isModel(model) {
+  return model === 'unknown' || (typeof model === 'string' && MODEL_PATTERN.test(model));
+}
 // 新しい記録で指定できる実行場所。runnerの無い古い記録は、集計のときだけunknownとして扱う。
 export const RUNNERS = ['local', 'cloud'];
 export const SEVERITIES = ['must', 'nit', 'security', 'decision'];
@@ -191,7 +197,7 @@ export function parseYaml(text) {
  */
 export function newRecord({ issue, title, model, runner = 'local', level = null, delegatedAt, followUpOf = null }) {
   if (!Number.isInteger(issue) || issue <= 0) throw new UsageError('Issue 番号が不正です');
-  if (!MODELS.includes(model)) throw new UsageError(`--model は ${MODELS.join(' | ')} のどれか`);
+  if (!isModel(model)) throw new UsageError(`--model は ${MODEL_HINT}`);
   if (!RUNNERS.includes(runner)) throw new UsageError(`--runner は ${RUNNERS.join(' | ')} のどれか`);
   if (level !== null && ![0, 1, 2, 3].includes(level)) throw new UsageError('--level は 0〜3');
   if (Number.isNaN(Date.parse(delegatedAt))) throw new UsageError('委譲の日時が ISO 8601 ではありません');
@@ -689,7 +695,7 @@ export function findTaskIssue(issues, taskKey, digest) {
 export function openTask({ planPath, taskKey, title, model, runner = 'local', level = null }, { dir = DEFAULT_DIR, mirrorDir = null, run = gh, git = (args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }), now = nowIso } = {}) {
   if (typeof planPath !== 'string' || !/^docs\/implementation-plans\/[a-z0-9-]+\.md$/.test(planPath)) throw new UsageError('計画は docs/implementation-plans/<機能名>.md を指定する');
   if (typeof title !== 'string' || title.trim() === '') throw new UsageError('--title が必要です');
-  if (!MODELS.includes(model ?? '')) throw new UsageError(`--model は ${MODELS.join(' | ')} のどれか`);
+  if (!isModel(model ?? '') || model === 'unknown') throw new UsageError('--model は `devin models list`に出るSWEのモデル名（swe-で始まる）');
   // 承認済みの計画はmainにマージされたもの。手元の未マージの版からは作らない。
   git(['fetch', '--quiet', 'origin', 'main']);
   const { body, digest } = extractPlanTask(git(['show', `origin/main:${planPath}`]), taskKey);
@@ -804,7 +810,7 @@ export function runCli(argv) {
     const dir = opts.dir ?? DEFAULT_DIR;
     const mirrorDir = mirrorOf(opts);
     if (opts.model === undefined) throw new UsageError('--model が必要です');
-    if (!MODELS.includes(opts.model)) throw new UsageError(`--model は ${MODELS.join(' | ')} のどれか`);
+    if (!isModel(opts.model)) throw new UsageError(`--model は ${MODEL_HINT}`);
     const existing = existingRecordPath(dir, issue, mirrorDir);
     if (existing !== null) throw new UsageError(`記録は作成済みです: ${existing}`);
     const followUpOf = opts['follow-up-of'] === undefined ? null : targetArg(opts['follow-up-of']);
@@ -854,7 +860,7 @@ function initSelf(pr, optArgs) {
   const dir = opts.dir ?? DEFAULT_DIR;
   const mirrorDir = mirrorOf(opts);
   const key = `pr-${pr}`;
-  if (opts.model !== undefined && !MODELS.includes(opts.model)) throw new UsageError(`--model は ${MODELS.join(' | ')} のどれか`);
+  if (opts.model !== undefined && !isModel(opts.model)) throw new UsageError(`--model は ${MODEL_HINT}`);
   const existing = existingRecordPath(dir, key, mirrorDir);
   if (existing !== null) throw new UsageError(`記録は作成済みです: ${existing}`);
   let { title, 'created-at': createdAt, runner } = opts;

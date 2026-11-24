@@ -50,6 +50,8 @@ test('Issue番号・runner・model・prompt fileを明示し、それ以外の�
   const options = parseLaunchArgs(['81', '--runner', 'local', '--model', 'swe-2-high', '--prompt-file', '/private/prompt']);
   assert.deepEqual([options.issue, options.runner, options.model], [81, 'local', 'swe-2-high']);
   assert.throws(() => parseLaunchArgs(['81', '--model', 'swe-2-high', '--prompt-file', '/p']));
+  assert.equal(parseLaunchArgs(['81', '--runner', 'local', '--model', 'swe-2-1-high', '--prompt-file', '/p']).model, 'swe-2-1-high');
+  for (const bad of ['unknown', 'opus']) assert.throws(() => parseLaunchArgs(['81', '--runner', 'local', '--model', bad, '--prompt-file', '/p']));
   assert.throws(() => parseLaunchArgs(['feature:task', '--runner', 'local', '--model', 'swe-2-high', '--prompt-file', '/p']));
   assert.throws(() => parseLaunchArgs(['81', '--runner', 'local', '--model', 'unknown', '--prompt-file', '/p']));
   assert.throws(() => parseLaunchArgs(['81', '--runner', 'local', '--model', 'swe-2-high', '--prompt-file', '/p', '--activation-id', id(1)]));

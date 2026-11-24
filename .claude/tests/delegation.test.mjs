@@ -119,7 +119,9 @@ test('D-02: 想定外の形の YAML はエラー', () => {
 });
 
 test('D-03: init の model の値の制限と重複作成', () => {
-  assert.throws(() => base(1, 'swe-1.5'), /--model/);
+  // モデル名は一覧で固定せず、swe-で始まる形だけを許す（SWE-2.1のように新しい版が出るため）。
+  for (const bad of ['opus', 'SWE-2.1', 'swe-', 'swe-2 --cloud', '']) assert.throws(() => base(1, bad), /--model/);
+  for (const good of ['swe-2-high', 'swe-2.1', 'swe-2-1-high']) assert.equal(base(1, good).model, good);
   assert.throws(() => newRecord({ issue: 1, title: 't', model: 'unknown', level: 5, delegatedAt: '2026-09-26T00:00:00Z' }), /--level/);
   withTmp((dir) => {
     const args = ['init', '44', '--model', 'swe-2-max', '--level', '3', '--title', 'M1-c', '--delegated-at', '2026-09-26T05:30:00Z', '--dir', dir];

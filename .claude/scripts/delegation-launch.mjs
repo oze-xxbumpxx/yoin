@@ -6,12 +6,13 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_CLONE } from './devin-watch.mjs';
 import { resolveStateDir } from '../lib/harness-paths.mjs';
+import { isModel } from './delegation.mjs';
 
-const MODELS = ['swe-2-medium', 'swe-2-high', 'swe-2-max'];
+const isLaunchModel = (model) => model !== 'unknown' && isModel(model);
 const CONFIG = join(dirname(fileURLToPath(import.meta.url)), '../config/delegation-review.json');
 
 /**
- * 使い方: delegation-launch.mjs <Issue番号> --runner local --model <swe-2-medium|swe-2-high|swe-2-max>
+ * 使い方: delegation-launch.mjs <Issue番号> --runner local --model <`devin models list`のSWEのモデル名>
  *   --prompt-file <本人だけが読めるファイル> [--clone <専用クローン>]
  * Issueは`delegation.mjs open-task`で作ったもの。起動の結果は1行のJSONで出し、自動で起動し直さない。
  */
@@ -23,14 +24,14 @@ export function parseLaunchArgs(argv) {
     if (field === undefined || args[i + 1] === undefined || options[field] !== null) throw new Error('起動引数を確認してください');
     options[field] = args[i + 1];
   }
-  if (!/^[1-9]\d*$/.test(issueText ?? '') || !['local', 'cloud'].includes(options.runner) || !MODELS.includes(options.model) || !options.promptFile) {
+  if (!/^[1-9]\d*$/.test(issueText ?? '') || !['local', 'cloud'].includes(options.runner) || !isLaunchModel(options.model) || !options.promptFile) {
     throw new Error('Issue番号、runner、model、非公開prompt fileが必要です');
   }
   return options;
 }
 
 export function buildDevinArgs({ runner, model, promptFile, exportFile = null }) {
-  if (!['local', 'cloud'].includes(runner) || !MODELS.includes(model)) throw new Error('runner/modelが不正です');
+  if (!['local', 'cloud'].includes(runner) || !isLaunchModel(model)) throw new Error('runner/modelが不正です');
   return [...(runner === 'cloud' ? ['--cloud'] : []), '--model', model, '--permission-mode', 'dangerous', ...(exportFile === null ? [] : ['--export', exportFile]), '-p', '--prompt-file', promptFile];
 }
 
@@ -181,7 +182,7 @@ async function spawnDevin({ args, clone, logFd }) {
 export async function launchDelegation(options, dependencies = {}) {
   const config = dependencies.config ?? JSON.parse(readFileSync(CONFIG, 'utf8'));
   if (config.cli_launch_verified !== true) return { exitCode: 4, state: 'unknown', reason: '手元の起動の確認待ちです' };
-  if (!Number.isSafeInteger(options.issue) || options.issue <= 0 || !MODELS.includes(options.model)) return { exitCode: 2, state: 'invalid' };
+  if (!Number.isSafeInteger(options.issue) || options.issue <= 0 || !isLaunchModel(options.model)) return { exitCode: 2, state: 'invalid' };
   // クラウドは内部の再送とURLの形を確かめるまで止める。
   if (options.runner !== 'local') return { exitCode: 4, state: 'unknown', reason: 'クラウドの起動は確認待ちです' };
   let promptFile;
