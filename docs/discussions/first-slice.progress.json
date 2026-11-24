@@ -16,7 +16,7 @@
       }
     },
     "design": {
-      "state": "waiting",
+      "state": "approval",
       "docs": [
         "docs/designs/first-slice.md"
       ]
@@ -37,5 +37,5 @@
       "state": "pending"
     }
   },
-  "updated_at": "2026-11-23T23:47:52.497Z"
+  "updated_at": "2026-11-24T00:49:14.963Z"
 }
