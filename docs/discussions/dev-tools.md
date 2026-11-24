@@ -295,7 +295,7 @@ flowchart LR
 - 反映先: docs/decisions/ADR-0004-dev-tools.mdの決定3と決定5
 - 決めた日: 2026-11-17
 
-### 本番の承認待ちを残し、変更を1本ずつにする方法
+### 本番の承認待ちを最新の1件にし、変更を1本ずつにする方法
 
 <!-- id: production-deploy-serialization -->
 
@@ -303,17 +303,19 @@ flowchart LR
 - 種類: 設計
 - 優先度: 高
 - 状態: 決定
-- なぜ今: 本番への配置を待つ実行が新しい実行で消えると、オーナーが結合検証を通った版を選べない。
-- 根拠: [#39でのSoftware Factory Botの回答](https://github.com/oze-xxbumpxx/yoin/issues/39#issuecomment-7129599233)、[S3の条件付き書き込み](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html)と[条件付き削除](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-deletes.html)
+- なぜ今: 2回続けてマージすると、結合検証で動く版は新しい版に入れ替わる。本番の承認画面にどの版を残すか決める。
+- 根拠: [オーナーの判断](https://github.com/oze-xxbumpxx/yoin/pull/40#issuecomment-7132905362)、[GitHub Actionsの同時実行の仕様](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)
 - 選択肢:
-  - A) 承認後に既存のTerraform状態用S3の専用キーで順番を取る。
-  - B) DynamoDBに専用のロック表を作る。
-  - C) GitHub Actionsの待機枠だけで順番を取る。
-- 推奨: A
-- 決定: A。本番だけ承認待ちを置き換えず、本番ロールへの追加権限は専用キー1つの条件付き操作に限る。途中で残ったロックはオーナーが状態を確かめて対象だけを外す。
+  - A) 承認待ちを全部残し、承認後にS3の専用キーで順番を取る（判断ボードの案B）。
+  - B) 本番の承認待ちは新しい実行で置き換え、最新の検証済みの版だけを残す（判断ボードの案A）。
+- 推奨: B
+- 決定: B。本番のジョブにだけ同時実行グループをかけ、進行中の変更は取り消さない。承認後は最後に本番に出たSHAと照合し、古い版のときは本番の権限を取る前に止める。承認は成果物がそろった最初の実デプロイで確かめる。
 - 推奨と同じか: 同じ
-- 理由: AWS資源を増やさず、承認待ちと本番変更の順番を分けられる。
-- 選ばなかった理由: BはAWS資源が増える。Cは`queue: max`でも待機枠の上限で後続が取り消される。承認だけの試行は3回行う。
+- 理由: オーナーは、いま結合検証で動いている版を承認できる。本番の順番を取るためにAWSの設定を足さなくてよい。
+- 選ばなかった理由:
+  - S3のロック: 2回続けてマージすると、結合検証は新しい版に上書きされる。古い承認待ちのSHAは、いま結合検証で確かめられる版ではない。1人で承認する間はロックは要らない。
+  - 承認だけの試行: 試行用の分岐が残り、実デプロイで使う本番の権限は確かめられない。
+- 初回用Terraformの状態は手元で作り、作成したS3の別のキーへ`terraform init -migrate-state`で移す。実装計画と試験計画を先に書き、マージ後に計画から土台のIssueを作り直す。
 - 反映先: [ADR-0004の2026-11-24の追記](../decisions/ADR-0004-dev-tools.md#2026-11-24の追記)、#35、#36、#39
 - 決めた日: 2026-11-24
 
