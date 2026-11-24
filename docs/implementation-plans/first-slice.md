@@ -16,9 +16,10 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | 初回準備 | 土台 | `infra/terraform/bootstrap/main.tf`、`scripts/bootstrap-ssm.ts` | なし | high | なし | S3状態、IAM、OIDC、SSM |
 | 環境と監視 | 土台 | `infra/terraform/main.tf`、`infra/terraform/environments/` | 初回準備の名前・ARNの取り決め | high | I10 | IaC、権限、費用、通知 |
-| CIと成果物 | 土台 | `package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`、`vitest.config.ts`、`.github/workflows/ci.yml` | なし | medium | なし | CIと境目の検査 |
+| CIと成果物 | 土台 | `package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`、`vitest.config.ts`、`.github/workflows/ci.yml`、`apps/web/vite.config.ts` | なし | medium | なし | CIと境目の検査 |
 | DB変更の仕組み | 土台 | `db/drizzle.config.ts`、`db/migrations/`の検査設定、`scripts/check-migrations.ts`・`scripts/migrate.ts` | CIと成果物 | high | I03 | SQL、削除条件、適用権限 |
-| オーナーと招待参加 | 製品 | `src/contexts/group/`、`src/functions/pre-sign-up/`、`src/functions/api/`、`scripts/seed-initial-data.ts`、`apps/web/src/features/join/` | DB変更の仕組み | high | I01 | 登録、認可、グループのSQL・個人情報 |
+| 画面の共通部分 | 製品 | `apps/web/index.html`、`apps/web/package.json`、`apps/web/components.json`、`apps/web/public/`、`apps/web/src/app/`・`styles/`・`components/ui/`、`apps/web/tests/app/` | CIと成果物 | high | U07 | ログイン状態、通信とキャッシュの分離 |
+| オーナーと招待参加 | 製品 | `src/contexts/group/`、`src/functions/pre-sign-up/`、`src/functions/api/`、`scripts/seed-initial-data.ts`、`apps/web/src/features/join/` | DB変更の仕組み・画面の共通部分 | high | I01 | 登録、認可、グループのSQL・個人情報 |
 | 公演を下書きから確定 | 製品 | `src/contexts/catalog/`、`apps/web/src/features/concert/` | オーナーと招待参加 | high | I11 | SQL、グループの参照・更新権限 |
 | チケット申込から受取 | 製品 | `src/contexts/ticket/`、`apps/web/src/features/ticket/`・`home/` | 公演を下書きから確定 | high | U01、U04、U06、I02 | SQL、他人の申込の更新拒否 |
 | iPhoneへの通知 | 製品 | `src/contexts/notification/`、`src/functions/notification-sender/`、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts` | チケット申込から受取 | high | U02、U03、U05、I04〜I07、I09 | 購読情報、送信権限、DBと予約 |
@@ -58,7 +59,7 @@
 <!-- delegation-task:ci-artifacts -->
 ### CIと成果物: 外部サービスなしで検査し、一度だけビルドする
 
-- 対象: `.github/workflows/ci.yml`、ルートのpnpm設定とVitestの設定、`apps/web/`のビルド設定。旧#37に対応します。
+- 対象: `.github/workflows/ci.yml`、ルートのpnpm設定とVitestの設定、`apps/web/vite.config.ts`。旧#37に対応します。
 - effort: medium
 - 先に要るタスク: なし
 - 受け持つ試験: なし
@@ -77,12 +78,24 @@
 - 完了条件: 空のDBへの適用、同じSQLの再実行、時刻違反と削除条件の未成立を使い捨てDBで確かめます。環境の設定はデプロイが渡し、手で実環境にSQLを流す手順は作りません。
 <!-- /delegation-task -->
 
+<!-- delegation-task:web-foundation -->
+### 画面の共通部分とログイン状態の入れ物を作る
+
+- 対象: `apps/web/index.html`、`apps/web/package.json`、`apps/web/components.json`、`apps/web/public/manifest.webmanifest`とアイコン、`apps/web/src/app/`・`styles/`・`components/ui/`、`apps/web/tests/app/`。
+- effort: high
+- 先に要るタスク: CIと成果物
+- 受け持つ試験: U07
+- やること: F-48のmanifestとアイコンを置きます。F-42〜F-45の色の変数とFigtreeを使い、Tailwind CSSとshadcn/uiを使える形にします。React Router、TanStack Query、`hono/client`の共通の入口を作ります。招待参加のタスクが、実際のAPI型とCognitoの操作をこの入口につなぎます。
+- ログイン状態: セッションごとにQueryClientを作り、キーにユーザーIDとグループIDを含めます。ログアウト・会員交代では通信を中断し、古いキャッシュと端末の認証情報を消します。Safariとホーム画面のPWAは別のログイン状態を持ちます。招待や通知から戻る先は同一オリジンのパスだけにします。通知先はログアウトでは消さず、Service WorkerにはJWTを渡しません。
+- 完了条件: U07で、yoinのmanifestとアイコン、明暗の色と書体、画面の移り方、会員を交代したときの通信とキャッシュの分離を確かめます。実際のメールOTPと2人の操作は後続のタスクでつなぎます。
+<!-- /delegation-task -->
+
 <!-- delegation-task:invite-and-join -->
 ### オーナーと招待参加: 2人が同じグループを開ける
 
 - 対象: `src/contexts/group/`、`src/functions/api/`・`pre-sign-up/`、`scripts/seed-initial-data.ts`、`apps/web/src/features/join/`。
 - effort: high
-- 先に要るタスク: DB変更の仕組み
+- 先に要るタスク: DB変更の仕組み・画面の共通部分
 - 受け持つ試験: I01
 - やること: 環境別の初期データ、S-01のメールOTP、S-02の参加、S-21の招待を作ります。初期データの再実行ではCognitoの既存subを使い、DB側は1トランザクションで重複なく作ります。登録前Lambdaは招待のハッシュ、期限、残り枠とグループ状態を検査し、登録開始数だけを1文で更新します。参加枠は参加の取引で使い、登録開始とは分けます。ログにはトークンや個人情報を出しません。
 - 完了条件: オーナーの招待から2人目の登録・参加・ホーム表示まで通ります。招待なしの新規登録、使えない招待、権限のない発行を拒み、最後の1枠を2人で使えません。実メールと実プールの確認は結合検証でオーナーが行います。
@@ -173,7 +186,9 @@
 flowchart LR
     B["初回準備"] --> I["環境と監視"]
     C["CIと成果物"] --> M["DB変更の仕組み"]
+    C --> A["画面の共通部分"]
     M --> G["オーナーと招待参加"] --> V["公演の確定"] --> T["チケット申込"] --> N["iPhoneへの通知"] --> E["2人のE2E"]
+    A --> G
     G --> W["変更を確かめる道具"]
     W --> X["2人の操作手順を道具に足す"]
     E --> X
