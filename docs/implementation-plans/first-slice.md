@@ -19,7 +19,7 @@
 | CIと成果物 | 土台 | `package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`、`vitest.config.ts`、`.github/workflows/ci.yml`、`apps/web/vite.config.ts` | なし | medium | なし | CIと境目の検査 |
 | DB変更の仕組み | 土台 | `db/drizzle.config.ts`、`db/migrations/`の検査設定、`scripts/check-migrations.ts`・`scripts/migrate.ts` | CIと成果物 | high | I03 | SQL、削除条件、適用権限 |
 | 画面の共通部分 | 製品 | `apps/web/index.html`、`apps/web/package.json`、`apps/web/components.json`、`apps/web/public/`、`apps/web/src/app/`・`styles/`・`components/ui/`、`apps/web/tests/app/` | CIと成果物 | high | U07 | ログイン状態、通信とキャッシュの分離 |
-| オーナーと招待参加 | 製品 | `src/contexts/group/`、`src/functions/pre-sign-up/`、`src/functions/api/`、`scripts/seed-initial-data.ts`、`apps/web/src/features/join/` | DB変更の仕組み・画面の共通部分 | high | I01 | 登録、認可、グループのSQL・個人情報 |
+| オーナーと招待参加 | 製品 | `src/contexts/group/`、`src/functions/pre-sign-up/`、`src/functions/api/`、`scripts/seed-initial-data.ts`、`apps/web/src/features/join/` | DB変更の仕組み・画面の共通部分 | high | U08、U09、I01 | 登録、認可、グループのSQL・個人情報 |
 | 公演を下書きから確定 | 製品 | `src/contexts/catalog/`、`apps/web/src/features/concert/` | オーナーと招待参加 | high | I11 | SQL、グループの参照・更新権限 |
 | チケット申込から受取 | 製品 | `src/contexts/ticket/`、`apps/web/src/features/ticket/`・`home/` | 公演を下書きから確定 | high | U01、U04、U06、I02、I12 | SQL、他人の申込の更新拒否 |
 | iPhoneへの通知 | 製品 | `src/contexts/notification/`、`src/functions/notification-sender/`、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts` | チケット申込から受取 | high | U02、U03、U05、I04〜I07、I09 | 購読情報、送信権限、DBと予約 |
@@ -96,9 +96,9 @@
 - 対象: `src/contexts/group/`、`src/functions/api/`・`pre-sign-up/`、`scripts/seed-initial-data.ts`、`apps/web/src/features/join/`。
 - effort: high
 - 先に要るタスク: DB変更の仕組み・画面の共通部分
-- 受け持つ試験: I01
+- 受け持つ試験: U08、U09、I01
 - やること: 環境別の初期データ、S-01のメールOTP、S-02の参加、S-21の招待を作ります。初期データの再実行ではCognitoの既存subを使い、DB側は1トランザクションで重複なく作ります。登録前Lambdaは招待のハッシュ、期限、残り枠とグループ状態を検査し、登録開始数だけを1文で更新します。参加枠は参加の取引で使い、登録開始とは分けます。ログにはトークンや個人情報を出しません。
-- 完了条件: オーナーの招待から2人目の登録・参加・ホーム表示まで通ります。招待なしの新規登録、使えない招待、権限のない発行を拒み、最後の1枠を2人で使えません。実メールと実プールの確認は結合検証でオーナーが行います。
+- 完了条件: オーナーの招待から2人目の登録・参加・ホーム表示まで通ります。招待なしの新規登録、使えない招待、権限のない発行を拒み、最後の1枠を2人で使えません。U08で招待の期限と利用数の境目、U09でメールのコードが誤り・期限切れなら再送でき、要求上限では時間を置く案内が出ることを確かめます。実メールと実プールの確認は結合検証でオーナーが行います。
 <!-- /delegation-task -->
 
 <!-- delegation-task:concert -->
