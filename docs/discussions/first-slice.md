@@ -627,6 +627,18 @@ flowchart LR
 - 決定: 発行時点より後で最長7日。24時間から延ばす。
 - 反映先: docs/designs/first-slice.md、docs/api.md
 
+### 登録前Lambdaに招待トークンをどう渡すか
+
+<!-- id: invite-validation-data -->
+
+- 工程: 設計
+- 種類: 設計
+- 優先度: 高
+- 状態: 決定
+- 根拠: [2026-11-24のオーナー判断](https://github.com/oze-xxbumpxx/yoin/pull/32#issuecomment-7118422508)
+- 決定: 招待トークンを暗号化せず、`ValidationData`で生のトークンを渡す。登録前LambdaがDBのハッシュと照合し、イベントの中身はログに書かない。
+- 反映先: docs/designs/first-slice.md、docs/decisions/ADR-0007-cognito-email.md
+
 ### 要件定義書から先を、誰が書くか
 
 <!-- id: who-writes -->

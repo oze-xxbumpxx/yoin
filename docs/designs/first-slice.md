@@ -79,7 +79,7 @@ sequenceDiagram
     participant A as API Gatewayとapi
     participant DB as Neon
     opt 有効な招待から初回登録
-        P->>C: SignUp（メール、暗号化した招待証明）
+        P->>C: SignUp（メール、生の招待トークンをValidationDataに入れる）
         C->>L: PreSignUp_SignUp
         L->>DB: 招待を検査して登録開始枠だけを使う
         L-->>C: 許可（参加回数は減らさない）
@@ -96,9 +96,9 @@ sequenceDiagram
     P->>A: GET /me と GET /me/groups（JWT）
 ```
 
-- 招待なしのS-01はSignUpを呼ばず、[USER_AUTH](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_InitiateAuth.html)のEMAIL_OTPだけを使う。招待付きでは暗号化した証明でSignUpを試す。UsernameExistsExceptionなら同じ入力でUSER_AUTHへ進む。UserNotConfirmedExceptionなら、招待付きの場合だけ確認入力へ戻り、利用者の操作でResendConfirmationCodeを呼ぶ。招待なしなら招待リンクから開き直すよう案内する。PreventUserExistenceErrorsはENABLED。画面はアカウントの存在を表示しない。CognitoのSignUp自体では既存アドレスの応答を完全には隠せない。
-- [登録前Lambda](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-pre-sign-up.html)は招待トークンと正規化したメールのSHA-256を照合する。ブラウザは配布済みの公開鍵（RSA-OAEP/SHA-256、2048ビット）で暗号化し、版付き暗号文だけをSignUpのValidationDataに入れる。TLSに加え、Cognito・監査やイベントの照会箇所で任意のValidationDataに生の招待が残らないための対策であり、リンクを知る人による別メールの登録は防がない。生トークンも暗号文もアプリのログに出さない。鍵を替えるときはSSMに新旧を置いて新しい公開鍵を配布し、旧PWAの入れ替えを確認してから旧鍵を削除する。
-- 同期Lambdaは復号・メール照合後、有効期限・取り消し・残り参加枠・グループ状態を条件に、登録開始数だけを1文のUPDATEで増やす。このLambdaのDBロールは招待検査と開始数の更新に必要な権限だけを持つ。登録開始数の上限は参加上限の3倍。開始数はCognitoの失敗やトリガー再試行で戻さない。招待は有効7日以内・参加1〜10人。参加のときだけ参加数を増やし、登録開始枠の不足で既存会員のログインや確認済みの招待参加は拒まない。枠を使い切ったときはオーナーが必要に応じてリンクを発行し直す。
+- 招待なしのS-01はSignUpを呼ばず、[USER_AUTH](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_InitiateAuth.html)のEMAIL_OTPだけを使う。招待付きでは生の招待トークンをValidationDataに入れてSignUpを試す。UsernameExistsExceptionなら同じ入力でUSER_AUTHへ進む。UserNotConfirmedExceptionなら、招待付きの場合だけ確認入力へ戻り、利用者の操作でResendConfirmationCodeを呼ぶ。招待なしなら招待リンクから開き直すよう案内する。PreventUserExistenceErrorsはENABLED。画面はアカウントの存在を表示しない。CognitoのSignUp自体では既存アドレスの応答を完全には隠せない。
+- [登録前Lambda](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-pre-sign-up.html)は、SignUpの`ValidationData`で受け取った生の招待トークンのハッシュを計算し、DBに保存したハッシュと照合する。招待トークンをアプリ側で暗号化せず、CognitoへはTLSで送る。登録前Lambdaはイベントの中身やトークンをログに書かない。
+- 同期Lambdaは招待トークンのハッシュ照合に加え、有効期限・取り消し・残り参加枠・グループ状態を条件に、登録開始数だけを1文のUPDATEで増やす。このLambdaのDBロールは招待検査と開始数の更新に必要な権限だけを持つ。登録開始数の上限は参加上限の3倍。開始数はCognitoの失敗やトリガー再試行で戻さない。招待は有効7日以内・参加1〜10人。参加のときだけ参加数を増やし、登録開始枠の不足で既存会員のログインや確認済みの招待参加は拒まない。枠を使い切ったときはオーナーが必要に応じてリンクを発行し直す。
 - プールは`AutoVerifiedAttributes=["email"]`を設定し、Cognitoに登録確認コードを送らせる。登録前Lambdaの応答では`autoConfirmUser`と`autoVerifyEmail`を立てない。利用者が届いたコードで確認するまでは未確認のままとする。[ConfirmSignUpのSession](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ConfirmSignUp.html)は初回ログインで再利用する。通常は確認メール1通、再ログインは[EMAIL_OTPのコード入力](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_RespondToAuthChallenge.html)。PreSignUp_AdminCreateUserは初期データ用に通す。
 
 | SDKで受ける結果 | S-01の案内と次の操作 |
@@ -251,7 +251,7 @@ sequenceDiagram
 | 観点 | 設計 |
 |---|---|
 | リトライ | Schedulerの送信不能は最大2回、Lambda非同期実行の関数エラーも最大2回、各イベントの保持は最大1時間。サービスのバックオフに従い、使い切り・期限切れはC-4へ送る。Web Pushの業務上の再送3回は5分固定。Cognitoのメール送信要求を画面で自動再送しない |
-| タイムアウト | 登録前LambdaはAWSの5秒制限より短い4秒。SSMの鍵・接続情報は初期化時に取得して実行環境内に保ち、DB書き込みに最大3秒を充てる。初期化と処理を含む応答枠も超えないよう残り時間で打ち切る。apiは20秒、DB文とScheduler SDKは各3秒、送信Lambdaは60秒、端末のPush要求は各5秒を上限とする |
+| タイムアウト | 登録前LambdaはAWSの5秒制限より短い4秒。SSMのDB接続情報は初期化時に取得して実行環境内に保ち、DB書き込みに最大3秒を充てる。初期化と処理を含む応答枠も超えないよう残り時間で打ち切る。apiは20秒、DB文とScheduler SDKは各3秒、送信Lambdaは60秒、端末のPush要求は各5秒を上限とする |
 | 冪等性 | 作成ID、招待の所属PK、通知先endpoint、予約の世代・回数と端末ごとの送信記録を使う。Schedulerの再呼び出しは同名・同じ入力に限る |
 | 部分失敗 | 予約作成とDB確定の一方だけが成功しても、旧予約を先に消さず、有効名で送信を止める。取消・削除はDBから確定し、その後AWS側を消す |
 | 縮退 | SESが止まれば新規登録・再ログインに時間をおく案内を出す。既にログイン済みの操作は継続できる。予約を保存できなければ申込の変更を成功と返さない。Pushが届かなくてもアプリから期限を確認できる |
@@ -268,7 +268,7 @@ SESは共有のアカウント／リージョンの集計値だけを見て、1�
 
 ## セキュリティ
 
-Cognitoのプール・発行者・アプリクライアントを環境で分離する。SSMの秘密は必要な関数だけが読み、VAPID公開鍵と招待証明の暗号化用公開鍵だけをPWAへ配る。HMACから作る元の招待トークンはDBにハッシュだけを保存する。秘密鍵・既存メールアドレスの実値をコード、作業ログ、Terraformソースに書かない。招待画面にReferrer-Policy: no-referrerを設定し、外部リソースへURLを送らない。CORSはその環境のPWAのオリジンに限る。
+Cognitoのプール・発行者・アプリクライアントを環境で分離する。SSMの秘密は必要な関数だけが読み、VAPID公開鍵をPWAへ配る。HMACから作る元の招待トークンはDBにハッシュだけを保存する。秘密の値・送信元メールアドレスの実値をコード、作業ログ、Terraformソースに書かない。招待画面にReferrer-Policy: no-referrerを設定し、外部リソースへURLを送らない。CORSはその環境のPWAのオリジンに限る。
 
 送信元の設定はplanやstateにも残り得る。planの平文をCIに出さず、公開の成果物にも置かない。S3の状態は専用の環境別キーと権限で分離し、暗号化とアクセス制限を適用する。SSMの秘密値はTerraformのデータソースでは読まず、許可された関数が実行時に読む。
 
