@@ -10,9 +10,9 @@
 
 ## 作業の分け方と主なファイル
 
-下表は新規作成先です。画面の置き場所・CI・DBの設定など、先行タスクで作った共有ファイルへの配線は、先行タスクがマージされてから行います。依存とファイルが重ならないタスクだけを、別々の作業用クローンで並行して進めます。SWE-2 Flashのeffortを表に示します。「人が読む」は[REVIEW.md](../../REVIEW.md)の対象で、画面の見た目だけの変更には広げません。
+下表は新規作成先です。画面の置き場所・CI・DBの設定など、先行タスクで作った共有ファイルへの配線は、先行タスクがマージされてから行います。依存とファイルが重ならないタスクだけを、別々の作業用クローンで並行して進めます。SWE-2 Flashのeffortを表に示します。「必ず見る」は[REVIEW.md](../../REVIEW.md)で人が差分を見る範囲です。「なし」の行でも通常のレビューは行います。
 
-| タスク | 区分 | 主に触るファイル | 先に要るタスク | effort | 受け持つ試験 | 人が読む差分 |
+| タスク | 区分 | 主に触るファイル | 先に要るタスク | effort | 受け持つ試験 | 必ず見る |
 | --- | --- | --- | --- | --- | --- | --- |
 | 初回準備 | 土台 | `infra/terraform/bootstrap/main.tf`、`scripts/bootstrap-ssm.ts` | なし | high | なし | S3状態、IAM、OIDC、SSM |
 | 環境と監視 | 土台 | `infra/terraform/main.tf`、`infra/terraform/environments/` | 初回準備の名前・ARNの取り決め | high | I10 | IaC、権限、費用、通知 |
@@ -22,8 +22,9 @@
 | 公演を下書きから確定 | 製品 | `src/contexts/catalog/`、`apps/web/src/features/concert/` | オーナーと招待参加 | high | I11 | SQL、グループの参照・更新権限 |
 | チケット申込から受取 | 製品 | `src/contexts/ticket/`、`apps/web/src/features/ticket/`・`home/` | 公演を下書きから確定 | high | U01、U04、U06、I02 | SQL、他人の申込の更新拒否 |
 | iPhoneへの通知 | 製品 | `src/contexts/notification/`、`src/functions/notification-sender/`、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts` | チケット申込から受取 | high | U02、U03、U05、I04〜I07、I09 | 購読情報、送信権限、DBと予約 |
-| 変更を確かめる道具 | 確認 | `.agents/skills/verify-first-slice/SKILL.md` | オーナーと招待参加 | medium | なし | 要約で足りる |
-| 2人で通す試験 | 確認 | `playwright.config.ts`、`tests/e2e/`、`tests/support/` | iPhoneへの通知・変更を確かめる道具 | high | E2E-01、E2E-02 | 試験専用の認証が本番に混ざらない差分 |
+| 変更を確かめる道具 | 確認 | `.claude/skills/verify-first-slice/SKILL.md`、`.agents/skills/verify-first-slice`（リンク） | オーナーと招待参加 | medium | なし | なし |
+| 2人で通す試験 | 確認 | `playwright.config.ts`、`tests/e2e/`、`tests/support/` | iPhoneへの通知 | high | E2E-01、E2E-02 | 試験専用の認証が本番に混ざらない差分 |
+| 2人の操作手順を道具に足す | 確認 | `.claude/skills/verify-first-slice/SKILL.md` | 変更を確かめる道具・2人で通す試験 | medium | なし | なし |
 | 結合検証と承認付き本番配置 | 土台・最終確認 | `.github/workflows/deploy.yml`、`scripts/check-deployment-sha.ts`、`scripts/write-release-config.ts` | 初回準備・環境と監視・全製品成果物と2人の自動試験 | high | I08 | 承認、デプロイ、OIDC、DB |
 
 ## 実装手順
@@ -123,23 +124,34 @@
 <!-- delegation-task:verification-skill -->
 ### 変更を確かめる道具を、招待の流れから使う
 
-- 対象: `.agents/skills/verify-first-slice/SKILL.md`。
+- 対象: `.claude/skills/verify-first-slice/SKILL.md`、`.agents/skills/verify-first-slice`（リンク）。
 - effort: medium
 - 先に要るタスク: オーナーと招待参加
 - 受け持つ試験: なし
-- やること: アプリの起動・試験データ・招待の操作・証拠の残し方をスキルにします。確認できる流れが伸びるたびに手順を更新します。
+- やること: アプリの起動・試験データ・招待の操作・証拠の残し方をClaude Code側のスキルに書きます。`.agents/skills/verify-first-slice`から`../../.claude/skills/verify-first-slice`を指し、Devinも同じ手順を使います。
 - 完了条件: DevinとClaude CodeがPRを出す前に、スキルに従ってローカルで動作を確かめられます。
 <!-- /delegation-task -->
 
 <!-- delegation-task:two-user-verification -->
 ### 2人のE2Eを自動で通す
 
-- 対象: `playwright.config.ts`、`tests/e2e/`、`tests/support/`。確かめの道具に全体の操作順を追記します。
+- 対象: `playwright.config.ts`、`tests/e2e/`、`tests/support/`。
 - effort: high
-- 先に要るタスク: iPhoneへの通知・変更を確かめる道具
+- 先に要るタスク: iPhoneへの通知
 - 受け持つ試験: E2E-01、E2E-02
 - やること: Playwrightでは2つの独立したcontextで、招待から受取済みまで操作します。ランナー内だけで署名した試験JWTを使い、製品の認証設定を緩めません。
 - 完了条件: 使い捨てDBから再現でき、製品ビルドが試験入口と鍵を含まず、試験JWTを受けないことを検査できます。
+<!-- /delegation-task -->
+
+<!-- delegation-task:verification-skill-walkthrough -->
+### 2人の操作手順を確かめの道具に足す
+
+- 対象: `.claude/skills/verify-first-slice/SKILL.md`。
+- effort: medium
+- 先に要るタスク: 変更を確かめる道具・2人で通す試験
+- 受け持つ試験: なし
+- やること: 確かめの道具に、招待から公演・チケット申込・受取までの2人の操作順と証拠の残し方を追記します。E2Eの試験は変更しません。
+- 完了条件: DevinとClaude Codeの両方の入口から同じ手順が読め、使い捨てDBで2人の流れを操作できます。
 <!-- /delegation-task -->
 
 <!-- delegation-task:deploy-approval -->
@@ -162,7 +174,9 @@ flowchart LR
     B["初回準備"] --> I["環境と監視"]
     C["CIと成果物"] --> M["DB変更の仕組み"]
     M --> G["オーナーと招待参加"] --> V["公演の確定"] --> T["チケット申込"] --> N["iPhoneへの通知"] --> E["2人のE2E"]
-    G --> W["変更を確かめる道具"] --> E
+    G --> W["変更を確かめる道具"]
+    W --> X["2人の操作手順を道具に足す"]
+    E --> X
     I --> D["結合検証と承認付き本番配置"]
     E --> D
     D --> S["オーナーが結合検証でiPhoneを確認"]
