@@ -23,9 +23,9 @@
 | 公演を下書きから確定 | 製品 | `src/contexts/catalog/`、`apps/web/src/features/concert/` | オーナーと招待参加 | high | I11 | SQL、グループの参照・更新権限 |
 | チケット申込から受取 | 製品 | `src/contexts/ticket/`、`apps/web/src/features/ticket/`・`home/` | 公演を下書きから確定 | high | U01、U04、U06、I02 | SQL、他人の申込の更新拒否 |
 | iPhoneへの通知 | 製品 | `src/contexts/notification/`、`src/functions/notification-sender/`、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts` | チケット申込から受取 | high | U02、U03、U05、I04〜I07、I09 | 購読情報、送信権限、DBと予約 |
-| 変更を確かめる道具 | 確認 | `.claude/skills/verify-first-slice/SKILL.md`、`.agents/skills/verify-first-slice`（リンク） | オーナーと招待参加 | medium | なし | なし |
+| 変更を確かめる道具 | 確認 | `.claude/skills/verify-first-slice/SKILL.md`、`.agents/skills/verify-first-slice`（リンク） | オーナーと招待参加 | medium | なし | PR前に使う検査の手順と両方の入口 |
 | 2人で通す試験 | 確認 | `playwright.config.ts`、`tests/e2e/`、`tests/support/` | iPhoneへの通知 | high | E2E-01、E2E-02 | 試験専用の認証が本番に混ざらない差分 |
-| 2人の操作手順を道具に足す | 確認 | `.claude/skills/verify-first-slice/SKILL.md` | 変更を確かめる道具・2人で通す試験 | medium | なし | なし |
+| 2人の操作手順を道具に足す | 確認 | `.claude/skills/verify-first-slice/SKILL.md` | 変更を確かめる道具・2人で通す試験 | medium | なし | PR前に使う2人の検査の手順 |
 | 結合検証と承認付き本番配置 | 土台・最終確認 | `.github/workflows/deploy.yml`、`scripts/check-deployment-sha.ts`、`scripts/write-release-config.ts` | 初回準備・環境と監視・全製品成果物と2人の自動試験 | high | I08 | 承認、デプロイ、OIDC、DB |
 
 ## 実装手順
@@ -143,6 +143,7 @@
 - 受け持つ試験: なし
 - やること: アプリの起動・試験データ・招待の操作・証拠の残し方をClaude Code側のスキルに書きます。`.agents/skills/verify-first-slice`から`../../.claude/skills/verify-first-slice`を指し、Devinも同じ手順を使います。
 - 完了条件: DevinとClaude CodeがPRを出す前に、スキルに従ってローカルで動作を確かめられます。
+- 必ず見る: 人が検査手順と両方の入口の差分を読みます。
 <!-- /delegation-task -->
 
 <!-- delegation-task:two-user-verification -->
@@ -165,6 +166,7 @@
 - 受け持つ試験: なし
 - やること: 確かめの道具に、招待から公演・チケット申込・受取までの2人の操作順と証拠の残し方を追記します。E2Eの試験は変更しません。
 - 完了条件: DevinとClaude Codeの両方の入口から同じ手順が読め、使い捨てDBで2人の流れを操作できます。
+- 必ず見る: 人が2人の検査手順の差分を読みます。
 <!-- /delegation-task -->
 
 <!-- delegation-task:deploy-approval -->
