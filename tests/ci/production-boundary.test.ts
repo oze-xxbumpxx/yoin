@@ -66,6 +66,13 @@ describe("production build guards", () => {
     await expect(buildFixture()).rejects.toThrow("Read environment values from /config.json");
   });
 
+  it("rejects forbidden environment reads in inline HTML modules", async () => {
+    await writeFile(join(fixture, "index.html"),
+      '<script type="module">document.title = import.meta.env.VITE_API_URL;</script>');
+
+    await expect(buildFixture()).rejects.toThrow("Read environment values from /config.json");
+  });
+
   it("rejects a Vite bundle that imports an E2E auth entrypoint", async () => {
     await mkdir(join(fixture, "tests/support"), { recursive: true });
     await writeFile(join(fixture, "tests/support/auth-entry.ts"), 'export const issuer = "test";');

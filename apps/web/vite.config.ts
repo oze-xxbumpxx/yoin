@@ -39,11 +39,12 @@ function productionInputs(): Plugin {
       handler(code, id) {
         const path = id.split("?")[0];
         const source = relative(root, path);
+        const htmlModule = source.endsWith(".html") && /\?html-proxy&index=\d+\.js$/u.test(id);
         if (!isAbsolute(path) || isAbsolute(source) || source.startsWith(`..${sep}`)
-          || source.split(sep).includes("node_modules") || !/\.[cm]?[jt]sx?$/u.test(source)) {
+          || source.split(sep).includes("node_modules") || (!htmlModule && !/\.[cm]?[jt]sx?$/u.test(source))) {
           return;
         }
-        const file = ts.createSourceFile(path, code, ts.ScriptTarget.Latest, true);
+        const file = ts.createSourceFile(htmlModule ? id : path, code, ts.ScriptTarget.Latest, true);
         const reference = findForbiddenEnvReference(file);
         if (reference !== null) {
           this.error("Read environment values from /config.json; only direct Vite built-ins may use import.meta.env", reference.getStart(file));
