@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { build } from "vite";
+import { build, resolveConfig } from "vite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { assertProductionFiles } from "../../scripts/production-boundary.ts";
 
@@ -26,6 +26,15 @@ function buildFixture() {
   return build({ root: fixture, configFile, logLevel: "silent", build: { outDir: "out" } });
 }
 
+it("does not load environment values in Vite dev or E2E configuration", async () => {
+  vi.stubEnv("VITE_FROM_PROCESS", "process-only-value");
+  await writeFile(join(fixture, ".env.development"), "VITE_FROM_FILE=file-only-value\n");
+  const config = await resolveConfig({ root: fixture, configFile, logLevel: "silent" }, "serve");
+
+  expect(config.env).not.toHaveProperty("VITE_FROM_PROCESS");
+  expect(config.env).not.toHaveProperty("VITE_FROM_FILE");
+});
+
 describe("production build guards", () => {
   it("builds without values from Vite environment variables or .env files", async () => {
     vi.stubEnv("VITE_FROM_PROCESS", "process-only-value");
@@ -37,6 +46,15 @@ describe("production build guards", () => {
     await expect(readFile(join(output, "index.html"), "utf8")).resolves.toContain("assets/");
     await expect(assertProductionFiles(output, ["process-only-value", "file-only-value"])).resolves.toBeUndefined();
   });
+
+  it.each(["import.meta.env.VITE_API_URL", 'import.meta.env["VITE_API_URL"]'])(
+    "rejects the web source reference %s before Vite substitutes it",
+    async (reference) => {
+      await writeViteEntry(`document.body.textContent = ${reference};`);
+
+      await expect(buildFixture()).rejects.toThrow("Read environment values from /config.json");
+    },
+  );
 
   it("rejects a Vite bundle that imports an E2E auth entrypoint", async () => {
     await mkdir(join(fixture, "tests/support"), { recursive: true });
