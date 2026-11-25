@@ -1,6 +1,8 @@
+import { realpathSync } from "node:fs";
 import { stdin, stderr } from "node:process";
 import { createInterface } from "node:readline";
 import { Writable } from "node:stream";
+import { fileURLToPath } from "node:url";
 import { PutParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import parameters from "../infra/terraform/bootstrap/parameters.json" with { type: "json" };
 
@@ -95,7 +97,8 @@ async function main(args: string[]): Promise<number> {
   }
 }
 
-if (import.meta.main) {
+const entryPath = process.argv[1] ?? null;
+if (entryPath !== null && realpathSync(entryPath) === fileURLToPath(import.meta.url)) {
   try {
     process.exitCode = await main(process.argv.slice(2));
   } catch {
