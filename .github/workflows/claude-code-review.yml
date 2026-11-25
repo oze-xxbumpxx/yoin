@@ -1,5 +1,7 @@
 # PRを開いたときと、下書きをレビューできる状態にしたときだけ動く。
 # 追加のpush（synchronize）では動かさない。
+# このファイルが既定ブランチと違うPRでは、actionはレビューを飛ばす。
+# 人が見るファイルの確認は、この変更がmainに入った次のPRから動く。
 # allowed_botsを付けると、このactionはautoモードにしない。
 # プロンプト付きの実行は、claude_argsのallowedToolsに無い道具を拒否する。
 # そのため、差分とレビュー基準を読む道具を許可リストに入れる。
@@ -73,6 +75,11 @@ jobs:
             Write every GitHub comment in Japanese. Keep identifiers, file paths, API names, and the severity label unchanged.
             Post CRITICAL, HIGH, and MEDIUM findings. Also post LOW findings when they are security, data loss, or authorization bugs. Skip pure style nits.
             If there is nothing to post, leave one short comment with severity NONE.
+            Start that top-level comment with a heading `人が重点的に見るべきファイル`.
+            Under it, list each file a human should read carefully: path, line range when one applies, and one Japanese reason.
+            Order by risk. Reasons include 認証・権限, DB migration, 外部公開のAPI, 課金, 削除処理, 設定・秘密情報, and places you are unsure.
+            If no file needs that look, write `なし` and the reason. Do not leave the list empty.
+            Then read the same heading in the pull request description. Name risky files in the diff that the description leaves out.
             Do not post a `claude-review-done` marker. That completion comment is a separate step, written by Claude Code in `review-devin-pr` before a human decides to merge.
 
             Use `gh pr comment` for top-level feedback.

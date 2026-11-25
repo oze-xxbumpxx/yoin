@@ -18,6 +18,7 @@ Claude Code、Devin、Codexは、このリポジトリの同じルールと成�
 - PRを開く前に、実在する試験を通す。無いゲートはunknownと書く。
 - `main`へ直接コミットしない。`main`へ直接pushしない。マージは人が行う。
 - 秘密の値をコミットしない。接続文字列、VAPIDの秘密鍵、招待トークンを作る値は、SSM Parameter Storeに置く。
+- Devinは、PRの説明の「人が重点的に見るべきファイル」を毎回書く。雛形は`.github/pull_request_template.md`。パス、必要なら行、理由1行。危険の高い順。無ければ理由。空欄にしない。
 
 ## してはいけないこと
 
@@ -55,6 +56,11 @@ Claude Code、Devin、Codexは、このリポジトリの同じルールと成�
 
 メンバー確認の前にS3の署名付きURLを出さない。取得の期限は5分にする。アップロードは`uploads/`に置き、確定のときにコピーする。例外の`message`をログや応答に出さない。
 安全な形は、同じ拒否の規則を、読み取りと書き込みのすべての経路で確かめる。
+
+### 人が見るファイル
+
+説明の一覧から、認証、権限、migration、公開API、課金、削除、秘密の値が抜けていたら指摘する。
+安全な形は、危険の高い順に書き、無ければ理由を書く。
 
 ## 現在の状態
 
@@ -145,7 +151,7 @@ AIが実装し、ユーザーは要件提示・設計判断・レビュー・マ
 
 見る範囲は、触ったファイルで決める。説明に書いていなくても、ファイルが下の範囲なら人が見る。
 
-根拠は、次の3つである。@kinopee_aiの投稿（2026-11-22、https://x.com/kinopee_ai/status/2124351926276145251 ）は、人のレビューを認証・権限、課金・決済、データベースに置く。引用元の@suna_gakuの投稿（2026-11-22、https://x.com/suna_gaku/status/2124287589893255584 ）は、すぐ巻き戻せるかを、見るかどうかの基準にする。AWSの記事「Building a gated review pipeline for AI coding agents on AWS」（2026-11-17、https://aws.amazon.com/blogs/devops/building-a-gated-review-pipeline-for-ai-coding-agents-on-aws/ ）は、触ったファイルでレビューの厚みを変える。
+根拠は`docs/reviews/human-review-sources.md`。
 
 人が差分を見るのは、次である。アプリのコード、Terraform、`.github/workflows/`のデプロイはまだ無い。実装が始まったら、各項目の場所に置く。
 
