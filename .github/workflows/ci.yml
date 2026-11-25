@@ -28,7 +28,9 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
 
       - name: Harness, lint, boundaries, types and Vitest
-        run: bash .claude/scripts/run-quality-gates.sh
+        run: |
+          node scripts/require-quality-scripts.ts
+          bash .claude/scripts/run-quality-gates.sh
 
       - name: Find available product checks
         id: available
