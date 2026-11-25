@@ -141,6 +141,28 @@
 - 反映先: .github/workflows/claude-code-review.yml、AGENTS.mdの「ブランチとPR」
 - 決めた日: 2026-11-26
 
+### ActionsのClaudeが見つけたセキュリティの指摘を、PRにどう書くか
+
+<!-- id: claude-security-disclosure -->
+
+- 工程: 設計
+- 種類: 設計
+- 優先度: 高
+- 状態: 回答待ち
+- なぜ今: PR #84でActionsのClaudeをpushのたびに動かすので、セキュリティの指摘を公開のコメントに書く回数が増える。Devin Reviewが、PR #84でこの点を指摘した。
+- 根拠: `.github/workflows/claude-code-review.yml`（PR #80で入った、CRITICAL・HIGH・MEDIUMを公開のコメントに書く指示）、`.claude/skills/review-devin-pr/SKILL.md`の「セキュリティ指摘」（PR・Issue・コメントのどこにも詳細を書かない）、`AGENTS.md`の「指摘の扱い」（セキュリティの指摘は非公開で扱う手順を優先する）、Devin ReviewのPR #84への指摘
+- 選択肢:
+  - A) 中身は書かず、「セキュリティの指摘あり、持ち主の確認待ち」とだけ公開のコメントに書く。中身は、Claude Codeが手元で同じPRを見て、プロジェクトのスレッドで大関さんに渡す
+    - 利点: 直す前の弱点を、第三者がコメントから読めない。`review-devin-pr`と`AGENTS.md`の決まりに合う
+    - 欠点: 中身を見るまでに、手元のClaude Codeを1回通す手間がかかる。「指摘あり」と書くこと自体が、そのPRに弱点があるという手がかりになる
+  - B) 今のまま、中身を公開のコメントに書く
+    - 利点: PRを開けば、すぐ中身が読める。手間が増えない
+    - 欠点: 公開リポジトリなので、直す前の弱点を誰でも読める。`review-devin-pr`の決まりと食い違ったままになる
+  - C) Actionsはセキュリティを見ず、手元のClaude Codeと`security-reviewer`だけが見る
+    - 利点: 公開の場所に、指摘の有無も残らない
+    - 欠点: 頼まなくても見る形から、セキュリティだけが外れる
+- 推奨: A（直す前の弱点を公開せずに、頼まなくても指摘があることには気づける）
+
 ### 回数の上限に当たったときにどうするか
 
 <!-- id: codex-limit -->

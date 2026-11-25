@@ -3,18 +3,14 @@
   "title": "PRのレビューをCodexとClaudeで自動にする",
   "level": "L2",
   "page": "https://claude.ai/artifact/F2JZQyonCYX5iccRTQNs77",
-  "round": 1,
+  "round": 2,
   "stages": {
     "requirements": {
       "state": "skipped",
       "reason": "レビューの手順の変更で、要件定義書は作らない"
     },
     "design": {
-      "state": "approval",
-      "docs": [
-        ".github/workflows/claude-code-review.yml",
-        ".claude/skills/review-devin-pr/SKILL.md"
-      ]
+      "state": "waiting"
     },
     "plan": {
       "state": "pending"
@@ -32,5 +28,5 @@
       "state": "pending"
     }
   },
-  "updated_at": "2026-11-25T22:10:00.000Z"
+  "updated_at": "2026-11-25T22:15:00.000Z"
 }
