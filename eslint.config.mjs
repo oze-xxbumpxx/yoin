@@ -34,6 +34,12 @@ export default [
           pattern: "src/contexts/*/**",
           capture: ["context"],
         },
+        {
+          type: "context-test",
+          mode: "full",
+          pattern: "tests/contexts/*/**",
+          capture: ["context"],
+        },
         { type: "other", mode: "full", pattern: "**/*" },
       ],
     },
@@ -48,7 +54,7 @@ export default [
             disallow: ["domain", "infrastructure", "context-internal"],
           },
           {
-            from: ["context-entry", "domain", "infrastructure", "context-internal"],
+            from: ["context-entry", "domain", "infrastructure", "context-internal", "context-test"],
             allow: ["domain", "infrastructure", "context-internal"]
               .map((type) => [type, { context: "${from.context}" }]),
           },

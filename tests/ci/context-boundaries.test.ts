@@ -12,6 +12,11 @@ it("enforces context public entrypoints and keeps domain code independent", asyn
     "src/contexts/ticket/domain/rules.ts": 'import "../infrastructure/store";\nimport "vite";',
     "src/contexts/ticket/infrastructure/store.ts": 'import "../domain/rules";',
     "src/contexts/group/index.ts": 'import "../ticket";\nimport "../ticket/infrastructure/store";',
+    "src/contexts/group/domain/rules.ts": "export {};",
+    "tests/contexts/ticket/domain/rules.test.ts": [
+      'import "../../../../src/contexts/ticket/domain/rules";',
+      'import "../../../../src/contexts/group/domain/rules";',
+    ].join("\n"),
   };
   try {
     for (const [file, contents] of Object.entries(files)) {
@@ -33,6 +38,8 @@ it("enforces context public entrypoints and keeps domain code independent", asyn
       ["src/contexts/ticket/domain/rules.ts", [["boundaries/element-types", 1], ["boundaries/external", 2]]],
       ["src/contexts/ticket/infrastructure/store.ts", []],
       ["src/contexts/group/index.ts", [["boundaries/element-types", 2]]],
+      ["src/contexts/group/domain/rules.ts", []],
+      ["tests/contexts/ticket/domain/rules.test.ts", [["boundaries/element-types", 2]]],
     ]);
   } finally {
     await rm(fixture, { force: true, recursive: true });
