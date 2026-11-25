@@ -60,15 +60,16 @@ node scripts/bootstrap-ssm.ts production
 
 | SSM名の末尾 | 入れる値 | 読む役割 |
 | --- | --- | --- |
-| `runtime/database-url` | Neonのプール経由の接続文字列 | 環境のLambda |
+| `runtime/database-url` | Neonのプール経由の接続文字列 | API・通知送信Lambda |
 | `runtime/invite-hmac-key` | 招待トークンを作る環境専用の秘密 | 必要なLambdaだけ |
 | `runtime/vapid-private-key` | 環境専用のVAPID秘密鍵 | 通知送信Lambda |
+| `pre-sign-up/database-url` | Neonのプール経由の接続文字列。招待検査と登録開始数の更新だけを許すDBロール（#50）を使います | 登録前Lambdaだけ |
 | `migration/database-url` | Neonの直接接続文字列 | DBマイグレーション用CI |
 | `seed/owner-email`、`seed/owner-display-name` | その環境で使うオーナーのメールアドレス、表示名 | 初期データ用CI |
 
 値は端末に表示されません。スクリプトは`SecureString`で新しく登録し、登録済みの値は上書きしません。途中からやり直すには末尾の名前を追加します（例: `node scripts/bootstrap-ssm.ts integration migration/database-url`）。値の変更は初回登録とは別にオーナーが行います。VAPID公開鍵は秘密ではなく、後続の配置でPWAに渡します。
 
-リポジトリのルートで次を実行し、名前とARNを確認します。環境用Terraformには必要な名前とARNだけを渡し、Lambdaのロールには必要なパラメーターの`ssm:GetParameter`だけを許可します。TerraformのSSMリソースやデータソースで値を扱いません。
+リポジトリのルートで次を実行し、名前とARNを確認します。環境用Terraformには必要な名前とARNだけを渡し、Lambdaのロールには必要なパラメーターの`ssm:GetParameter`だけを許可します。`pre-sign-up/database-url`のARNを許可するのは、同じ環境の登録前Lambdaの実行ロールだけです。登録前Lambdaには`runtime/database-url`を渡しません。TerraformのSSMリソースやデータソースで値を扱いません。
 
 ```sh
 terraform -chdir=infra/terraform/bootstrap output -json ssm_parameter_names

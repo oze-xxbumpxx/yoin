@@ -9,6 +9,7 @@ test("パラメーター名を環境と用途で分ける", () => {
       "runtime/database-url",
       "runtime/invite-hmac-key",
       "runtime/vapid-private-key",
+      "pre-sign-up/database-url",
       "migration/database-url",
       "seed/owner-email",
       "seed/owner-display-name",

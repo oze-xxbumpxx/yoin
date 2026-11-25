@@ -129,6 +129,8 @@ run "scope_oidc_and_parameter_reads" {
       toset(values(output.ssm_parameter_names[environment].runtime)) == toset([
         "/yoin/${environment}/runtime/database-url", "/yoin/${environment}/runtime/invite-hmac-key", "/yoin/${environment}/runtime/vapid-private-key"
       ]) &&
+      toset(values(output.ssm_parameter_names[environment]["pre-sign-up"])) == toset(["/yoin/${environment}/pre-sign-up/database-url"]) &&
+      toset(values(output.ssm_parameter_arns[environment]["pre-sign-up"])) == toset(["arn:aws:ssm:ap-southeast-1:111122223333:parameter/yoin/${environment}/pre-sign-up/database-url"]) &&
       toset(values(output.ssm_parameter_names[environment].migration)) == toset(["/yoin/${environment}/migration/database-url"]) &&
       toset(values(output.ssm_parameter_names[environment].seed)) == toset(["/yoin/${environment}/seed/owner-email", "/yoin/${environment}/seed/owner-display-name"])
     ])
