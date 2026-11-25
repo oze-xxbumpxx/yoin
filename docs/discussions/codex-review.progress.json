@@ -1,0 +1,32 @@
+{
+  "feature": "codex-review",
+  "title": "PRのレビューにCodexをどう使うか",
+  "level": "L2",
+  "page": "https://claude.ai/artifact/F2JZQyonCYX5iccRTQNs77",
+  "round": 1,
+  "stages": {
+    "requirements": {
+      "state": "skipped",
+      "reason": "レビューの手順の変更で、要件定義書は作らない"
+    },
+    "design": {
+      "state": "waiting"
+    },
+    "plan": {
+      "state": "pending"
+    },
+    "implement": {
+      "state": "pending"
+    },
+    "review": {
+      "state": "pending"
+    },
+    "merge": {
+      "state": "pending"
+    },
+    "reflect": {
+      "state": "pending"
+    }
+  },
+  "updated_at": "2026-11-25T11:01:33.571Z"
+}
