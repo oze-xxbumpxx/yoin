@@ -39,7 +39,13 @@ describe("production build guards", () => {
   it("builds without values from Vite environment variables or .env files", async () => {
     vi.stubEnv("VITE_FROM_PROCESS", "process-only-value");
     await writeFile(join(fixture, ".env.production"), "VITE_FROM_FILE=file-only-value\n");
-    await writeViteEntry("document.body.textContent = JSON.stringify(import.meta.env);");
+    const config = await resolveConfig({ root: fixture, configFile, logLevel: "silent" }, "build", "production");
+    expect(config.env).not.toHaveProperty("VITE_FROM_PROCESS");
+    expect(config.env).not.toHaveProperty("VITE_FROM_FILE");
+    await writeViteEntry(`document.body.textContent = JSON.stringify([
+      import.meta.env.MODE, import.meta.env.DEV, import.meta.env.PROD,
+      import.meta.env.BASE_URL, import.meta.env.SSR,
+    ]);`);
     await buildFixture();
 
     const output = join(fixture, "out");
@@ -47,14 +53,18 @@ describe("production build guards", () => {
     await expect(assertProductionFiles(output, ["process-only-value", "file-only-value"])).resolves.toBeUndefined();
   });
 
-  it.each(["import.meta.env.VITE_API_URL", 'import.meta.env["VITE_API_URL"]'])(
-    "rejects the web source reference %s before Vite substitutes it",
-    async (reference) => {
-      await writeViteEntry(`document.body.textContent = ${reference};`);
+  it.each([
+    ["custom property", "document.title = import.meta.env.VITE_API_URL;"],
+    ["bracket access", 'document.title = import.meta.env["VITE_API_URL"];'],
+    ["bracket access to a built-in", 'document.title = import.meta.env["MODE"];'],
+    ["bracket access to env", 'document.title = import.meta["env"].MODE;'],
+    ["destructuring", "const { VITE_API_URL } = import.meta.env; document.title = VITE_API_URL;"],
+    ["aliasing env", "const env = import.meta.env; document.title = env.MODE;"],
+  ])("rejects %s before Vite substitutes import.meta.env", async (_name, source) => {
+    await writeViteEntry(source);
 
-      await expect(buildFixture()).rejects.toThrow("Read environment values from /config.json");
-    },
-  );
+    await expect(buildFixture()).rejects.toThrow("Read environment values from /config.json");
+  });
 
   it("rejects a Vite bundle that imports an E2E auth entrypoint", async () => {
     await mkdir(join(fixture, "tests/support"), { recursive: true });
