@@ -50,7 +50,7 @@ PRの説明の「コマンドの範囲」が「なし」でないときも、表
 | 拒否（403・404）の規則を足した | 同じ規則を持つ読み取りと書き込みのすべての経路で確かめているか | `.agents/skills/devin-workflow/SKILL.md`の実装の約束 |
 | `package.json`かロックファイル（`pnpm-lock.yaml`など）で依存を足した・版を変えた | その依存はこの変更に要るか。広く使われているパッケージか。綴りを少し変えた名前や、よく似た別のパッケージでないか。理由なくgitのURLやtarballに固定していないか | 持ち主の依頼（2026-11-25） |
 | TerraformでIAMのポリシー、S3、CloudFront、セキュリティグループを足した・変えた | IAMのアクションまたはリソースが`*`になっていないか。S3のバケットやCloudFrontが、必要な範囲より公開されていないか。セキュリティグループが`0.0.0.0/0`に開いていないか | 持ち主の依頼（2026-11-25）。IaCは「重点的に見るところ」 |
-| 通知先（`PushSubscription`）の読み取り、登録、送信、削除を変えた | `endpoint`と鍵（`p256dh`・`auth`）を読めるのは、その通知先の持ち主だけか。期限が切れた通知先と、Web Pushの応答が404または410の通知先は消しているか。`endpoint`のURLをログに書いていないか | `docs/designs/first-slice.md`（購読情報は本人だけ。404/410は通知先を消す）、`docs/requirements/first-slice.md`のE-11 |
+| 通知先（`PushSubscription`）の読み取り、登録、送信、削除を変えた | `endpoint`と鍵（`p256dh`・`auth`）を読めるのは、その通知先の持ち主だけか。期限が切れた通知先と、Web Pushの応答が404または410の通知先は消しているか。`endpoint`のURLをログに書いていないか | `docs/designs/first-slice.md`（購読情報は本人だけ。404/410は通知先を消す）、`docs/requirements/first-slice.md`のE-11。期限切れは持ち主の依頼（2026-11-25） |
 | 作業クローンの外、`.git/hooks`、`.git/config`、ホームディレクトリ、AWS、Neon、Cognito、SSM、本番、結合検証へのコマンドを足した。またはGitが追跡しないディレクトリの書き換えで動きを直した | ユーザーの確認がPRの説明にあるか。`--permission-mode dangerous`を理由にしていないか | `AGENTS.md`の「コマンドの範囲」。OpenAI「Inside the Codex sandbox」（2026-11-18、https://openai.com/index/inside-the-codex-sandbox ） |
 
 ## 前回のレビューを使う
