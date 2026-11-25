@@ -68,7 +68,12 @@ node scripts/bootstrap-ssm.ts production
 
 値は端末に表示されません。スクリプトは`SecureString`で新しく登録し、登録済みの値は上書きしません。途中からやり直すには末尾の名前を追加します（例: `node scripts/bootstrap-ssm.ts integration migration/database-url`）。値の変更は初回登録とは別にオーナーが行います。VAPID公開鍵は秘密ではなく、後続の配置でPWAに渡します。
 
-名前とARNは`terraform output -json ssm_parameter_names`と`terraform output -json ssm_parameter_arns`で確認できます。環境用Terraformには必要な名前とARNだけを渡し、Lambdaのロールには必要なパラメーターの`ssm:GetParameter`だけを許可します。TerraformのSSMリソースやデータソースで値を扱いません。
+リポジトリのルートで次を実行し、名前とARNを確認します。環境用Terraformには必要な名前とARNだけを渡し、Lambdaのロールには必要なパラメーターの`ssm:GetParameter`だけを許可します。TerraformのSSMリソースやデータソースで値を扱いません。
+
+```sh
+terraform -chdir=infra/terraform/bootstrap output -json ssm_parameter_names
+terraform -chdir=infra/terraform/bootstrap output -json ssm_parameter_arns
+```
 
 ## 5. オーナーがGitHubの承認とOIDCを設定する
 
@@ -79,12 +84,18 @@ node scripts/bootstrap-ssm.ts production
    {"use_default":false,"include_claim_keys":["repo","context","job_workflow_ref"]}
    ```
 
-3. 後続のデプロイは`deploy.yml`から、`main`で管理する再利用可能な`deploy-terraform.yml`、`deploy-migration.yml`、`deploy-seed.yml`の各ジョブを呼びます。AWSを使うジョブ内で対象のGitHub Environmentを指定し、`id-token: write`でOIDCの短期認証を取ります。本番のジョブは承認とSHA照合を終えるまで本番の権限を取りません。ロールARNは`terraform output -json ci_role_arns`で確認できます。長期のAWSキーやSSMの値をGitHub Secretsに置きません。
+3. 後続のデプロイは`deploy.yml`から、`main`で管理する再利用可能な`deploy-terraform.yml`、`deploy-migration.yml`、`deploy-seed.yml`の各ジョブを呼びます。AWSを使うジョブ内で対象のGitHub Environmentを指定し、`id-token: write`でOIDCの短期認証を取ります。本番のジョブは承認とSHA照合を終えるまで本番の権限を取りません。ルートから`terraform -chdir=infra/terraform/bootstrap output -json ci_role_arns`でロールARNを確認できます。長期のAWSキーやSSMの値をGitHub Secretsに置きません。
 4. このPRが作るCIロールには、対象の状態またはSSMパラメーターの権限だけを付けます。後続のPRでアプリ用の権限を足す際、CIに初回用バケットポリシーやOIDC・CIロール自体を変更する権限を渡しません。
 
 ## 6. オーナーが状態の移行と権限を確かめる（M09）
 
-1. オーナーのMacで`terraform state list >/dev/null`が成功し、`terraform plan -detailed-exitcode`が0で終わることを確かめます。終了コード2は意図しない差分、1はエラーです。結果は端末だけで見ます。状態やplanの内容をチケットやPRに貼りません。
+1. オーナーのMacで、リポジトリのルートから次を実行します。状態を読めて、planが終了コード0で終わることを確かめます。終了コード2は意図しない差分、1はエラーです。結果は端末だけで見ます。状態やplanの内容をチケットやPRに貼りません。
+
+   ```sh
+   terraform -chdir=infra/terraform/bootstrap state list >/dev/null
+   terraform -chdir=infra/terraform/bootstrap plan -detailed-exitcode
+   ```
+
 2. CIのOIDCジョブが揃ったら、各CIロールの短期認証でバケットの`bootstrap/terraform.tfstate`に対する`aws s3api head-object`が`403`（`AccessDenied`）になることを確かめます。認証違いやキーの不存在を合格にしません。先にオーナーの認証で同じキーが存在することを確かめます。
 3. 同じCI認証で次を実行し、`AccessDenied`になることを確かめます。`bucket`には対象バケット名を入れます。既存の状態のETagと一致しない条件を付けるため、権限が漏れていても既存の状態を書き換えません。`PreconditionFailed`など、`AccessDenied`以外は不合格です。無条件の書き込みや削除はしません。本番のロールを取る試験にもオーナーの承認が必要です。
 
