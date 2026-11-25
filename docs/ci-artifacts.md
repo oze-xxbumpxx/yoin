@@ -8,7 +8,7 @@ PRはmainと合わせたコミットを検査します。mainへのpushでは、
 - DB変更のタスクは`check:migrations`をルートの`package.json`に追加します。DBを使う試験は`tests/integration/`に置き、`test:integration`で実行します。Neonと同じメジャー版の使い捨てPostgreSQLをランナーで立ち上げ、localhostだけを接続先にします。
 - 2人の試験は`playwright.config.ts`と`tests/e2e/`を追加します。CIはPlaywrightで試験を列挙してから実行します。代替のAPI・メール・Pushと使い捨てDBだけを使い、配置用のファイルは書き換えません。
 - 試験用の認証コードは`tests/support/`に置きます。試験の経路、JWTの発行者、鍵を識別する**秘密ではない**文字列を`tests/support/production-markers.json`に配列で列挙します。CIは製品ファイルにその文字列がないか調べます。ルートの`test:production-auth`はビルド済みの`dist/pwa`と`dist/lambda/api`を使い、製品が試験の入口を公開せず、試験JWTを拒むことを確かめます。
-- 画面が`apps/web/index.html`に加わると、Viteは環境の値を取り込まずに`dist/pwa`を作ります。各Lambdaは`src/functions/<名前>/index.ts`から`dist/lambda/<名前>/index.mjs`を作ります。製品ビルドでは`tests/`以下を取り込めません。
+- 画面が`apps/web/index.html`に加わると、Viteは環境の値を取り込まずに`dist/pwa`を作ります。各Lambdaは`src/functions/<名前>/index.ts`から`dist/lambda/<名前>/index.mjs`を作ります。LambdaとPWAのメインバンドルでは、依存するモジュールに`tests/`以下がないことを確かめます。ViteはWeb Workerを別にビルドするため、最初のWeb Workerを追加するときは、その依存モジュールも検査に含めます。
 
 まだ用意していない製品の検査は、成功とせず実行結果の概要に「未実行」と書きます。製品のビルドと試験がそろうまでは、配置用の成果物を出しません。
 
