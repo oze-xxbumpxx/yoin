@@ -9,7 +9,8 @@ PRはmainと合わせたコミットを検査します。mainへのpushでは、
 - 2人の試験は`playwright.config.ts`と`tests/e2e/`を追加します。CIはPlaywrightで試験を列挙してから実行します。代替のAPI・メール・Pushと使い捨てDBだけを使い、配置用のファイルは書き換えません。
 - 試験用の認証コードは`tests/support/`に置きます。試験の経路、JWTの発行者、鍵を識別する**秘密ではない**文字列を`tests/support/production-markers.json`に配列で列挙します。CIは製品ファイルにその文字列がないか調べます。ルートの`test:production-auth`はビルド済みの`dist/pwa`と`dist/lambda/api`を使い、製品が試験の入口を公開せず、試験JWTを拒むことを確かめます。
 - 画面が`apps/web/index.html`に加わると、Viteは環境の値を取り込まずに`dist/pwa`を作ります。各Lambdaは`src/functions/<名前>/index.ts`から`dist/lambda/<名前>/index.mjs`を作ります。LambdaとPWAのメインバンドルでは、依存するモジュールに`tests/`以下がないことを確かめます。ViteはWeb Workerを別にビルドするため、最初のWeb Workerを追加するときは、その依存モジュールも検査に含めます。
-- ローカル開発とE2Eでも、画面は開発サーバーが返す手元用の`/config.json`から環境の値を読みます。Viteは開発時もビルド時も`.env`や`VITE_*`の値を取り込みません。画面のビルド対象に`import.meta.env.VITE_*`への参照があれば、ビルドを失敗させます。
+- Viteは開発時もビルド時も`.env`や`VITE_*`の値を取り込みません。画面のビルドでは、`import.meta.env`から`MODE`、`DEV`、`PROD`、`BASE_URL`、`SSR`を直接読む場合だけを許します。
+- 現時点では開発サーバーは`/config.json`を返しません。画面の共通部分を作るタスクで、ローカル開発とE2Eが使う手元用の`/config.json`を開発サーバーから返すようにします。手元用のファイルは配置用の成果物に入れません。
 
 まだ用意していない製品の検査は、成功とせず実行結果の概要に「未実行」と書きます。製品のビルドと試験がそろうまでは、配置用の成果物を出しません。
 
