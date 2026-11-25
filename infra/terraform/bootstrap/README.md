@@ -6,7 +6,7 @@
 
 - 変更を承認してから作業を始めます。結合検証を先に準備します。本番のNeon作成やSSM登録は、本番側の準備をオーナーが承認した後に行います。
 - Macの暗号化されたローカル領域に、このPRがマージされたリポジトリを用意します。クラウド同期、共有バックアップ、画面収録、シェルのトレースを切ります。`umask 077`を設定し、`TF_LOG`と`TF_LOG_PATH`を解除します。
-- AWS CLI v2、Terraform 1.12以降（1.x）、Node.js 24、pnpm、jqを用意します。AWSのオーナー用プロファイルで一時認証し、環境に残った別のAWS認証変数を解除します。`AWS_PROFILE`を設定し、`aws sts get-caller-identity --query Account --output text`が対象の12桁のAWSアカウントIDであることを確かめます。以下では同じ認証を使います。
+- AWS CLI v2、Terraform 1.12以降（1.x）、Node.js 24、pnpm、jq、psqlを用意します。AWSのオーナー用プロファイルで一時認証し、環境に残った別のAWS認証変数を解除します。`AWS_PROFILE`を設定し、`aws sts get-caller-identity --query Account --output text`が対象の12桁のAWSアカウントIDであることを確かめます。以下では同じ認証を使います。
 - [Neon Console](https://console.neon.tech/)でシンガポール（AWSの`ap-southeast-1`）に結合検証・本番のプロジェクトを1つずつ作ります。各プロジェクトのプール経由と直接接続の文字列を区別して用意します。
 - このAWSアカウントにGitHub用OIDCプロバイダーが既にある場合は適用前に止め、オーナーが既存の利用者と管理元を確認します。共有プロバイダーを消して作り直さないでください。
 
@@ -48,6 +48,10 @@ terraform init -migrate-state -backend-config=bootstrap.tfbackend
 後続の環境用Terraformには、`terraform output -json backends`の対応するS3設定だけを渡します。`default`ワークスペースを使い、結合検証と本番をTerraformワークスペースで切り替えません。CIから初回状態を`terraform_remote_state`で読みません。
 
 ## 4. オーナーがSSMへ値を登録する
+
+登録スクリプトを動かす前に、対象のNeonプロジェクトで登録前Lambda専用のログインロールを作ります。アプリ用の権限はこの時点では付けず、招待検査と登録開始数の更新に必要な権限は#50で付けます。本番のロールを作るのは、オーナーが本番の準備を承認した後です。
+
+Neonの管理用ロールで直接接続し、SQLで`CREATE ROLE yoin_pre_sign_up LOGIN;`を実行します。名前は#50で使うロール名とそろえます。Neon Consoleのロール作成画面は`neon_superuser`権限を付けるため使いません。パスワードは`psql`の`\password yoin_pre_sign_up`で非表示のまま設定します。専用ロールのプール経由の接続文字列を用意してから、次の登録に進みます。共通ランタイムの接続文字列で代用しません。
 
 ルートへ戻り、同じAWSプロファイルと対象アカウントを確かめます。端末で入力します。値をコマンド引数、環境変数、ファイルに入れません。
 
