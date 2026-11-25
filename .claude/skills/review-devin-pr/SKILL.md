@@ -52,9 +52,12 @@ description: >
 
 `main`の`REVIEW.md`を先に読み、差分で当たる確認項目を選んでから見る。PRの版の`REVIEW.md`では判定しない。
 
+GitHub ActionsのClaude（`.github/workflows/claude-code-review.yml`）が、PRを開いたときとpushのたびに、下の1〜4と7を見て、`<!-- claude-review round=<n> sha=<head> source=actions -->`で始まるコメントを付ける。round 0と1の`must`は、そのコメントでDevinに届いている。このセッションでは、そのコメントを先に読み、同じ指摘を重ねて投稿しない。roundはActionsのコメントと共通で数える。Actionsのコメントが今のheadに無いとき（実行の失敗や使用上限）だけ、このセッションが下の「自動投稿」で投稿する。
+
 1. **状態**: `gh pr view <n> --json files,statusCheckRollup,mergeable,body,headRefOid`。既存CIの結果を確認する。
    round 1以降は`gh api repos/{owner}/{repo}/compare/<前回の sha>...<今の head>`で差分を見て、
    前回の指摘が直ったかと、新しい変更に問題が無いかを見る。Devinの返信コメントも読む。
+   round 1以降で、Devinの直しが文言やnitだけでないときは、PRに`@codex review`とコメントしてCodexの見直しを頼む（`AGENTS.md`の「レビュー」）。Codexは、開いたときにしか自動で見ないため。
 2. **範囲**: 変更ファイルがIssueの「やること」と範囲内か。範囲外のファイル、並行作業中の他PRが作る
    はずの型・ファイルを先回りで作っていないか。本文に`Closes #<Issue>`があるか。
 3. **中身**: 設計書・試験計画と突き合わせる。名前・置き場所・型・エラーコード・応答の形。
@@ -154,6 +157,7 @@ summaryの先頭には、最初にその指摘を出したレビュアーを`[cl
 2. `<!-- claude-review-done sha=<完全なSHA> verdict=<merge|fix|escalate> -->`を先頭に入れたコメントを`gh pr comment <PR> --body-file <ファイル>`で新規投稿する。指摘本文やsecurityの有無は書かない。
 3. 間違いの修正やpush後の再レビューでは、前の完了を編集せず、新しい完了を投稿する。短いSHAは完了の印にしない。
 4. マージ判断をユーザーへ渡す前に、現在のheadが完了の印のSHAと同じで、既存CIが通っていることを確かめる。PRのマージはユーザーが行う。
+5. 完了の印の前に、Codexが今のheadを見たかを確かめる。PRのCodexの要約コメント（`<!-- codex-review-state:v1 … -->`）の`commit_sha`か、`@codex review`への返信が、今のheadを指していること。指していなければ`@codex review`を頼んで待つ。Codexが使用上限の返事を返したときは、ユーザーに一言知らせる。L0 / L1はClaude Codeと`reviewer`のレビューで進め、L2 / L3は上限が戻ってから頼み直す（`docs/discussions/codex-review.md`の仮決定）。
 
 ## 直ったスレッドを解決済みにする
 
