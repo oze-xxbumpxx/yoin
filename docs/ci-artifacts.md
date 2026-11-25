@@ -14,6 +14,6 @@ PRはmainと合わせたコミットを検査します。mainへのpushでは、
 
 ## 配置側が受け取るもの
 
-mainの`CI`が成功した実行から、対象の完全SHAと同じ`head_sha`を持つ実行IDを選びます。その実行の`yoin-<完全SHA>`だけを取得し、`SHA`が対象の完全SHAと一致することと、`sha256sum -c SHA256SUMS`が通ることを配置前に確かめます。失敗した実行や別のSHAは使いません。
+mainの`CI`が成功した実行から、対象の完全SHAと同じ`head_sha`を持つ実行IDを選びます。その実行の`yoin-<完全SHA>`だけを取得し、`SHA`が対象の完全SHAと一致することを確かめます。成果物を展開した場所で`bash /path/to/yoin/scripts/sha256.sh -c SHA256SUMS`を実行し、中身も照合します。失敗した実行や別のSHAは使いません。
 
 成果物の中身は`pwa/`、`lambda/{api,pre-sign-up,notification-sender}.zip`、`SHA`、`SHA256SUMS`です。結合検証と本番では同じ`pwa/`を使います。`config.json`はビルドや成果物に入れず、配置するときに各環境に置きます。

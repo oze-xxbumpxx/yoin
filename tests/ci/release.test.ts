@@ -1,9 +1,11 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
 const packageRelease = resolve("scripts/package-release.sh");
+const sha256 = resolve("scripts/sha256.sh");
 const revision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 const functions = ["api", "pre-sign-up", "notification-sender"];
 let fixture: string;
@@ -31,8 +33,22 @@ it("packages the original PWA and Lambda builds under the checked-out full SHA",
     })).toBe(`dist/lambda/${name}/index.mjs`);
   }
   writeFileSync(join(release, "pwa/index.html"), "changed");
-  expect(spawnSync("sha256sum", ["-c", "SHA256SUMS"], { cwd: release, encoding: "utf8" }).stdout)
+  expect(spawnSync("bash", [sha256, "-c", "SHA256SUMS"], { cwd: release, encoding: "utf8" }).stdout)
     .toContain("pwa/index.html: FAILED");
+});
+
+it("writes and verifies the same manifest format with only shasum on PATH", () => {
+  const path = join(fixture, "bin");
+  const bash = execFileSync("bash", ["-c", "command -v bash"], { encoding: "utf8" }).trim();
+  const shasum = execFileSync("bash", ["-c", "command -v shasum"], { encoding: "utf8" }).trim();
+  mkdirSync(path);
+  symlinkSync(shasum, join(path, "shasum"));
+  const options = { cwd: fixture, env: { ...process.env, PATH: path }, encoding: "utf8" } as const;
+  const file = "dist/pwa/index.html";
+  const manifest = execFileSync(bash, [sha256, file], options);
+  expect(manifest).toBe(`${createHash("sha256").update(file).digest("hex")}  ${file}\n`);
+  writeFileSync(join(fixture, "SHA256SUMS"), manifest);
+  expect(execFileSync(bash, [sha256, "-c", "SHA256SUMS"], options)).toBe(`${file}: OK\n`);
 });
 
 it.each(["wrong", "missing"])("does not package a %s revision or build", (failure) => {
