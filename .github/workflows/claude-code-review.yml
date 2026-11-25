@@ -92,7 +92,6 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # 一時的にログへ全出力を出している（PR #82の失敗の理由を見るため）。公開リポジトリでログは誰でも読めるので、理由が分かったらfalseに戻す。
-          show_full_output: true
           # [bot]の有無はaction側で無視して比べる。最初のPRで実ログインが違えば直す。
           allowed_bots: "devin-ai-integration[bot]"
           prompt: |
