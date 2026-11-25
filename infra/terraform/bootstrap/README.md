@@ -86,7 +86,17 @@ node scripts/bootstrap-ssm.ts production
 
 1. オーナーのMacで`terraform state list >/dev/null`が成功し、`terraform plan -detailed-exitcode`が0で終わることを確かめます。終了コード2は意図しない差分、1はエラーです。結果は端末だけで見ます。状態やplanの内容をチケットやPRに貼りません。
 2. CIのOIDCジョブが揃ったら、各CIロールの短期認証でバケットの`bootstrap/terraform.tfstate`に対する`aws s3api head-object`が`403`（`AccessDenied`）になることを確かめます。認証違いやキーの不存在を合格にしません。先にオーナーの認証で同じキーが存在することを確かめます。
-3. 同じCI認証で`aws s3api put-object --bucket "$bucket" --key bootstrap/terraform.tfstate --body /dev/null --if-match '"m09-never-matches"'`が`AccessDenied`になることを確かめます。`bucket`には対象バケット名を入れます。既存の状態のETagと一致しない条件を付けるため、権限が漏れていても既存の状態を書き換えません。`PreconditionFailed`など、`AccessDenied`以外は不合格です。無条件の書き込みや削除はしません。本番のロールを取る試験にもオーナーの承認が必要です。
+3. 同じCI認証で次を実行し、`AccessDenied`になることを確かめます。`bucket`には対象バケット名を入れます。既存の状態のETagと一致しない条件を付けるため、権限が漏れていても既存の状態を書き換えません。`PreconditionFailed`など、`AccessDenied`以外は不合格です。無条件の書き込みや削除はしません。本番のロールを取る試験にもオーナーの承認が必要です。
+
+   ```sh
+   (
+     empty_body=$(mktemp "${TMPDIR:-/tmp}/yoin-m09.XXXXXX") || exit 1
+     trap 'rm -f "$empty_body"' EXIT
+     aws s3api put-object --bucket "$bucket" --key bootstrap/terraform.tfstate \
+       --body "$empty_body" --if-match '"m09-never-matches"'
+   )
+   ```
+
 4. 移行と権限の確認が済んだら、初回用キーを残し、暗号化された場所のローカル状態と一時バックアップだけを破棄します。確認の記録は結果と終了コードだけを残し、値、状態、plan、OIDCトークンはログや成果物に含めません。
 
 ## AWSにつながずに確かめる
