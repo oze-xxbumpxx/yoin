@@ -1,0 +1,35 @@
+{
+  "feature": "aws-emulator",
+  "title": "AWSのエミュレータを開発と試験に入れるか",
+  "level": "L2",
+  "page": "https://claude.ai/artifact/JNv7XSP9D5sDTBtKtuuHeQ",
+  "round": 1,
+  "stages": {
+    "requirements": {
+      "state": "skipped",
+      "reason": "道具の決定で、要件定義書は作らない"
+    },
+    "design": {
+      "state": "approval",
+      "docs": [
+        "docs/decisions/ADR-0004-dev-tools.md"
+      ]
+    },
+    "plan": {
+      "state": "pending"
+    },
+    "implement": {
+      "state": "pending"
+    },
+    "review": {
+      "state": "pending"
+    },
+    "merge": {
+      "state": "pending"
+    },
+    "reflect": {
+      "state": "pending"
+    }
+  },
+  "updated_at": "2026-11-25T05:10:56.917Z"
+}
