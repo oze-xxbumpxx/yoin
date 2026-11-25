@@ -3,3 +3,8 @@
 .claude/evals/results/
 .claude/evals/baselines/
 .DS_Store
+node_modules/
+.pnpm-store/
+dist/
+playwright-report/
+test-results/

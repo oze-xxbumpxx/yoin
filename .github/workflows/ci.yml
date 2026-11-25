@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Check the tested commit
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Harness, lint, boundaries, types and Vitest
+        run: bash .claude/scripts/run-quality-gates.sh
+
+      - name: Find available product checks
+        id: available
+        run: |
+          script_exists() {
+            node -e 'process.exit(require("./package.json").scripts?.[process.argv[1]] ? 0 : 1)' "$1"
+          }
+          lambda_exists() {
+            test -f src/functions/api/index.ts ||
+              test -f src/functions/pre-sign-up/index.ts ||
+              test -f src/functions/notification-sender/index.ts
+          }
+          detect() {
+            local name="$1"
+            shift
+            if "$@"; then
+              echo "${name}=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "${name}=false" >> "$GITHUB_OUTPUT"
+              echo "- ${name}: 未実行（製品コードまたは検査が未接続）" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+          detect migrations script_exists check:migrations
+          detect postgres script_exists test:integration
+          detect playwright test -f playwright.config.ts
+          detect pwa test -f apps/web/index.html
+          detect lambda lambda_exists
+          detect production_auth script_exists test:production-auth
+          if test -d tests/integration && ! script_exists test:integration; then
+            echo "::error::tests/integration requires the test:integration script"
+            exit 1
+          fi
+          if test -d tests/e2e && ! test -f playwright.config.ts; then
+            echo "::error::tests/e2e requires playwright.config.ts"
+            exit 1
+          fi
+
+      - name: Migration checks
+        if: steps.available.outputs.migrations == 'true'
+        run: pnpm check:migrations
+
+      - name: Disposable PostgreSQL integration tests
+        if: steps.available.outputs.postgres == 'true'
+        run: pnpm test:integration
+
+      - name: Build the environment-independent PWA
+        if: steps.available.outputs.pwa == 'true'
+        run: pnpm build:web
+
+      - name: Bundle available Lambda entrypoints
+        if: steps.available.outputs.lambda == 'true'
+        run: pnpm build:lambda
+
+      - name: Discover and run the two-user Playwright tests
+        if: steps.available.outputs.playwright == 'true'
+        run: |
+          pnpm exec playwright test --list
+          pnpm exec playwright install --with-deps chromium
+          pnpm exec playwright test
+
+      - name: Test JWT rejection with the production build
+        if: steps.available.outputs.production_auth == 'true'
+        run: |
+          test -s tests/support/production-markers.json
+          test -s dist/pwa/index.html
+          test -s dist/lambda/api/index.mjs
+          pnpm test:production-auth
+
+      - name: Scan product outputs for test-only inputs and deploy-time config
+        if: steps.available.outputs.pwa == 'true' || steps.available.outputs.lambda == 'true'
+        run: node scripts/check-production.ts
+
+      - name: Package deployable outputs
+        id: release
+        if: >-
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          steps.available.outputs.migrations == 'true' &&
+          steps.available.outputs.postgres == 'true' &&
+          steps.available.outputs.playwright == 'true' &&
+          steps.available.outputs.production_auth == 'true' &&
+          steps.available.outputs.pwa == 'true' &&
+          steps.available.outputs.lambda == 'true'
+        run: |
+          bash scripts/package-release.sh "$GITHUB_SHA"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the tested revision
+        if: steps.release.outputs.ready == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: yoin-${{ github.sha }}
+          path: dist/release
+          if-no-files-found: error
+          include-hidden-files: true

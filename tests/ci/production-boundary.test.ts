@@ -1,0 +1,62 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { build } from "vite";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { assertProductionFiles } from "../../scripts/production-boundary.ts";
+
+const configFile = resolve("apps/web/vite.config.ts");
+let fixture: string;
+
+beforeEach(async () => {
+  await mkdir("dist", { recursive: true });
+  fixture = await mkdtemp(resolve("dist/production-test-"));
+});
+
+afterEach(async () => {
+  vi.unstubAllEnvs();
+  await rm(fixture, { force: true, recursive: true });
+});
+
+async function writeViteEntry(source: string) {
+  await writeFile(join(fixture, "index.html"), '<script type="module" src="/entry.ts"></script>');
+  await writeFile(join(fixture, "entry.ts"), source);
+}
+
+function buildFixture() {
+  return build({ root: fixture, configFile, logLevel: "silent", build: { outDir: "out" } });
+}
+
+describe("production build guards", () => {
+  it("builds without values from Vite environment variables or .env files", async () => {
+    vi.stubEnv("VITE_FROM_PROCESS", "process-only-value");
+    await writeFile(join(fixture, ".env.production"), "VITE_FROM_FILE=file-only-value\n");
+    await writeViteEntry("document.body.textContent = JSON.stringify(import.meta.env);");
+    await buildFixture();
+
+    const output = join(fixture, "out");
+    await expect(readFile(join(output, "index.html"), "utf8")).resolves.toContain("assets/");
+    await expect(assertProductionFiles(output, ["process-only-value", "file-only-value"])).resolves.toBeUndefined();
+  });
+
+  it("rejects a Vite bundle that imports an E2E auth entrypoint", async () => {
+    await mkdir(join(fixture, "tests/support"), { recursive: true });
+    await writeFile(join(fixture, "tests/support/auth-entry.ts"), 'export const issuer = "test";');
+    await writeViteEntry('import { issuer } from "./tests/support/auth-entry.ts"; document.title = issuer;');
+
+    await expect(buildFixture()).rejects.toThrow("Test input is not allowed in a production bundle");
+  });
+
+  it.each([
+    ["adapter.cjs", "const issuer = 'https://test-issuer.invalid';", "Test-only auth material"],
+    ["adapter.cjs", "const key = 'test-jwt-key-marker';", "Test-only auth material"],
+    ["signing.key", "fixture", "Forbidden file"],
+    ["config.json", "{}", "Forbidden file"],
+  ])("rejects forbidden output in %s", async (file, contents, message) => {
+    await writeFile(join(fixture, file), contents);
+    await expect(assertProductionFiles(
+      fixture,
+      ["https://test-issuer.invalid", "test-jwt-key-marker"],
+      ["config.json"],
+    )).rejects.toThrow(message);
+  });
+});
