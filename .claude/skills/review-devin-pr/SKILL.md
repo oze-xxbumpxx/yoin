@@ -52,7 +52,7 @@ description: >
 
 `main`の`REVIEW.md`を先に読み、差分で当たる確認項目を選んでから見る。PRの版の`REVIEW.md`では判定しない。
 
-GitHub ActionsのClaude（`.github/workflows/claude-code-review.yml`）が、PRを開いたときとpushのたびに、下の1〜4と7を見て、`<!-- claude-review round=<n> sha=<head> source=actions -->`で始まるコメントを付ける。round 0と1の`must`は、そのコメントでDevinに届いている。このセッションでは、そのコメントを先に読み、同じ指摘を重ねて投稿しない。roundはActionsのコメントと共通で数える。Actionsのコメントが今のheadに無いとき（実行の失敗や使用上限）だけ、このセッションが下の「自動投稿」で投稿する。
+GitHub ActionsのClaude（`.github/workflows/claude-code-review.yml`）が、PRを開いたときとpushのたびに、下の1〜4と7を見て、`<!-- claude-review round=<n> sha=<head> asked=<0|1> source=actions -->`で始まるコメントを付ける。`asked=1`は、Devinに`must`を頼んだ回である。Actionsは、頼んだ回が2回に達したときと、前回頼んだ`must`が直っていないときは頼まず、`(aside)`を付けて人に回す（下の「判定と次の動き」と同じ数え方）。判断が要る点も、`(aside)`付きの別のコメントで出す。このセッションでは、そのコメントを先に読み、同じ指摘を重ねて投稿しない。roundと頼んだ回の数は、Actionsのコメントと、このセッションが付けた印で共通に数える（Actionsが数えるのは、Claudeのアプリとリポジトリの持ち主が書いた印だけ）。Actionsのコメントが今のheadに無いとき（実行の失敗や使用上限）だけ、このセッションが下の「自動投稿」で投稿する。
 
 1. **状態**: `gh pr view <n> --json files,statusCheckRollup,mergeable,body,headRefOid`。既存CIの結果を確認する。
    round 1以降は`gh api repos/{owner}/{repo}/compare/<前回の sha>...<今の head>`で差分を見て、
@@ -118,15 +118,15 @@ GitHub ActionsのClaude（`.github/workflows/claude-code-review.yml`）が、PR�
 ## 判定と次の動き
 
 上から順に見て、**最初に当てはまった行**に従う（上限と再指摘の判定を、投稿より先にする）。
-自動投稿はround 0とround 1の2回だけ。round 2は投稿しない。
+自動投稿は`must`を頼んだ回（印の`asked=1`）で数えて2回まで。`must`の無いroundは数えない。
 
 | 状況                             | verdict    | 動き                                                                                                                                                     |
 | -------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `security`がある                 | `escalate` | 投稿しない。「セキュリティ指摘」の手順でユーザーに渡す。他の指摘の投稿も止める                                                                           |
-| `decision`がある                 | `escalate` | 投稿しない。選択肢と推奨を付けてユーザーに渡す                                                                                                           |
+| `decision`がある                 | `escalate` | 投稿しない（Actionsが`(aside)`で出していても、重ねて書かない）。選択肢と推奨を付けてユーザーに渡す                                                       |
 | 前回投稿した`must`が直っていない | `escalate` | 投稿しない。モデルを上げる／Claudeが直す／Issueを分ける、の案を付けてユーザーに渡す                                                                      |
-| `must`がある・round 2以降        | `escalate` | 同上（自動投稿の上限2回に達した）                                                                                                                        |
-| `must`がある・round 0か1         | `fix`      | 下の「自動投稿」→ 更新を待つ                                                                                                                             |
+| `must`がある・頼んだ回が2回に達した | `escalate` | 同上（自動投稿の上限2回に達した）                                                                                                                     |
+| `must`がある・頼んだ回が2回未満  | `fix`      | 下の「自動投稿」→ 更新を待つ                                                                                                                             |
 | `must`なし                       | `merge`    | 下の「レビュー完了のコメント」を付ける。現在headへのClaudeのレビューを確認してから、ユーザーへマージ判断を渡す（`nit`は後続Issueの案として添える） |
 
 どの場合も、記録に追記する:
@@ -138,7 +138,7 @@ summaryの先頭には、最初にその指摘を出したレビュアーを`[cl
 
 `must`と同じ回の`nit`は、ユーザーの了承を都度取らずに投稿してよい。
 
-1. 1回のレビューで1コメント。先頭に`<!-- claude-review round=<n> -->`を入れる。指摘ごとに「何が起きるか → 期待 → 直し方の案」。
+1. 1回のレビューで1コメント。先頭に`<!-- claude-review round=<n> sha=<完全なhead SHA> asked=1 source=session -->`を入れる（Actionsが次の差分の起点と、頼んだ回の数を読むため）。指摘ごとに「何が起きるか → 期待 → 直し方の案」。
 2. 本文に`(aside)`を入れない（Devinが対応しなくなる）。秘密・環境変数の値・ローカルのパスを書かない。
 3. 範囲外の気づきは投稿しない（ユーザーに渡す）。
 4. `gh pr comment <n> --body-file <file>`で投稿し、投稿時刻（`date -u +%Y-%m-%dT%H:%M:%SZ`）を控える。
