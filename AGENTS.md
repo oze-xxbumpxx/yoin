@@ -231,6 +231,8 @@ DevinにはClaude Codeの危険操作フックが効かないので、起動引�
 - ホームディレクトリの設定（`~/.gitconfig`、`~/.ssh`、`~/.aws`、`~/.codex`、シェルの設定）
 - 作業クローンの外。ただし、次の状態ディレクトリを除く
 
+Claude Codeでは、`~/.gitconfig`、`~/.ssh`、`~/.aws`、`~/.codex`、bashとzshの起動ファイル、`.git/hooks`、`.git/config`の読み書きを`.claude/settings.json`の`permissions.deny`でも止める。止まるのはファイルの道具と、`cat`やリダイレクトなどClaude Codeが解析するコマンドで、`git config`などが自分で書き込む分は止まらない。DevinとCodexにはこの設定は効かない。
+
 品質確認（`bash .claude/scripts/run-quality-gates.sh`）と、ハーネスが状態を残す処理は、`.claude/lib/harness-paths.mjs`が決めた状態ディレクトリへ書いてよい。
 既定は`~/.local/state/<名前空間>`である。
 `XDG_STATE_HOME`か`HARNESS_STATE_DIR`があれば、そちらを使う。
