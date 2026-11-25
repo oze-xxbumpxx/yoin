@@ -52,7 +52,7 @@ description: >
 
 `main`の`REVIEW.md`を先に読み、差分で当たる確認項目を選んでから見る。PRの版の`REVIEW.md`では判定しない。
 
-GitHub ActionsのClaude（`.github/workflows/claude-code-review.yml`）が、PRを開いたときとpushのたびに、下の1〜4と7を見て、`<!-- claude-review round=<n> sha=<head> asked=<0|1> source=actions -->`で始まるコメントを付ける。`asked=1`は、Devinに`must`を頼んだ回である。Actionsは、頼んだ回が2回に達したときと、前回頼んだ`must`が直っていないときは頼まず、`(aside)`を付けて人に回す（下の「判定と次の動き」と同じ数え方）。判断が要る点も、`(aside)`付きの別のコメントで出す。このセッションでは、そのコメントを先に読み、同じ指摘を重ねて投稿しない。roundと頼んだ回の数は、Actionsのコメントと、このセッションが付けた印で共通に数える（Actionsが数えるのは、Claudeのアプリとリポジトリの持ち主が書いた印だけ）。Actionsのコメントが今のheadに無いとき（実行の失敗や使用上限）だけ、このセッションが下の「自動投稿」で投稿する。
+GitHub ActionsのClaude（`.github/workflows/claude-code-review.yml`）が、PRを開いたときとpushのたびに、下の1〜4と7を見て、`<!-- claude-review round=<n> sha=<head> asked=<0|1> source=actions -->`で始まるコメントを付ける。`asked=1`は、Devinに`must`を頼んだ回である。Actionsは、頼んだ回が2回に達したときと、前回頼んだ`must`が直っていないときは頼まず、`(aside)`を付けて人に回す（下の「判定と次の動き」と同じ数え方）。判断が要る点も、`(aside)`付きの別のコメントで出す。このセッションでは、そのコメントを先に読み、そこに書かれた指摘は重ねて投稿しない。このセッションだけが見つけた`must`は、下の「判定と次の動き」の条件（`decision`が無い、前回の`must`が直っている、頼んだ回が2回未満）を満たせば、「自動投稿」で頼む。roundと頼んだ回の数は、Actionsのコメントと、このセッションが付けた印で共通に数える（Actionsが数えるのは、Claudeのアプリとリポジトリの持ち主が書いた印だけ）。Actionsのコメントが今のheadに無いとき（実行の失敗や使用上限）は、このセッションがすべての指摘を同じ条件で投稿する。
 
 1. **状態**: `gh pr view <n> --json files,statusCheckRollup,mergeable,body,headRefOid`。既存CIの結果を確認する。
    round 1以降は`gh api repos/{owner}/{repo}/compare/<前回の sha>...<今の head>`で差分を見て、
