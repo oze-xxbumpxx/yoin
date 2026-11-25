@@ -14,12 +14,16 @@
 - CIは外部サービスにつながない（試験計画の冒頭、実装計画の「CIと成果物」）。
 - 使うAWSの部品は、Lambda、API Gateway（HTTP API）、EventBridge Scheduler、Cognito、S3、SES、SQS、SSM Parameter Store、CloudFront（`docs/architecture.md`、ADR-0007）。
 - 結合試験のDBはGitHub ActionsのPostgresのコンテナ（ADR-0004の決定8）。ここは変えない。
-- 2026-11-24に調べた事実（出典は各論点の根拠）
-  - LocalStackは2026-03-23から、使うのにアカウントと認証トークンが要る。無料のHobbyは「趣味と商用でない利用」向けで、CIで動かすことも含む。いちばん安い有料のBaseは1人月39ドル（年払い）か45ドル（月払い）。
-  - LocalStackのHobbyに入るのは、Lambda、SQS、SES（v1）、EventBridge Scheduler、S3、SSM。CognitoのユーザープールとAPI GatewayのHTTP API（v2）はBase以上。
-  - LocalStackのSchedulerは、予約した時刻に実際に宛先のLambdaやSQSを起動する。ただし、FlexibleTimeWindowを無視し、失敗しても再試行せず、止めていたあいだの分はやり直さない。
-  - 2026-11-25に大関さんの依頼でAWS Emulator（1.0.610）をこの環境に入れて試した（下の「AWS Emulatorを試した結果」）。
-  - MiniStack・Flociは、アカウントの要らないMITライセンスの代わりの道具。MiniStackはCognitoやSchedulerも「対応」と書いているが、実際に動くかは確かめた記事が見つからなかった。
+
+## 調べた事実
+
+出典は、最初の論点の根拠にある。
+
+- LocalStackは2026-03-23から、使うのにアカウントと認証トークンが要る。無料のHobbyは「趣味と商用でない利用」向けで、CIで動かすことも含む。いちばん安い有料のBaseは1人月39ドル（年払い）か45ドル（月払い）。
+- LocalStackのHobbyに入るのは、Lambda、SQS、SES（v1）、EventBridge Scheduler、S3、SSM。CognitoのユーザープールとAPI GatewayのHTTP API（v2）はBase以上。
+- LocalStackのSchedulerは、予約した時刻に実際に宛先のLambdaやSQSを起動する。ただし、FlexibleTimeWindowを無視し、失敗しても再試行せず、止めていたあいだの分はやり直さない。
+- 2026-11-25に大関さんの依頼でAWS Emulator（1.0.610）をこの環境に入れて試した（下の「AWS Emulatorを試した結果」）。
+- MiniStack・Flociは、アカウントの要らないMITライセンスの代わりの道具。MiniStackはCognitoやSchedulerも「対応」と書いているが、実際に動くかは確かめた記事が見つからなかった。
 
 ## AWS Emulatorを試した結果
 
@@ -48,7 +52,7 @@
 - 工程: 設計
 - 種類: 設計
 - 優先度: 高
-- 状態: 回答待ち
+- 状態: 決定
 - なぜ今: 最初の1本のCIのタスク（実装計画「CIと成果物」）は、まだDevinに渡していない。渡す前に決めれば、CIの作りと試験計画に最初から入れられる。
 - 根拠: AWSの記事（https://aws.amazon.com/jp/blogs/news/test-your-applications-against-aws-locally-with-aws-emulator/ ）、AWS Emulatorのリポジトリ（https://github.com/aws/aws-emulator ）、下の「AWS Emulatorを試した結果」、LocalStackの料金（https://www.localstack.cloud/pricing ）とライセンス（https://docs.localstack.cloud/aws/licensing/ ）、Scheduler（https://docs.localstack.cloud/aws/services/scheduler/ ）、Cognito（https://docs.localstack.cloud/aws/services/cognito-idp/ ）、API Gateway（https://docs.localstack.cloud/aws/services/apigateway/ ）、無料の代わりの道具の比較（https://innomizetech.com/blog/free-local-aws-emulators-in-2026-what-each-one-runs-and-where-each-one-stops ）、MiniStack（https://www.ministack.org/ ）
 - 選択肢:
@@ -68,6 +72,12 @@
     - 利点: 道具も決まりも増えない
     - 欠点: Schedulerの予約の引数や権限、SQSの失敗キューの設定の誤りは、大関さんが結合検証で動かすまで見つからない
 - 推奨: A（無料でトークンも要らず、試験計画が結合検証まで残しているSchedulerの起動と権限を、CIで先に確かめられる。動かないと分かったWeb Pushの暗号とJWTの署名の確認は、今どおり手元の試験と結合検証で見る）
+- 決定: A
+- 推奨と同じか: 同じ
+- 理由: 推奨のとおり
+- 選ばなかった理由: B（CognitoとHTTP APIが入らず、アカウントと認証トークンが要る）、C（動くことを確かめた記録が見つからない）、D（月45ドル前後かかる）、E（Schedulerの権限や失敗キューの誤りが結合検証まで見つからない）
+- 反映先: docs/decisions/ADR-0004-dev-tools.mdの2026-11-25の追記、AGENTS.mdの「コマンドの範囲」
+- 決めた日: 2026-11-25
 
 ### エミュレータで、何を確かめるか
 
@@ -76,7 +86,7 @@
 - 工程: 設計
 - 種類: 設計
 - 優先度: 高
-- 状態: 回答待ち
+- 状態: 決定
 - なぜ今: 範囲でCIの作りと、試験計画のどの試験を書き直すかが変わる。
 - 根拠: 試験計画`docs/tests/first-slice.md`のI04〜I07・I13・M07・M08、実装計画の「iPhoneへの通知」「環境と監視」
 - 選択肢:
@@ -90,6 +100,12 @@
     - 利点: 確かめのスキル（verify-first-slice）で、通知の予約まで手元で動きを見られる
     - 欠点: エミュレータのJWTの確認は署名を壊したトークンも通すので、ログインの確かめには使えない。開発用の起動の手順が増える
 - 推奨: A（試験計画で代わりの実装に頼っていたところだけを置き換えるのが、変える量に対して得るものが大きい。Bは、Terraformを試してから足すかを決めればよい）
+- 決定: A
+- 推奨と同じか: 同じ
+- 理由: 推奨のとおり
+- 選ばなかった理由: B（Terraformで作れるかをまだ試せていない）、C（JWTの確認が署名を見ないので、ログインの確かめに使えない）
+- 反映先: docs/decisions/ADR-0004-dev-tools.mdの2026-11-25の追記
+- 決めた日: 2026-11-25
 
 ### 決めたことを、どこに書くか
 
@@ -98,7 +114,7 @@
 - 工程: 設計
 - 種類: 設計
 - 優先度: 中
-- 状態: 仮決定
+- 状態: 決定
 - なぜ今: 実装計画と試験計画はDevinが書く分担（AGENTS.md「進め方の決まり」）なので、Claudeが直す範囲を決めておく。
 - 根拠: AGENTS.md「進め方の決まり」「コマンドの範囲」、ADR-0004の決定8
 - 選択肢:
@@ -109,3 +125,9 @@
     - 利点: 早い
     - 欠点: 試験計画はDevinが書く分担を外れる
 - 推奨: A（分担の決まりのとおり）
+- 決定: A
+- 推奨と同じか: 同じ
+- 理由: 仮決定に異議なし
+- 選ばなかった理由: B（試験計画はDevinが書く分担から外れる）
+- 反映先: このPR（ADR-0004とAGENTS.md）と、試験計画・実装計画を直すDevin向けのIssue
+- 決めた日: 2026-11-25

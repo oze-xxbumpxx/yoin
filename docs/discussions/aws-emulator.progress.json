@@ -10,7 +10,7 @@
       "reason": "道具の決定で、要件定義書は作らない"
     },
     "design": {
-      "state": "waiting",
+      "state": "approval",
       "docs": [
         "docs/decisions/ADR-0004-dev-tools.md"
       ]
@@ -30,5 +30,6 @@
     "reflect": {
       "state": "pending"
     }
-  }
+  },
+  "updated_at": "2026-11-25T05:10:56.917Z"
 }

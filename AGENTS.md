@@ -183,6 +183,7 @@ DevinにはClaude Codeの危険操作フックが効かないので、起動引�
 - このリポジトリのGitHub。`git fetch`、作業ブランチへの`git push`、このリポジトリを見る`gh`
 - パッケージの取得先。依存を新しく足してよいのは、依頼がその依存を含めているときだけ
 - 手元のテストが使うlocalhost
+  - AWS Emulator（ADR-0004の2026-11-25の追記）は、手元で動くのでここに入る。起動するときは、利用状況をAWSへ送る機能を止める（`--telemetry off`か`EMULATOR_TELEMETRY=off`）。止めないと、localhostの外へ通信するため。配布物を取る`downloads.aws.com`は、パッケージの取得先に入る
 
 AWS、Neon、Cognito、SSM、本番、結合検証には繋がない。
 `terraform apply`、`terraform destroy`、デプロイ、マイグレーションの適用もしない。
