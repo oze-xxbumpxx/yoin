@@ -1,0 +1,5 @@
+{
+  "runtime": ["database-url", "invite-hmac-key", "vapid-private-key"],
+  "migration": ["database-url"],
+  "seed": ["owner-email", "owner-display-name"]
+}
