@@ -6,7 +6,7 @@
 
 - 変更を承認してから作業を始めます。結合検証を先に準備します。本番のNeon作成やSSM登録は、本番側の準備をオーナーが承認した後に行います。
 - Macの暗号化されたローカル領域に、このPRがマージされたリポジトリを用意します。クラウド同期、共有バックアップ、画面収録、シェルのトレースを切ります。`umask 077`を設定し、`TF_LOG`と`TF_LOG_PATH`を解除します。
-- AWS CLI v2、Terraform 1.12以降（1.x）、Node.js 24、npm、jqを用意します。AWSのオーナー用プロファイルで一時認証し、環境に残った別のAWS認証変数を解除します。`AWS_PROFILE`を設定し、`aws sts get-caller-identity --query Account --output text`が対象の12桁のAWSアカウントIDであることを確かめます。以下では同じ認証を使います。
+- AWS CLI v2、Terraform 1.12以降（1.x）、Node.js 24、pnpm、jqを用意します。AWSのオーナー用プロファイルで一時認証し、環境に残った別のAWS認証変数を解除します。`AWS_PROFILE`を設定し、`aws sts get-caller-identity --query Account --output text`が対象の12桁のAWSアカウントIDであることを確かめます。以下では同じ認証を使います。
 - [Neon Console](https://console.neon.tech/)でシンガポール（AWSの`ap-southeast-1`）に結合検証・本番のプロジェクトを1つずつ作ります。各プロジェクトのプール経由と直接接続の文字列を区別して用意します。
 - このAWSアカウントにGitHub用OIDCプロバイダーが既にある場合は適用前に止め、オーナーが既存の利用者と管理元を確認します。共有プロバイダーを消して作り直さないでください。
 
@@ -52,7 +52,7 @@ terraform init -migrate-state -backend-config=bootstrap.tfbackend
 ルートへ戻り、同じAWSプロファイルと対象アカウントを確かめます。端末で入力します。値をコマンド引数、環境変数、ファイルに入れません。
 
 ```sh
-npm install --no-save --package-lock=false @aws-sdk/client-ssm@3.930.0
+pnpm --dir scripts install --ignore-workspace --frozen-lockfile
 node scripts/bootstrap-ssm.ts integration
 # 本番の準備を承認した後だけ実行する
 node scripts/bootstrap-ssm.ts production
@@ -112,4 +112,4 @@ terraform -chdir=infra/terraform/bootstrap output -json ssm_parameter_arns
 
 ## AWSにつながずに確かめる
 
-バックエンドを作っていない作業コピーで、`terraform init -backend=false`、`terraform fmt -check -recursive`、`terraform validate`、`terraform test`を実行します。試験はAWSのモックで動きます。SSMスクリプトは依存を入れたルートで`node --test scripts/tests/bootstrap-ssm.test.ts`を実行します。テストのSSM送信は差し替えていて、実際の値やAWSの認証を使いません。
+バックエンドを作っていない作業コピーで、`terraform init -backend=false`、`terraform fmt -check -recursive`、`terraform validate`、`terraform test`を実行します。試験はAWSのモックで動きます。SSMスクリプトは手順4のコマンドで依存を入れ、ルートで`pnpm --dir scripts test`を実行します。テストのSSM送信は差し替えていて、実際の値やAWSの認証を使いません。
