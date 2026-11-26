@@ -1,0 +1,11 @@
+issue: 50
+title: 'first-slice: DB変更の仕組み（SQLをデプロイの流れだけで流す）'
+agent: 'devin'
+model: 'swe-2-1-high'
+runner: 'cloud'
+change_level: 3
+delegated_at: '2026-11-24T23:52:48Z'
+reviews: []
+escalations: 0
+outcome: null
+gh: null
