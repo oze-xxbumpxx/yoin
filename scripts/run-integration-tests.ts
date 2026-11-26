@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const POSTGRES_IMAGE = "postgres:17-alpine";
 const LOCALHOST_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+const FORBIDDEN_QUERY_PARAMS = new Set(["host", "hostaddr", "service", "servicefile"]);
 const READY_TIMEOUT_MS = 30_000;
 const READY_POLL_MS = 250;
 
@@ -27,8 +28,13 @@ export function assertLocalhostDatabaseUrl(rawUrl: string): string {
   if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") {
     throw new Error("TEST_DATABASE_URLはpostgres://またはpostgresql://で指定してください");
   }
-  if (!LOCALHOST_HOSTS.has(parsed.hostname)) {
+  if (!LOCALHOST_HOSTS.has(parsed.hostname.toLowerCase())) {
     throw new Error("TEST_DATABASE_URLはlocalhostのみ許可します");
+  }
+  for (const key of parsed.searchParams.keys()) {
+    if (FORBIDDEN_QUERY_PARAMS.has(key.toLowerCase())) {
+      throw new Error("TEST_DATABASE_URLのクエリによる接続先上書きは許可しません");
+    }
   }
   return rawUrl;
 }

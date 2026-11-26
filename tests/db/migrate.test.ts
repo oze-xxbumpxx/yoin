@@ -140,9 +140,21 @@ describe("秘密情報の保護と接続先制限", () => {
     expect(output).not.toContain("postgres://");
   });
 
-  it("assertLocalhostDatabaseUrlはlocalhost以外を拒否する", () => {
+  it("assertLocalhostDatabaseUrlはlocalhost以外およびクエリによる接続先上書きを拒否する", () => {
     expect(assertLocalhostDatabaseUrl("postgresql://postgres@127.0.0.1:5432/yoin_test")).toContain("127.0.0.1");
-    expect(assertLocalhostDatabaseUrl("postgresql://postgres@localhost:5432/yoin_test")).toContain("localhost");
+    expect(assertLocalhostDatabaseUrl("postgresql://postgres@localhost:5432/yoin_test?sslmode=disable")).toContain(
+      "localhost",
+    );
     expect(() => assertLocalhostDatabaseUrl("postgresql://user:pass@ep-cool.ap-southeast-1.aws.neon.tech/yoin")).toThrow();
+    expect(() =>
+      assertLocalhostDatabaseUrl("postgresql://tester:example@localhost/yoin_test?host=external.example"),
+    ).toThrow();
+    expect(() =>
+      assertLocalhostDatabaseUrl("postgresql://tester:example@localhost/yoin_test?HOST=external.example"),
+    ).toThrow();
+    expect(() =>
+      assertLocalhostDatabaseUrl("postgresql://tester:example@localhost/yoin_test?hostaddr=198.51.100.1"),
+    ).toThrow();
+    expect(() => assertLocalhostDatabaseUrl("postgresql://tester:example@localhost/yoin_test?service=prod")).toThrow();
   });
 });
