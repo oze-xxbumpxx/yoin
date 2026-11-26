@@ -8,6 +8,7 @@ export default defineConfig({
       "**/dist/**",
       ".claude/**",
       ".agents/**",
+      "scripts/tests/**",
       "tests/e2e/**",
       "tests/integration/**",
     ],
