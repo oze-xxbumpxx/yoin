@@ -1,0 +1,18 @@
+issue: 47
+title: 'first-slice: 初回準備（環境ごとの状態、権限、設定を用意する）'
+agent: 'devin'
+model: 'swe-2-1-high'
+runner: 'cloud'
+change_level: 2
+delegated_at: '2026-11-24T23:52:32Z'
+reviews: []
+escalations: 0
+outcome: 'merged'
+gh:
+  pr: 76
+  pr_created_at: '2026-11-25T00:34:43Z'
+  merged_at: '2026-11-26T13:21:58Z'
+  closed_at: '2026-11-26T13:21:58Z'
+  commits: 7
+  ci_first_pass: null
+  closes_linked: true
