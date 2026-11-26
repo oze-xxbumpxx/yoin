@@ -79,6 +79,18 @@ describe("containsDestructiveDrop", () => {
     expect(containsDestructiveDrop("-- DROP TABLE fake\nSELECT 'DROP COLUMN fake', $$DROP TABLE x$$;")).toBe(false);
     expect(containsDestructiveDrop("/* outer /* DROP TABLE nested */ still comment */ CREATE TABLE t (id int);")).toBe(false);
   });
+
+  it("COLUMNを省略したALTER TABLE ... DROPを検出し、制約・DEFAULT・NOT NULLの削除は誤検知しない", () => {
+    expect(containsDestructiveDrop("ALTER TABLE groups DROP old_col;")).toBe(true);
+    expect(containsDestructiveDrop('ALTER TABLE groups DROP IF EXISTS "old_col";')).toBe(true);
+    expect(containsDestructiveDrop("ALTER TABLE groups ADD COLUMN next_col text, DROP old_col;")).toBe(true);
+    expect(containsDestructiveDrop("ALTER TABLE groups ALTER COLUMN name DROP DEFAULT, DROP legacy;")).toBe(true);
+    expect(containsDestructiveDrop("ALTER TABLE groups DROP CONSTRAINT groups_name_key;")).toBe(false);
+    expect(containsDestructiveDrop("ALTER TABLE groups ALTER COLUMN name DROP DEFAULT;")).toBe(false);
+    expect(containsDestructiveDrop("ALTER TABLE groups ALTER COLUMN name DROP NOT NULL;")).toBe(false);
+    expect(containsDestructiveDrop("ALTER TABLE groups ALTER COLUMN id DROP IDENTITY;")).toBe(false);
+    expect(containsDestructiveDrop("ALTER TABLE groups ALTER COLUMN gen DROP EXPRESSION;")).toBe(false);
+  });
 });
 
 describe("readAndValidateMigrations", () => {

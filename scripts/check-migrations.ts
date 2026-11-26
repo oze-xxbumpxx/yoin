@@ -11,7 +11,10 @@ export const FULL_SHA_PATTERN = /^[0-9a-f]{40}$/;
 
 const REQUIRES_DEPLOYED_PREFIX = /^--\s*requires-deployed\b/i;
 const REQUIRES_DEPLOYED_EXACT = /^--\s*requires-deployed:\s*([0-9a-f]{40})\s*$/;
-const DESTRUCTIVE_DROP_PATTERN = /\bDROP\s+(?:TABLE|COLUMN)\b/i;
+const DROP_TABLE_OR_COLUMN_PATTERN = /\bDROP\s+(?:TABLE|COLUMN)\b/i;
+const ALTER_TABLE_STATEMENT_PATTERN = /^\s*ALTER\s+TABLE\b/i;
+const ALTER_TABLE_IMPLICIT_DROP_COLUMN_PATTERN =
+  /\bDROP\s+(?!CONSTRAINT\b|DEFAULT\b|NOT\b|EXPRESSION\b|IDENTITY\b|COLUMN\b)/i;
 
 export interface JournalEntry {
   idx: number;
@@ -171,9 +174,21 @@ export function stripSqlCommentsAndLiterals(sql: string): string {
   return out.join("");
 }
 
-/** SQL本体に `DROP TABLE` または `DROP COLUMN` が含まれるかを判定する。 */
+/** SQL本体に `DROP TABLE` または列削除（`COLUMN`省略形含む）が含まれるかを判定する。 */
 export function containsDestructiveDrop(sql: string): boolean {
-  return DESTRUCTIVE_DROP_PATTERN.test(stripSqlCommentsAndLiterals(sql));
+  const stripped = stripSqlCommentsAndLiterals(sql);
+  if (DROP_TABLE_OR_COLUMN_PATTERN.test(stripped)) {
+    return true;
+  }
+  for (const statement of stripped.split(";")) {
+    if (
+      ALTER_TABLE_STATEMENT_PATTERN.test(statement) &&
+      ALTER_TABLE_IMPLICIT_DROP_COLUMN_PATTERN.test(statement)
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
