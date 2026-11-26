@@ -1,7 +1,7 @@
 # PRを開いたとき、下書きをレビューできる状態にしたとき、追加のpush（synchronize）のたびに動く。
 # 同じPRで前の実行が動いていたら止め、最新のheadだけを見る（concurrency）。
 # pushのあとは、前回のClaudeのレビューの印（claude-review round=… sha=…）から今のheadまでの差分を先に見る。範囲の検査はいつもベースとの差分でする。
-# 同じheadを見たことがある印があれば、actionを動かさない。
+# 同じheadの claude[bot] の印が既にあれば、基準のコピーと入力の準備とactionを動かさない。
 # 判断の記録は docs/discussions/codex-review.md（2026-11-26）。
 # このファイルが既定ブランチと違うPRでは、actionはレビューを飛ばす。
 # 人が見るファイルの確認は、この変更がmainに入った次のPRから動く。
@@ -33,14 +33,34 @@ jobs:
       id-token: write
     timeout-minutes: 25
     steps:
+      # 再実行、下書きの解除、開き直しで、同じshaを二度レビューしない。新しいshaはここを通る。
+      - name: Check for an existing review of this sha
+        id: reviewed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          match="$(gh api --paginate "repos/${REPO}/issues/${PR}/comments" \
+            --jq ".[] | select(.user.login == \"claude[bot]\") | .body | split(\"\n\")[0] | select(contains(\"claude-review round=\") and contains(\"sha=${HEAD_SHA}\"))")"
+          if [ -n "$match" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "このshaのClaudeレビューは既にあるので、Claudeの実行を飛ばす" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v6
         id: checkout
+        if: steps.reviewed.outputs.skip != 'true'
         with:
           fetch-depth: 1
       # レビューの基準は、PRの版ではなくベースブランチのREVIEW.mdにする。
       # actionがベースの版に戻すのはAGENTS.mdとCLAUDE.mdなどで、REVIEW.mdは戻さない。
       - name: Copy REVIEW.md from the base branch
         id: base
+        if: steps.reviewed.outputs.skip != 'true'
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
@@ -55,6 +75,7 @@ jobs:
       # 前回の印として数えるのは、Claudeのアプリと、リポジトリの持ち主が書いたコメントだけにする（公開リポジトリでは誰でもコメントできる）。
       - name: Prepare review input
         id: input
+        if: steps.reviewed.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -92,7 +113,7 @@ jobs:
           printf 'round=%s\nprevious_sha=%s\nmust_requests_so_far=%s\n' "$round" "$prev" "$asked" > .review-input/state.txt
       - uses: anthropics/claude-code-action@v1
         id: claude
-        if: steps.input.outputs.skip != 'true'
+        if: steps.reviewed.outputs.skip != 'true' && steps.input.outputs.skip != 'true'
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # [bot]の有無はaction側で無視して比べる。最初のPRで実ログインが違えば直す。
@@ -175,6 +196,7 @@ jobs:
             --max-turns 20
             --allowedTools "Read,Grep,Glob,Edit(.review-output/**),mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*)"
       # レビュー本文の有無にかかわらず、このshaの完了コメントを1件出す。再実行では足さない。
+      # 上でレビュー済みとして飛ばしたときも、同じshaの完了コメントがあれば足さない。
       # 下書き、fork、skipラベルはジョブのifで止まっている。
       - name: Post that the Claude review finished
         if: always()
