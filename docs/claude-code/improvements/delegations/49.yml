@@ -1,0 +1,11 @@
+issue: 49
+title: 'first-slice: CIと成果物（外部サービスなしで検査し、一度だけビルドする）'
+agent: 'devin'
+model: 'swe-2-1-medium'
+runner: 'cloud'
+change_level: 2
+delegated_at: '2026-11-25T00:27:00Z'
+reviews: []
+escalations: 0
+outcome: null
+gh: null
