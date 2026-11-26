@@ -86,10 +86,13 @@ describe("containsDestructiveDrop", () => {
     expect(containsDestructiveDrop("ALTER TABLE groups ADD COLUMN next_col text, DROP old_col;")).toBe(true);
     expect(containsDestructiveDrop("ALTER TABLE groups ALTER COLUMN name DROP DEFAULT, DROP legacy;")).toBe(true);
     expect(containsDestructiveDrop("ALTER TABLE groups DROP CONSTRAINT groups_name_key;")).toBe(false);
-    expect(containsDestructiveDrop("ALTER TABLE groups ALTER COLUMN name DROP DEFAULT;")).toBe(false);
-    expect(containsDestructiveDrop("ALTER TABLE groups ALTER COLUMN name DROP NOT NULL;")).toBe(false);
+    expect(containsDestructiveDrop("ALTER TABLE groups DROP   CONSTRAINT groups_name_key;")).toBe(false);
+    expect(containsDestructiveDrop("ALTER TABLE groups DROP /* keep */ CONSTRAINT groups_name_key;")).toBe(false);
+    expect(containsDestructiveDrop("ALTER TABLE groups ALTER COLUMN name DROP\n  DEFAULT;")).toBe(false);
+    expect(containsDestructiveDrop("ALTER TABLE groups ALTER COLUMN name DROP  NOT NULL;")).toBe(false);
     expect(containsDestructiveDrop("ALTER TABLE groups ALTER COLUMN id DROP IDENTITY;")).toBe(false);
     expect(containsDestructiveDrop("ALTER TABLE groups ALTER COLUMN gen DROP EXPRESSION;")).toBe(false);
+    expect(containsDestructiveDrop('ALTER TABLE groups DROP "CONSTRAINT";')).toBe(true);
   });
 });
 

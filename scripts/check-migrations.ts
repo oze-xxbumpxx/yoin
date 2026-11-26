@@ -13,8 +13,15 @@ const REQUIRES_DEPLOYED_PREFIX = /^--\s*requires-deployed\b/i;
 const REQUIRES_DEPLOYED_EXACT = /^--\s*requires-deployed:\s*([0-9a-f]{40})\s*$/;
 const DROP_TABLE_OR_COLUMN_PATTERN = /\bDROP\s+(?:TABLE|COLUMN)\b/i;
 const ALTER_TABLE_STATEMENT_PATTERN = /^\s*ALTER\s+TABLE\b/i;
-const ALTER_TABLE_IMPLICIT_DROP_COLUMN_PATTERN =
-  /\bDROP\s+(?!CONSTRAINT\b|DEFAULT\b|NOT\b|EXPRESSION\b|IDENTITY\b|COLUMN\b)/i;
+const ALTER_TABLE_DROP_NEXT_TOKEN = /\bDROP\s+([A-Za-z_][A-Za-z0-9_]*|"[^"]+")/gi;
+const NON_COLUMN_DROP_KEYWORDS = new Set([
+  "CONSTRAINT",
+  "DEFAULT",
+  "NOT",
+  "EXPRESSION",
+  "IDENTITY",
+  "COLUMN",
+]);
 
 export interface JournalEntry {
   idx: number;
@@ -181,11 +188,14 @@ export function containsDestructiveDrop(sql: string): boolean {
     return true;
   }
   for (const statement of stripped.split(";")) {
-    if (
-      ALTER_TABLE_STATEMENT_PATTERN.test(statement) &&
-      ALTER_TABLE_IMPLICIT_DROP_COLUMN_PATTERN.test(statement)
-    ) {
-      return true;
+    if (!ALTER_TABLE_STATEMENT_PATTERN.test(statement)) {
+      continue;
+    }
+    for (const match of statement.matchAll(ALTER_TABLE_DROP_NEXT_TOKEN)) {
+      const nextToken = match[1];
+      if (!NON_COLUMN_DROP_KEYWORDS.has(nextToken.toUpperCase())) {
+        return true;
+      }
     }
   }
   return false;
