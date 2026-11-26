@@ -5,7 +5,7 @@ import { parameterNames, registerParameter } from "../bootstrap-ssm.ts";
 
 test("パラメーター名を環境と用途で分ける", () => {
   for (const environment of ["integration", "production"] as const) {
-    expect(parameterNames(environment)).toEqual([
+    expect(parameterNames(environment)).toStrictEqual([
       "runtime/database-url",
       "runtime/invite-hmac-key",
       "runtime/vapid-private-key",
@@ -26,12 +26,12 @@ test("値をSecureStringとして送り、上書きも表示もしない", async
     expect(promptedName).toBe(name);
     return value;
   }, async (command) => {
-    expect(command.input).toEqual({ Name: name, Value: value, Tier: "Standard", Type: "SecureString", Overwrite: false });
+    expect(command.input).toStrictEqual({ Name: name, Value: value, Tier: "Standard", Type: "SecureString", Overwrite: false });
     sent = true;
   }, (message) => messages.push(message));
   expect(result).toBe(true);
   expect(sent).toBe(true);
-  expect(messages).toEqual([`${name}: 登録しました。`]);
+  expect(messages).toStrictEqual([`${name}: 登録しました。`]);
 });
 
 test("重複とAWSエラーで応答本文や値を表示しない", async () => {
@@ -60,7 +60,7 @@ test("空の値と入力の中止ではAWSへ送らない", async () => {
   expect(await registerParameter(name, async () => "  ", send, report)).toBe(false);
   expect(await registerParameter(name, async () => { throw new Error("secret-canary"); }, send, report)).toBe(false);
   expect(sent).toBe(false);
-  expect(messages).toEqual([`${name}: 空の値は登録しません。`, `${name}: 入力を中止しました。`]);
+  expect(messages).toStrictEqual([`${name}: 空の値は登録しません。`, `${name}: 入力を中止しました。`]);
 });
 
 test("実行入口はパイプからの値を受け付けない", () => {
