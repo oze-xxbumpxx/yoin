@@ -13,7 +13,7 @@ const REQUIRES_DEPLOYED_PREFIX = /^--\s*requires-deployed\b/i;
 const REQUIRES_DEPLOYED_EXACT = /^--\s*requires-deployed:\s*([0-9a-f]{40})\s*$/;
 const DROP_TABLE_OR_COLUMN_PATTERN = /\bDROP\s+(?:TABLE|COLUMN)\b/i;
 const ALTER_TABLE_STATEMENT_PATTERN = /^\s*ALTER\s+TABLE\b/i;
-const ALTER_TABLE_DROP_NEXT_TOKEN = /\bDROP\s+([A-Za-z_][A-Za-z0-9_]*|"[^"]+")/gi;
+const ALTER_TABLE_DROP_NEXT_TOKEN = /\bDROP\s+("(?:""|[^"])*"|[^\s,;]+)/gi;
 const NON_COLUMN_DROP_KEYWORDS = new Set([
   "CONSTRAINT",
   "DEFAULT",

@@ -93,6 +93,7 @@ describe("containsDestructiveDrop", () => {
     expect(containsDestructiveDrop("ALTER TABLE groups ALTER COLUMN id DROP IDENTITY;")).toBe(false);
     expect(containsDestructiveDrop("ALTER TABLE groups ALTER COLUMN gen DROP EXPRESSION;")).toBe(false);
     expect(containsDestructiveDrop('ALTER TABLE groups DROP "CONSTRAINT";')).toBe(true);
+    expect(containsDestructiveDrop("ALTER TABLE groups DROP 旧列;")).toBe(true);
   });
 });
 
