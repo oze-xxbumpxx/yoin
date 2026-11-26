@@ -23,5 +23,8 @@
     "typescript": "5.9.3",
     "vite": "7.3.8",
     "vitest": "4.1.12"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ssm": "3.930.0"
   }
 }
