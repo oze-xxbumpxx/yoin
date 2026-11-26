@@ -1,0 +1,11 @@
+issue: 47
+title: 'first-slice: 初回準備（環境ごとの状態、権限、設定を用意する）'
+agent: 'devin'
+model: 'swe-2-1-high'
+runner: 'cloud'
+change_level: 2
+delegated_at: '2026-11-24T23:52:32Z'
+reviews: []
+escalations: 0
+outcome: null
+gh: null
