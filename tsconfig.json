@@ -10,5 +10,5 @@
     "types": ["node", "vite/client"]
   },
   "include": ["*.ts", "src", "scripts", "db", "apps", "packages", "tests"],
-  "exclude": ["node_modules", "scripts/bootstrap-ssm.ts", "scripts/tests/**"]
+  "exclude": ["node_modules"]
 }

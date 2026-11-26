@@ -56,7 +56,7 @@ Neonの管理用ロールで直接接続し、SQLで`CREATE ROLE yoin_pre_sign_u
 ルートへ戻り、同じAWSプロファイルと対象アカウントを確かめます。端末で入力します。値をコマンド引数、環境変数、ファイルに入れません。
 
 ```sh
-pnpm --dir scripts install --ignore-workspace --frozen-lockfile
+pnpm install --frozen-lockfile
 node scripts/bootstrap-ssm.ts integration
 # 本番の準備を承認した後だけ実行する
 node scripts/bootstrap-ssm.ts production
@@ -117,4 +117,4 @@ terraform -chdir=infra/terraform/bootstrap output -json ssm_parameter_arns
 
 ## AWSにつながずに確かめる
 
-バックエンドを作っていない作業コピーで、`terraform init -backend=false`、`terraform fmt -check -recursive`、`terraform validate`、`terraform test`を実行します。試験はAWSのモックで動きます。SSMスクリプトは手順4のコマンドで依存を入れ、ルートで`pnpm --dir scripts test`を実行します。テストのSSM送信は差し替えていて、実際の値やAWSの認証を使いません。
+バックエンドを作っていない作業コピーで、`terraform init -backend=false`、`terraform fmt -check -recursive`、`terraform validate`、`terraform test`を実行します。試験はAWSのモックで動きます。SSMスクリプトの試験は、手順4の`pnpm install --frozen-lockfile`の後、リポジトリのルートで`pnpm test scripts/tests/bootstrap-ssm.test.ts`を実行します。テストのSSM送信は差し替えていて、実際の値やAWSの認証を使いません。
