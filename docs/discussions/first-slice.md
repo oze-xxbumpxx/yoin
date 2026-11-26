@@ -16,7 +16,7 @@
 - iPhoneのホーム画面に追加したWebアプリは、Safariとログインの状態（Cookieや保存領域）を分けて持つ（https://bugs.webkit.org/show_bug.cgi?id=181849 ）。Safariで招待リンクから登録しても、ホーム画面から開くともう一度ログインが要る。
 - パスキーは使わない（2026-11-21、大関さん）。Cognitoのメールに届くコードでのログインは、Essentialsのプランの機能で、Essentialsも月1万MAUまで無料（https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pool-settings-advanced-security-access-token.html 、https://aws.amazon.com/cognito/pricing/ ）。Cognitoが自分で送るメールは1日の通数に上限があるので、使う通数は設計で確かめる。
 - Web Pushの通知は、ログインが切れていても届く。通知を押して申込を開くときにログインが要る。
-- ClaudeとDevinはAWSとNeonにつながない（AGENTS.mdの「コマンドの範囲」）。結合検証の環境で動かして確かめるのは大関さんになる。
+- ClaudeとDevinはAWSとNeonにつながない（`docs/agents/command-scope.md`）。結合検証の環境で動かして確かめるのは大関さんになる。
 - 途中で止まる・2回流れる・重なる流れ。リマインドの予約・送信・取り消しの順番は、データモデル（R11、「リマインドの送り方」）で決まっていて、この回の問いでは変えない。この回で順番に関わるのは、環境を分ける問い（デプロイとマイグレーションを、どの環境で先に流すか）だけ。2本のデプロイの重なりは、環境ごとのGitHub Actionsの`concurrency`で止める（ADR-0004）。
 
 ## 論点

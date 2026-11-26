@@ -10,7 +10,7 @@
 
 ## 前提
 
-- ClaudeとDevinはAWSとNeonにつながない（AGENTS.md「コマンドの範囲」）。確認なしで通信してよいのは、このリポジトリのGitHub、パッケージの取得先、手元の試験が使うlocalhostだけ。
+- ClaudeとDevinはAWSとNeonにつながない（`docs/agents/command-scope.md`）。確認なしで通信してよいのは、このリポジトリのGitHub、パッケージの取得先、手元の試験が使うlocalhostだけ。
 - CIは外部サービスにつながない（試験計画の冒頭、実装計画の「CIと成果物」）。
 - 使うAWSの部品は、Lambda、API Gateway（HTTP API）、EventBridge Scheduler、Cognito、S3、SES、SQS、SSM Parameter Store、CloudFront（`docs/architecture.md`、ADR-0007）。
 - 結合試験のDBはGitHub ActionsのPostgresのコンテナ（ADR-0004の決定8）。ここは変えない。
