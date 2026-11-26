@@ -40,7 +40,7 @@ description: >
 2. `node .claude/scripts/delegation.mjs open-task docs/implementation-plans/<機能名>.md <機能名>:<タスク名> --title <題> --model <SWE-2.1の名前>`でIssueと委譲の記録を作る（名前は`devin models list`に出るもの。effortの付け方もその出力に合わせる）。本文の先頭に印（タスク名と本文のdigest）が入り、同じ印の開いたIssueがあれば作らずにその番号を返す。digestが違えば止まるので、計画を変えたら古いIssueを閉じてから作り直す。
 3. 専用クローンに前のプロセスや変更が残っていないか先に確認する。残っていたら捨てずにユーザーへ渡す。非公開prompt fileを0600で作る。SWE-2.1のeffortは難しさで選び、依頼時にユーザーへ伝える。
 4. `node .claude/scripts/delegation-launch.mjs <Issue番号> --runner local --model <SWE-2.1の名前> --prompt-file <非公開ファイル> --clone <専用クローン>`で起動する。runner/modelは省かない。クラウドは起動の確かめが済むまで使えない（`cloud_launch_verified:false`）。
-5. promptにはリポジトリ内での作業、`AGENTS.md`の「コマンドの範囲」（作業クローンの外への書き込み、`.git`のフックと設定の変更、AWS・Neon・Cognito・SSM・本番・結合検証への通信を、確認なしにしないこと。`--permission-mode dangerous`はこの範囲を広げない）、force push・ブランチ削除・履歴改変・mainへのpushの禁止、PR後の監視を含める。生ログは状態の置き場の`devin-logs/issue-<n>.log`（0600）に残る。
+5. promptにはリポジトリ内での作業、`docs/agents/command-scope.md`（作業クローンの外への書き込み、`.git`のフックと設定の変更、AWS・Neon・Cognito・SSM・本番・結合検証への通信を、確認なしにしないこと。`--permission-mode dangerous`はこの範囲を広げない）、force push・ブランチ削除・履歴改変・mainへのpushの禁止、PR後の監視を含める。生ログは状態の置き場の`devin-logs/issue-<n>.log`（0600）に残る。
 6. 起動の結果は1行のJSONで出る。`running`ならセッションのIDが確定している。`launch_unknown`やエラーでは、自動で起動し直さず、`devin list`とログで確かめてからユーザーに渡す。
 7. `wait-for-pr.mjs <Issue>`と、セッション1本の`wait-for-devin-pr.mjs --since <UTC時刻>`でPRを待つ。複数の対応候補から番号の小さいPRを選ばない。
 
@@ -52,9 +52,12 @@ description: >
 
 `main`の`REVIEW.md`を先に読み、差分で当たる確認項目を選んでから見る。PRの版の`REVIEW.md`では判定しない。
 
+GitHub ActionsのClaude（`.github/workflows/claude-code-review.yml`）が、PRを開いたときとpushのたびに、下の1〜4と7を見て、`<!-- claude-review round=<n> sha=<head> asked=<0|1> source=actions -->`で始まるコメントを付ける。`asked=1`は、Devinに`must`を頼んだ回である。Actionsは、頼んだ回が2回に達したときと、前回頼んだ`must`が直っていないときは頼まず、`(aside)`を付けて人に回す（下の「判定と次の動き」と同じ数え方）。判断が要る点も、`(aside)`付きの別のコメントで出す。このセッションでは、そのコメントを先に読み、そこに書かれた指摘は重ねて投稿しない。このセッションだけが見つけた`must`は、下の「判定と次の動き」の条件（`decision`が無い、前回の`must`が直っている、頼んだ回が2回未満）を満たせば、「自動投稿」で頼む。roundと頼んだ回の数は、Actionsのコメントと、このセッションが付けた印で共通に数える（Actionsが数えるのは、Claudeのアプリとリポジトリの持ち主が書いた印だけ）。Actionsのコメントが今のheadに無いとき（実行の失敗や使用上限）は、このセッションがすべての指摘を同じ条件で投稿する。
+
 1. **状態**: `gh pr view <n> --json files,statusCheckRollup,mergeable,body,headRefOid`。既存CIの結果を確認する。
    round 1以降は`gh api repos/{owner}/{repo}/compare/<前回の sha>...<今の head>`で差分を見て、
    前回の指摘が直ったかと、新しい変更に問題が無いかを見る。Devinの返信コメントも読む。
+   round 1以降で、Devinの直しが文言やnitだけでないときは、PRに`@codex review`とコメントしてCodexの見直しを頼む（`AGENTS.md`の「レビュー」）。Codexは、開いたときにしか自動で見ないため。
 2. **範囲**: 変更ファイルがIssueの「やること」と範囲内か。範囲外のファイル、並行作業中の他PRが作る
    はずの型・ファイルを先回りで作っていないか。本文に`Closes #<Issue>`があるか。
 3. **中身**: 設計書・試験計画と突き合わせる。名前・置き場所・型・エラーコード・応答の形。
@@ -115,15 +118,15 @@ description: >
 ## 判定と次の動き
 
 上から順に見て、**最初に当てはまった行**に従う（上限と再指摘の判定を、投稿より先にする）。
-自動投稿はround 0とround 1の2回だけ。round 2は投稿しない。
+自動投稿は`must`を頼んだ回（印の`asked=1`）で数えて2回まで。`must`の無いroundは数えない。
 
 | 状況                             | verdict    | 動き                                                                                                                                                     |
 | -------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `security`がある                 | `escalate` | 投稿しない。「セキュリティ指摘」の手順でユーザーに渡す。他の指摘の投稿も止める                                                                           |
-| `decision`がある                 | `escalate` | 投稿しない。選択肢と推奨を付けてユーザーに渡す                                                                                                           |
+| `decision`がある                 | `escalate` | 投稿しない（Actionsが`(aside)`で出していても、重ねて書かない）。選択肢と推奨を付けてユーザーに渡す                                                       |
 | 前回投稿した`must`が直っていない | `escalate` | 投稿しない。モデルを上げる／Claudeが直す／Issueを分ける、の案を付けてユーザーに渡す                                                                      |
-| `must`がある・round 2以降        | `escalate` | 同上（自動投稿の上限2回に達した）                                                                                                                        |
-| `must`がある・round 0か1         | `fix`      | 下の「自動投稿」→ 更新を待つ                                                                                                                             |
+| `must`がある・頼んだ回が2回に達した | `escalate` | 同上（自動投稿の上限2回に達した）                                                                                                                     |
+| `must`がある・頼んだ回が2回未満  | `fix`      | 下の「自動投稿」→ 更新を待つ                                                                                                                             |
 | `must`なし                       | `merge`    | 下の「レビュー完了のコメント」を付ける。現在headへのClaudeのレビューを確認してから、ユーザーへマージ判断を渡す（`nit`は後続Issueの案として添える） |
 
 どの場合も、記録に追記する:
@@ -135,7 +138,7 @@ summaryの先頭には、最初にその指摘を出したレビュアーを`[cl
 
 `must`と同じ回の`nit`は、ユーザーの了承を都度取らずに投稿してよい。
 
-1. 1回のレビューで1コメント。先頭に`<!-- claude-review round=<n> -->`を入れる。指摘ごとに「何が起きるか → 期待 → 直し方の案」。
+1. 1回のレビューで1コメント。先頭に`<!-- claude-review round=<n> sha=<完全なhead SHA> asked=1 source=session -->`を入れる（Actionsが次の差分の起点と、頼んだ回の数を読むため）。指摘ごとに「何が起きるか → 期待 → 直し方の案」。
 2. 本文に`(aside)`を入れない（Devinが対応しなくなる）。秘密・環境変数の値・ローカルのパスを書かない。
 3. 範囲外の気づきは投稿しない（ユーザーに渡す）。
 4. `gh pr comment <n> --body-file <file>`で投稿し、投稿時刻（`date -u +%Y-%m-%dT%H:%M:%SZ`）を控える。
@@ -154,6 +157,7 @@ summaryの先頭には、最初にその指摘を出したレビュアーを`[cl
 2. `<!-- claude-review-done sha=<完全なSHA> verdict=<merge|fix|escalate> -->`を先頭に入れたコメントを`gh pr comment <PR> --body-file <ファイル>`で新規投稿する。指摘本文やsecurityの有無は書かない。
 3. 間違いの修正やpush後の再レビューでは、前の完了を編集せず、新しい完了を投稿する。短いSHAは完了の印にしない。
 4. マージ判断をユーザーへ渡す前に、現在のheadが完了の印のSHAと同じで、既存CIが通っていることを確かめる。PRのマージはユーザーが行う。
+5. 完了の印の前に、Codexが今のheadを見たかを確かめる。PRのCodexの要約コメント（`<!-- codex-review-state:v1 … -->`）の`commit_sha`か、`@codex review`への返信が、今のheadを指していること。指していなければ`@codex review`を頼んで待つ。Codexが使用上限の返事を返したときは、ユーザーに一言知らせる。L0 / L1はClaude Codeと`reviewer`のレビューで進め、L2 / L3は上限が戻ってから頼み直す（`docs/discussions/codex-review.md`の仮決定）。
 
 ## 直ったスレッドを解決済みにする
 

@@ -14,7 +14,7 @@ AWS構成では、リージョンを東京にすると決めていた（AWS構�
 
 - 利用者は招待制で、1年後も10人以下。費用は無料の範囲に収めるのが目標（PR/FAQ）。
 - 書き込みは1つのトランザクションで行い、最初にグループの行を`FOR SHARE`でロックする（ADR-0002の決定3）。Lambdaは要求ごとにNeonへWebSocketでつなぎ、終わったら切る（ADR-0004の決定4、AWS構成のA-1）。
-- ClaudeとDevinはAWSとNeonにつながない（`AGENTS.md`の「コマンドの範囲」）。
+- ClaudeとDevinはAWSとNeonにつながない（`docs/agents/command-scope.md`）。
 
 ## 決定
 

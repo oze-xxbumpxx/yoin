@@ -1,0 +1,11 @@
+{
+  "name": "@yoin/bootstrap-ssm",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/bootstrap-ssm.test.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ssm": "3.930.0"
+  }
+}
