@@ -53,14 +53,14 @@ jobs:
           fi
       - uses: actions/checkout@v6
         id: checkout
-        if: steps.reviewed.outputs.skip != 'true'
+        if: success() && steps.reviewed.outputs.skip != 'true'
         with:
           fetch-depth: 1
       # レビューの基準は、PRの版ではなくベースブランチのREVIEW.mdにする。
       # actionがベースの版に戻すのはAGENTS.mdとCLAUDE.mdなどで、REVIEW.mdは戻さない。
       - name: Copy REVIEW.md from the base branch
         id: base
-        if: steps.reviewed.outputs.skip != 'true'
+        if: success() && steps.reviewed.outputs.skip != 'true'
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
@@ -75,7 +75,7 @@ jobs:
       # 前回の印として数えるのは、Claudeのアプリと、リポジトリの持ち主が書いたコメントだけにする（公開リポジトリでは誰でもコメントできる）。
       - name: Prepare review input
         id: input
-        if: steps.reviewed.outputs.skip != 'true'
+        if: success() && steps.reviewed.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -113,7 +113,7 @@ jobs:
           printf 'round=%s\nprevious_sha=%s\nmust_requests_so_far=%s\n' "$round" "$prev" "$asked" > .review-input/state.txt
       - uses: anthropics/claude-code-action@v1
         id: claude
-        if: steps.reviewed.outputs.skip != 'true' && steps.input.outputs.skip != 'true'
+        if: success() && steps.reviewed.outputs.skip != 'true' && steps.input.outputs.skip != 'true'
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # [bot]の有無はaction側で無視して比べる。最初のPRで実ログインが違えば直す。
@@ -195,8 +195,9 @@ jobs:
           claude_args: |
             --max-turns 20
             --allowedTools "Read,Grep,Glob,Edit(.review-output/**),mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*)"
-      # レビュー本文の有無にかかわらず、このshaの完了コメントを1件出す。再実行では足さない。
-      # 上でレビュー済みとして飛ばしたときも、同じshaの完了コメントがあれば足さない。
+      # レビュー本文の有無にかかわらず、このshaの完了コメントを1件出す。
+      # 成功の完了コメントが既にあれば足さない。失敗のあとで成功したときだけ、成功を1件足す。
+      # 事前確認の失敗は失敗として書く。レビュー済みで飛ばしたときも、同じshaの完了コメントがあれば足さない。
       # 下書き、fork、skipラベルはジョブのifで止まっている。
       - name: Post that the Claude review finished
         if: always()
@@ -206,6 +207,7 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REVIEWED_OUTCOME: ${{ steps.reviewed.outcome }}
           CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
           BASE_OUTCOME: ${{ steps.base.outcome }}
           INPUT_OUTCOME: ${{ steps.input.outcome }}
@@ -214,10 +216,8 @@ jobs:
           set -euo pipefail
           short="${HEAD_SHA:0:7}"
           lines="$(gh api --paginate "repos/${REPO}/issues/${PR}/comments" --jq '.[] | .body | split("\n")[0]')"
-          if printf '%s\n' "$lines" | grep -F -q "claude-review-finished sha=${HEAD_SHA}"; then
-            echo "finished comment already exists for ${HEAD_SHA}"
-            exit 0
-          fi
+          finished="$(gh api --paginate "repos/${REPO}/issues/${PR}/comments" \
+            --jq ".[] | select(.body | contains(\"claude-review-finished sha=${HEAD_SHA}\")) | .body")"
           if printf '%s\n' "$lines" | grep -F "sha=${HEAD_SHA}" | grep -F -q "claude-review round="; then
             posted="あり"
           else
@@ -225,13 +225,21 @@ jobs:
           fi
           result="${CLAUDE_OUTCOME:-skipped}"
           mark="✅"
-          for outcome in "$CHECKOUT_OUTCOME" "$BASE_OUTCOME" "$INPUT_OUTCOME" "$CLAUDE_OUTCOME"; do
+          for outcome in "$REVIEWED_OUTCOME" "$CHECKOUT_OUTCOME" "$BASE_OUTCOME" "$INPUT_OUTCOME" "$CLAUDE_OUTCOME"; do
             if [ "$outcome" = "failure" ] || [ "$outcome" = "cancelled" ]; then
               result="failure"
               mark="❌"
               break
             fi
           done
+          if [ -n "$finished" ] && printf '%s\n' "$finished" | grep -F -q "結果: success"; then
+            echo "success comment already exists for ${HEAD_SHA}"
+            exit 0
+          fi
+          if [ -n "$finished" ] && [ "$result" != "success" ]; then
+            echo "finished comment already exists for ${HEAD_SHA}"
+            exit 0
+          fi
           gh pr comment "$PR" --repo "$REPO" --body "$(printf '%s\n' \
             "<!-- claude-review-finished sha=${HEAD_SHA} -->" \
             "${mark} Claudeレビュー完了（sha: ${short}、メインコメント: ${posted}、結果: ${result}）" \
