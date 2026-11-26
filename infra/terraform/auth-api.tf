@@ -45,8 +45,13 @@ resource "aws_cognito_user_pool_client" "pwa" {
   generate_secret               = false
   prevent_user_existence_errors = "ENABLED"
   enable_token_revocation       = true
+  refresh_token_validity        = 365
   explicit_auth_flows           = ["ALLOW_USER_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"]
   supported_identity_providers  = ["COGNITO"]
+
+  token_validity_units {
+    refresh_token = "days"
+  }
 }
 
 resource "aws_apigatewayv2_api" "http" {

@@ -113,6 +113,8 @@ for (const env of ["integration", "production"]) {
   assert.equal(client.generate_secret, false);
   assert.equal(client.prevent_user_existence_errors, "ENABLED");
   assert.equal(client.enable_token_revocation, true);
+  assert.equal(client.refresh_token_validity, 365);
+  assert.equal(client.token_validity_units[0].refresh_token, "days");
   assert.deepEqual(client.explicit_auth_flows, ["ALLOW_REFRESH_TOKEN_AUTH", "ALLOW_USER_AUTH"]);
 
   const http = resource("aws_apigatewayv2_api.http");
