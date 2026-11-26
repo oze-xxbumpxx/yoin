@@ -174,7 +174,7 @@ jobs:
             | --- | --- | --- |
             | 🔴 must | `path` | one line |
 
-            Use 🔴 must, 🟡 nit, or 🟣 decision in the first column. If there is no finding, one row: なし, なし, なし. End that comment with severity NONE only in that case.
+            Use 🔴 must or 🟡 nit in that table. Do not put a 🟣 decision row there. Decision findings go only in the second comment. If there is no must and no nit, one row: なし, なし, なし. End that comment with severity NONE only when there is also no decision. A round that is only decisions still uses `止める指摘はない` and does not use NONE.
             Then the heading `人が重点的に見るべきファイル`.
             Under it, list each file a human should read carefully: path, line range when one applies, and one Japanese reason.
             Order by risk. Reasons include 認証・権限, DB migration, 外部公開のAPI, 課金, 削除処理, 設定・秘密情報, and places you are unsure.
@@ -195,10 +195,11 @@ jobs:
             Optional. One test to add, or one command. Omit it when the fix is obvious.
 
             Use 🟡 nit or 🟣 decision instead of 🔴 must when that is the class. Keep the CRITICAL, HIGH, MEDIUM, LOW, or NONE label in the title.
-            After the file list, add a section `must` and a section `nit` for part B. Those sections repeat the table rows only. The long text stays in the inline comment. If a finding has no line to attach to, put that same shape in the main comment, inside `<details>`.
-            Classify every finding before writing anything.
+            After the file list, add a section `must` and a section `nit` for part B, inside `<details>` when either is long. The table stays one line per finding. In the `must` section, also write for each must the file and line and the condition that counts as fixed. The next review reads only this main comment (`previous.md`), not inline comments.
+            The long text of a line-attached finding stays in the inline comment. If a finding has no line to attach to, put that same shape in the main comment, inside `<details>`.
+            Classify every finding, and decide `asked`, before you post anything.
             Ask the author (often Devin, who watches comments and fixes them) to fix the `must` findings only when all are true: there is no `decision` finding, `must_requests_so_far` is below 2, and every `must` in `previous.md` is fixed. Then write `asked=1`.
-            Otherwise, if any `must` is open, do not ask the author. Write `(aside)` at the start of the `must` section, say that the decision goes to the repository owner, and write `asked=0`. The author skips any comment that contains `(aside)`, so this stops the automatic fix loop.
+            Otherwise, if any `must` is open, do not ask the author. Write `(aside)` at the start of the `must` section and at the start of every must inline comment, say that the decision goes to the repository owner, and write `asked=0`. The author skips any comment that contains `(aside)`, so this stops the automatic fix loop. Apply that same `asked` choice to every place you post a must.
             With no `must`, write `asked=0`.
             Do not put a `decision` finding in the main comment. Post it as a second, separate top-level comment that starts with `(aside)` and the heading `判断が要る点`. This is the only case for a second comment.
             Write `(aside)` in the main comment only in the case above.
