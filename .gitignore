@@ -4,3 +4,5 @@
 .claude/evals/results/
 .claude/evals/baselines/
 .DS_Store
+/node_modules/
+/scripts/node_modules/
