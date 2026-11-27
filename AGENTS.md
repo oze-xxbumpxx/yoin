@@ -19,14 +19,14 @@ Claude Code、Devin、Codexは、このリポジトリの同じルールと成�
 - PRは下書きにせず、レビューできる状態で開く。Claudeレビューは、開いたとき、下書きを解除したとき、追加のpushのたびに動く。pushのあとは前回のレビューからの差分を見る。
 - PRを開く前に、実在する試験を通す。無いゲートはunknownと書く。
 - `main`へ直接コミットしない。`main`へ直接pushしない。マージは人が行う。
-- 秘密の値をコミットしない。接続文字列、VAPIDの秘密鍵、招待トークンを作る値は、SSM Parameter Storeに置く。
+- 秘密の値をコミットしない。VAPIDの秘密鍵、招待トークンを作る値、Better Authの秘密の値は、Workersのsecret（`void secret put`）に置く。CIが使う`CLOUDFLARE_API_TOKEN`はGitHubのSecretsに置く（ADR-0008）。
 - Devinは、PRの説明の「人が重点的に見るべきファイル」を毎回書く。雛形は`.github/pull_request_template.md`。パス、必要なら行、理由1行。危険の高い順。無ければ理由。空欄にしない。
 
 ## してはいけないこと
 
-- AWS、Neon、Cognito、SSM、本番、結合検証へ接続しない。
-- `terraform apply`、`terraform destroy`、デプロイ、マイグレーションの適用をしない。
-- 秘密の値を、リポジトリ、Terraform、PR、ログに書かない。ログに名前、メールアドレス、通知の内容も書かない。
+- Cloudflareのアカウント（D1、R2、Queues、Workers、secret）、本番、結合検証へ接続しない。もとのAWSとNeonにも接続しない。
+- `void deploy`、`void secret put`、D1のマイグレーションの適用（`--remote`）、D1を過去の時点に戻す操作をしない。`terraform apply`、`terraform destroy`もしない。
+- 秘密の値を、リポジトリ、設定ファイル、PR、ログに書かない。ログに名前、メールアドレス、通知の内容も書かない。
 - Gitが追跡しないディレクトリの書き換えで、不具合を直したことにしない。
 - コマンドの範囲の全文は`docs/agents/command-scope.md`。
 
@@ -38,12 +38,12 @@ Claude Code、Devin、Codexは、このリポジトリの同じルールと成�
 ### 認可
 
 招待リンクを通らないログインだけでユーザーを作らない。グループの操作は、メンバーであることを確かめてから行う。
-安全な形は、CognitoのJWTのあと、読み取りと書き込みの両方でメンバーを確かめる。
+安全な形は、Better Authのセッションと`users.status`が`active`かを確かめたあと、読み取りと書き込みの両方でメンバーを確かめる。書き込みは、`batch()`の先頭の確かめの文でもグループと所属が`active`かを見る（`docs/data-model.md`の「書き込みの順番」）。
 
 ### 秘密の値と個人の情報
 
-接続文字列、VAPIDの秘密鍵、招待トークンを作る値を、リポジトリ、Terraform、PR、ログに書かない。名前、メールアドレス、通知の本文もログに書かない。
-安全な形は、秘密の値をSSM Parameter Storeの名前で参照する。VAPIDの公開鍵は公開の設定に置いてよい。
+VAPIDの秘密鍵、招待トークンを作る値、Better Authの秘密の値、Cloudflareのトークンを、リポジトリ、設定ファイル、PR、ログに書かない。名前、メールアドレス、通知の本文もログに書かない。
+安全な形は、秘密の値をWorkersのsecretの名前で参照する。VAPIDの公開鍵は公開の設定に置いてよい。
 
 ### データの消失
 
@@ -57,7 +57,7 @@ Claude Code、Devin、Codexは、このリポジトリの同じルールと成�
 
 ### 境界
 
-メンバー確認の前にS3の署名付きURLを出さない。取得の期限は5分にする。アップロードは`uploads/`に置き、確定のときにコピーする。例外の`message`をログや応答に出さない。
+メンバー確認の前にR2の署名付きURLを出さない。R2の枚数と操作の回数が上限に達していたら、新しい画像のURLを出さない（`docs/data-model.md`のR25）。取得の期限は5分にする。アップロードは`uploads/`に置き、確定のときにコピーする。例外の`message`をログや応答に出さない。
 安全な形は、同じ拒否の規則を、読み取りと書き込みのすべての経路で確かめる。
 
 ### 人が見るファイル

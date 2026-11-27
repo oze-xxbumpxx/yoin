@@ -137,11 +137,26 @@ test('破壊的・本番影響コマンドを拒否する', () => {
       'pnpm publish',
       'terraform apply',
       'sst deploy',
+      'void deploy',
+      'pnpm void secret put VAPID_PRIVATE_KEY',
+      'npx wrangler deploy',
+      'wrangler login',
+      'wrangler d1 migrations apply yoin --remote',
+      'wrangler d1 time-travel restore yoin --timestamp 1700000000',
       'rm -rf /',
       'rm -rf $HOME',
     ]) {
       assert.equal(runHook(sb, bash(command)).code, DENY, `許可されています: ${command}`);
     }
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('D1を手元で使うコマンドは許可する', () => {
+  const sb = sandbox();
+  try {
+    assert.equal(runHook(sb, bash('wrangler d1 migrations apply yoin --local')).code, ALLOW);
   } finally {
     sb.cleanup();
   }

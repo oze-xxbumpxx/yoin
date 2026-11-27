@@ -78,6 +78,13 @@ const ALWAYS_DENY = [
   { re: /\b(serverless|sls|sst)\s+deploy\b/, why: '本番デプロイ（serverless/sst deploy）' },
   { re: /\bvercel\b[^\n]*--prod\b/, why: '本番デプロイ（vercel --prod）' },
   { re: /\bkubectl\s+(apply|delete)\b[^\n]*prod/i, why: '本番 Kubernetes 変更' },
+  { re: /\bvoid\s+(deploy|secret\s+put)\b/, why: 'Cloudflare 本番操作（void deploy / secret put）' },
+  { re: /\bwrangler\s+(deploy|publish|login|secret\s+put)\b/, why: 'Cloudflare 本番操作（wrangler deploy / login / secret put）' },
+  {
+    re: /\bwrangler\s+d1\s+(migrations\s+apply|execute|time-travel\s+restore)\b[^\n]*--remote\b/,
+    why: 'D1 本番操作（--remote）',
+  },
+  { re: /\bwrangler\s+d1\s+time-travel\s+restore\b/, why: 'D1 を過去の時点に戻す操作' },
   { re: /\baws\s+deploy\b/, why: 'AWS 本番操作（aws deploy）' },
   { re: /\baws\s+cloudformation\s+deploy\b/, why: 'AWS 本番操作（cloudformation deploy）' },
   { re: /\baws\s+s3\s+(rm|rb)\b/, why: 'AWS S3 削除（s3 rm / rb）' },
