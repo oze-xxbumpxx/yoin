@@ -3,6 +3,6 @@ description: Cursorの作業はpstackを基本にする
 alwaysApply: true
 ---
 
-Cursorでこのリポジトリを進めるときは、pstackを基本にする。厳密さが要る作業は`/poteto-mode`の手順で進める。明らかな小さい修正は、`/poteto-mode`を付けなくてよい。
+Cursorでこのリポジトリを進めるときは、pstackを基本にする。厳密さが要る作業は`/poteto-mode`の手順で進める。明らかな小さい修正で`/poteto-mode`を省くのは、手順だけの省略である。誰が実装するかは変えない。
 
 L2 / L3の実装計画から先はDevinに委譲したままにする。pstackの手順と`AGENTS.md`が食い違うときは、`AGENTS.md`に従う。日付つきの決まりは`docs/agents/roles.md`のCursorの行。
