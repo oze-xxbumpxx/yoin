@@ -34,7 +34,7 @@
 
 ## 対象範囲
 
-要件の14画面、下表のAPI、1分ごとのCronの受け手、本体のD1の17表とBetter Authの`auth_`の表、`send_log`のD1の2表、Voidの設定、デプロイの流れ、PWA、2人のE2Eを作る。
+要件の14画面、下表のAPI、1分ごとのCronの受け手、本体のD1の17表とBetter Authの`auth_`の表、`yoin-send-log`のD1の3表、Voidの設定、デプロイの流れ、PWA、2人のE2Eを作る。
 
 ## 対象外
 
@@ -113,7 +113,9 @@ sequenceDiagram
 ```
 
 - 入口の札は、入口の種類・対象のID（招待リンク・戻すリンク・はじめの登録）・期限10分を、`BETTER_AUTH_SECRET`から作った鍵でHMACした値にする。D1には書かない。札が無いか、期限切れか、署名が合わなければ、ユーザーを作る前のつなぎ目（Better Authの`databaseHooks.user.create.before`）で断る。
+- 札には乱数の`ticketId`を入れる。ユーザーを作る前のつなぎ目は、同じ`ticketId`で作ったBetter Authのユーザーがすでにあれば断る（作ったユーザーに`ticketId`を持たせる）。札1枚で作れるユーザーは1人だけになる。
 - 札でできるのは、パスキーの登録と、その入口の最後の要求だけである。札でアプリのほかのAPIは呼べない。
+- 認証の条件は3つに分かれる。札を出す3本（`GET /invites/{token}`、`POST /setup/verify`、`GET /recovery/{token}`）はセッションが無くても呼べる。最後の要求（`accept`、`setup/complete`）は、札と、パスキーの登録でできたセッションの両方が要る。ほかのAPIはセッションと`users`の行が要る。戻す2つ（`recovery`、`setup/recover`）は、最後の要求を別に呼ばず、パスキーの登録の中で済ませる（下の「戻すリンク」）。
 - パスキーを登録したあと最後の要求が届かず、`groups.users`から指されないBetter Authのユーザーが残ったら、1時間後にCronが消す（データモデルR24）。
 - Better Authのパスキーのプラグインで、セッションの無い人の登録をどうつなぐか（セッションなしの登録の設定を使うか、入口でユーザーを作ってから札つきのセッションで登録するか）は、Voidに入っているBetter Authの版で実装の最初に確かめる。どちらでも、上の札とつなぎ目の確かめは入れる。
 
@@ -136,12 +138,13 @@ sequenceDiagram
 
 - オーナーはS-21で、メンバーごとに`POST /groups/{g}/members/{userId}/recovery-links`を呼ぶ。本文は`{ id }`。オーナーだけ、自分の分は出せない（`forbidden`）。相手が`active`なメンバーでなければ`not_found`。トークンは`RECOVERY_TOKEN_SECRET`とリンクのIDからHMAC-SHA256で作り、`groups.recovery_links`にはハッシュだけを書く。同じ`batch()`で、その人あての前のリンクの`revoked_at`に時刻を入れる。応答はリンクのURL（`/recover/{token}`）。同じIDの2回目は同じURLを返す。
 - 本人はS-25でリンクを開く。`GET /recovery/{token}`は、使えるかと表示名だけを返し、使えるなら札を出す。使った・切れた・出し直した・取り消したリンクは、どれも同じ`recovery_unusable`にする（E-20）。期限は`expires_at`ちょうどから使えない（B-13）。
-- 本人が札で新しいパスキーを登録すると、Better Authの同じユーザーに足される。続けて`POST /recovery/{token}/complete`が、1つの`batch()`で、確かめの文（期限・使用済み・取り消し・所属が`active`）、`used_at`の記入、そのユーザーの古いパスキーと、今のセッションを除くセッションの削除を流す。
-- 確かめの文で断られたら、登録した新しいパスキーを消して`recovery_unusable`を返す。
+- 本人が札で新しいパスキーを登録すると、Better Authの同じユーザーに足される。パスキーの登録を確かめる同じ要求の中（Better Authの登録のあとのつなぎ目）で、1つの`batch()`に、確かめの文（期限・使用済み・取り消し・所属が`active`）、`used_at`の記入、そのユーザーの古いパスキーと、今のセッションを除くセッションの削除を流す。画面から別の確定の要求は送らない。`POST /recovery/{token}/complete`は、応答が届かなかったときに結果を読み直すためだけに置き、何も書かない。
+- 確かめの文で断られたら、その要求で足したパスキーとセッションを消して`recovery_unusable`を返す。
+- 札を出すとき、`recovery_links.ticket_issued_at`に時刻を書く。パスキーを足したあと`batch()`の前にWorkerが止まると、新しいパスキーが残る。Cronは、`ticket_issued_at`から11分たっても`used_at`が空の行を見つけたら、そのユーザーのパスキーのうち`ticket_issued_at`より後に作ったものとそのセッションを消す。消すまでの最長11分は、新しいパスキーでログインできる。この時間にログインできるのはリンクを持っている人だけで、その人は確定まで進めることもできたので、受け入れる。
 
 ### オーナー本人の戻し方（F-05b）
 
-オーナーが端末をすべてなくしたら、S-24で合言葉を入れる。オーナーがいるときに合言葉が合うと、`setup_state.owner_user_id`のユーザーに戻す札を出す。そのあとは戻すリンクと同じく、新しいパスキーを足し、`POST /setup/recover`の`batch()`で古いパスキーとセッションを消す。間違えた回数の上限は、はじめの登録と同じものを使う。
+オーナーが端末をすべてなくしたら、S-24で合言葉を入れる。オーナーがいるときに合言葉が合うと、`setup_state.owner_user_id`のユーザーに戻す札を出す。そのあとは戻すリンクと同じく、新しいパスキーの登録の中の`batch()`で古いパスキーとセッションを消す。止まったときの片づけも戻すリンクと同じで、札を出した時刻は`setup_state.ticket_issued_at`に書く。`POST /setup/recover`は結果を読み直すためだけに置く。間違えた回数の上限は、はじめの登録と同じものを使う。
 
 使ったあと、大関さんは`void secret put SETUP_PASSPHRASE`で合言葉を新しい値に替える。合言葉が漏れたままだと、ほかの人がオーナーになれるためである。
 
@@ -182,13 +185,15 @@ Drizzleの表の定義は各文脈の`infrastructure/`に置く。型・null・�
 |---|---|
 | `groups_users`・`groups_groups`・`groups_members` | `users.auth_user_id`は一意。自分用グループはオーナーごとに1つ（`kind`の部分一意インデックス）。`members`は(group_id, user_id)がPK |
 | `groups_invite_links` | `token_hash`は一意。`used_count`と`max_uses`を確かめの文で比べる |
-| `groups_recovery_links` | データモデルのR26。`token_hash`は一意 |
-| `groups_setup_state` | この回で足す。`id`（常に1）、`failed_count`、`locked_until`（null可）、`owner_user_id`（null可）。データモデルに足す |
+| `groups_recovery_links` | データモデルのR26。`token_hash`は一意。札を出した時刻`ticket_issued_at`を足す |
+| `groups_setup_state` | この回で足す。`id`（常に1）、`failed_count`、`locked_until`（null可）、`owner_user_id`（null可）、`ticket_issued_at`（null可）。データモデルに足す |
 | `catalog_artists`・`catalog_venues`・`catalog_tours`・`catalog_concerts`・`catalog_concert_artists`・`catalog_drafts` | 前の版と同じ。`artists`は(group_id, name_key)が一意で、色は12色のCHECK。`drafts`の中身はJSONの`text` |
 | `ticket_ticket_applications` | 前の版と同じ。`seat_or_entry_number`を含む。`created_at`は最初の挿入のときだけ書く |
 | `notification_reminders`・`notification_push_subscriptions`・`notification_reminder_deliveries` | データモデルのとおり。`reminders`は(status, send_at)にインデックス。`status`に`held`を含む |
 | `auth_`の表 | Better Authが決めた形のまま（ユーザー・セッション・パスキーなど） |
-| `yoin-send-log`の`send_log` | (reminder_id, push_subscription_id, attempt_no)がPK、`sent_at`。90日より前の行はCronが消す |
+| `yoin-send-log`の`send_log` | (reminder_id, push_subscription_id, attempt_no)がPK、`sent_at`。90日より前の行はCronが消す。戻すリンクの`batch()`では、本体の書き込みの前に`revocations`も書く |
+| `yoin-send-log`の`send_log`の`send_at` | 送ったときの予約の`send_at`も持つ。突き合わせで、時刻を直す前の記録を数えないため |
+| `yoin-send-log`の`revocations` | 戻すリンクとオーナーの戻しで消したもの。`id`、`auth_user_id`、`kept_passkey_id`、`recovery_link_id`（null可）、`revoked_at`。戻したあと本体に当て直す。90日より前の行は消す |
 | `yoin-send-log`の`control` | `id`（常に1）、`paused_at`（null可）、`reconciled_at`（null可）。下の「D1を過去の時点に戻したとき」で使う |
 
 ```mermaid
@@ -275,13 +280,16 @@ sequenceDiagram
 
 ### D1を過去の時点に戻したとき（F-36a）
 
-戻すのは大関さんで、手でSQLは流さない。止める印は、戻しても消えない`yoin-send-log`の`control`に置く。
+戻すのは大関さんで、手でSQLは流さない。止める印は、戻しても消えない`yoin-send-log`の`control`に置く。`yoin-send-log`には、戻しても消えてはいけない記録として、送れた記録（`send_log`）と、パスキーを消した記録（`revocations`）を置く。
 
-1. 大関さんが`void secret put REMINDERS_PAUSED 1`で止める。次のCronが`control.paused_at`に今の時刻を書き、以後は送らない。
+1. 大関さんが`void secret put REMINDERS_PAUSED 1`で止める。次のCronは、`paused_at`が空か`reconciled_at`が入っていれば、`paused_at`に今の時刻を書き、`reconciled_at`を空にする（2回目の戻しでも突き合わせが要る状態になる）。以後は送らない。
 2. 大関さんがCloudflareの管理画面かcf CLIで、本体のD1（`yoin`）だけを戻したい時点に戻す。
-3. 大関さんが`void secret put REMINDERS_PAUSED 0`で再開する。次のCronは、`paused_at`があって`reconciled_at`が無いとき、送る前に突き合わせをする。`send_log`に記録がある端末は本体でも`sent`にし、対象の端末すべてに記録がある予約は`sent`にする。記録が一部にしか無い予約と、`send_at`が`paused_at`以前の`scheduled`・`sending`の予約は`held`にする。終わったら`reconciled_at`を書く。
-4. 突き合わせは1回のCronで20件ずつ進め、全部を終えるまで送らない。
-5. オーナーはS-26で1件ずつ決める。`send`はデータモデルの手順5のとおり、送信期限を今から1時間後にして`scheduled`か`sending`に戻し、`send_log`で`sent`にした端末には送らない。`cancel`は`canceled`にする。
+3. 大関さんが`void secret put REMINDERS_PAUSED 0`で再開する。次のCronは、`paused_at`があって`reconciled_at`が無いとき、送る前に突き合わせをする。`send_log`に記録がある端末は本体でも`sent`にし、対象の端末すべてに記録がある予約は`sent`にする。記録が一部にしか無い予約と、`send_at`が`paused_at`以前の`scheduled`・`sending`の予約は`held`にする。`send_log`の行は、その予約の今の`send_at`と同じ`send_at`のものだけを数える。未送信の予約の時刻を直すと同じIDのまま`send_at`が変わるので、直す前の時刻で送った記録を、直したあとの予約の記録として数えないためである。`held`と`sent`に移すときは、同じ更新で`retry_at`と`claimed_at`を空にする（`retry_at`は`sending`の行だけが持てる）。
+   続けて`revocations`を本体に当て直す。戻した先の時点のあとで消したパスキーとセッション（戻すリンクとオーナーの戻しで消したもの）を、もう一度消す。使った戻すリンクも、`revocations`に残したリンクのIDで`used_at`を入れ直す。終わったら`reconciled_at`を書く。
+4. 突き合わせは1回のCronで20件ずつ進め、全部を終えるまで送らない。10人の規模では数分で終わる（推測）。そのあいだ、ほかの予約の送信も遅れる。送信期限を過ぎた予約は送らない。
+5. オーナーはS-26で1件ずつ決める。`send`はデータモデルの手順5のとおり、送信期限を今から1時間後にして`scheduled`か`sending`に戻し、`send_log`で`sent`にした端末には送らない。`cancel`は`canceled`にする。`send`は、その予約の`dedupe_key`が`history:`で始まらない（今の期限を表している）ときだけ受ける。そうでなければ`cancel`として扱う。
+
+`held`のあいだに申込者が申込を直したときは、予約を合わせる関数が`held`の行も`scheduled`の行と同じく取り消し・時刻の変更・履歴への移動の対象にする。入金済みにしたあとで、古い入金期限のリマインドを送ることはない。
 
 戻した先の時点より前に送信時刻があって、戻した時点ですでに送っていた予約も、記録が一部にしか無ければ`held`になる。届いたかを確かめられないものは、オーナーに決めてもらう形に寄せる。
 
@@ -322,7 +330,8 @@ sequenceDiagram
 - Web Pushは、試験のときだけ配信サービスの代わりにする手元の受け手を使い、送った中身と回数を見る。試験の受け手は製品のビルドに入れない。
 - 手元のHonoで、`users`の行が無い人・メンバーでない人・オーナーでない人、招待の最後の1回、合言葉の5回目と6回目、オーナーができたあとの`setup/complete`、戻すリンクの24時間ちょうど・使用済み・出し直し、別グループのIDの404を確かめる。
 - fast-checkで、申込からあるべき予約を出す関数（AC-02）、状態の移り方（AC-03）、引き受けと再送と完了（AC-04）を確かめる。Cronを2つ同時に流しても同じ行を2回引き受けないこと、取り消した予約を引き受けないこと、端末の数の上限で止めた回の続きで送れた端末に送り直さないことを含める。
-- 固定の時計で、前の版の時刻の試験（12:00締切を11:58と11:59に登録する、締切ちょうどに起動する、再送が締切に間に合わない、送信期限を過ぎた`scheduled`の表示）をCronの形で流す。
+- 固定の時計で、送信期限の境目を試す。入金期限12:00の3時間前の分（9:00、送信期限10:00）は、9:30に登録すれば次のCronで送り、10:00に登録すれば作らない。前日20時の分（送信期限21:00）も、20:30と21:00で同じに分かれる。Cronが締切ちょうどに起動したら送らない、再送が送信期限に間に合わなければ作らない、送信期限を過ぎた`scheduled`は表示上だけ完了にする、も確かめる。
+- D1を戻す手順は、2回続けて戻しても2回目に突き合わせが流れること、時刻を直した予約で直す前の送信記録を数えないこと、`retry_at`の入った予約を`held`にできること、戻すリンクで消したパスキーが戻したあとも使えないことを試す。
 - D1を戻したあとの手順（AC-06b）は、手元のD1で、`send_log`に一部の端末だけ記録がある予約、全部ある予約、無い予約を作り、`REMINDERS_PAUSED`を1から0に戻して、`held`と`sent`に分かれること、S-26の`send`でまだ送っていない端末にだけ送ることを確かめる。
 - 本番で人が確かめるもの（AC-06c、AC-07〜AC-12）は要件定義書の表のとおり。大関さんがオーナーと2人目の両方を操作する。2人目を退会させる機能はまだ無いので、本番に招くのは大関さんの2つ目のアカウントか、退会の回までいてもらってよい人に限る。
 
