@@ -30,5 +30,5 @@ AIが実装し、ユーザーは要件提示・設計判断・レビュー・マ
 もとは`AGENTS.md`の「ツールごとの入口」。Claude Codeは`.claude/AGENTS.md`、Devinは`.agents/AGENTS.md`。
 
 - Codex: 設計の敵対的レビューと、PRのレビュー（`docs/agents/review.md`）を担う。実装はしない。レビューでコマンドを動かすときも、`docs/agents/command-scope.md`に従う。
-- Cursor: ユーザーが「必ず見る」差分を読み、手で直すときに使う。AIの役割（実装・レビュー）は持たせない（2026-11-12 ユーザーの判断）。
+- Cursor: 作業はpstackを基本にする（2026-11-27 ユーザーの判断）。厳密さが要る作業は`/poteto-mode`の手順で進める。明らかな小さい修正は、`/poteto-mode`を付けなくてよい。モデルの割り当ては、使う人が`/setup-pstack`を1回実行し、`~/.cursor/rules/pstack-models.mdc`に書く。そのファイルはリポジトリに置かない。人が「必ず見る」差分を読んで手で直す使い方は残す（2026-11-12）。L2 / L3の実装計画から先の委譲先はDevinのまま（`docs/agents/how-we-work.md`）。pstackの手順と`AGENTS.md`が食い違うときは、`AGENTS.md`に従う。
 
