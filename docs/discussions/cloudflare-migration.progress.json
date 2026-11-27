@@ -10,11 +10,12 @@
       "reason": "基盤の決定で、要件定義書は作らない（決まったら最初の1本の要件の直しを見る）"
     },
     "design": {
-      "state": "approval",
+      "state": "done",
       "docs": [
         "docs/decisions/ADR-0008-cloudflare.md",
         "docs/architecture.md"
-      ]
+      ],
+      "approved": "2026-11-27（PR #96のマージ）"
     },
     "plan": {
       "state": "pending"
@@ -32,5 +33,5 @@
       "state": "pending"
     }
   },
-  "updated_at": "2026-11-27T09:37:27.367Z"
+  "updated_at": "2026-11-27T11:37:04.325Z"
 }
