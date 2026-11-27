@@ -1,54 +1,42 @@
-# AWSアーキテクチャ
+# アーキテクチャ
 
-状態：確定（2026-11-13）。案は2026-11-07に作り、同日リマインドを1件ずつ予約する方式に直した。関数とスキーマの分け方は[ADR-0002](decisions/ADR-0002-schema-and-functions.md)（2026-11-12承認）に合わせた。このページで決めたことは「決めたこと」の節にある。リージョンと費用は、工程6の[ADR-0006](decisions/ADR-0006-region-and-cost.md)で決めた（2026-11-22）。
+状態：提案（2026-11-27。同じ日に無料プランとパスキーに変えた。[ADR-0008](decisions/ADR-0008-cloudflare.md)と同じPRのマージで承認）。インフラとDBはすべてCloudflareに置き、バックエンドはVoidで組む。2026-11-13に確定したAWSとNeonの構成は、ADR-0008で置き換えた。前の版はgitの履歴（`8a25fcb`）にある。
 
-- 関連：[データモデル](data-model.md)、[ADR-0002](decisions/ADR-0002-schema-and-functions.md)、[PR/FAQ](prfaq.md)
+- 関連：[ADR-0008](decisions/ADR-0008-cloudflare.md)、[データモデル](data-model.md)、[ADR-0002](decisions/ADR-0002-schema-and-functions.md)、[API設計](api.md)、[PR/FAQ](prfaq.md)、[論点の記録](discussions/cloudflare-migration.md)
 
 ## 全体図
-
-AWSの公式アイコン（AWS Architecture Icons）で描いた図。画像はまだリージョンが東京のままで、C-4のSQSとアラームも描いていない。正しいのは下のmermaidの図である（描き直しは「決めないこと」）。
-
-![AWS構成図](images/aws-architecture.svg)
 
 ```mermaid
 flowchart LR
   device[利用者の端末<br>PWA・Service Worker]
-  subgraph aws[AWSシンガポールリージョン（ap-southeast-1）]
-    cf[CloudFront + S3<br>画面のファイル]
-    cognito[Cognito<br>ユーザープール]
-    ses[Amazon SES<br>確認済みのyoin専用メールアドレス]
-    signup[登録前Lambda<br>有効な招待を確認]
-    apigw[API Gateway<br>HTTP API]
-    api[Lambda api]
-    worker[Lambda erasure-worker]
-    sender[Lambda notification-sender]
-    sched[EventBridge Scheduler]
-    img[S3<br>グッズの画像]
-    ssm[SSM Parameter Store<br>接続文字列・VAPID鍵]
-    logs[CloudWatch Logs]
+  subgraph cf[Cloudflare]
+    subgraph worker[Worker（Voidで組む）]
+      assets[静的ファイル<br>画面]
+      routes[routes/<br>HonoのAPI]
+      auth[Better Auth<br>パスキー]
+      cron[crons/<br>1分ごと]
+      consumer[queues/<br>解散・退会・外す]
+    end
+    d1[(D1<br>アジアに置く)]
+    r2[R2<br>グッズの画像]
+    queue[Queues<br>＋失敗キュー]
+    secrets[Workersのsecret<br>VAPID鍵・招待の値]
   end
-  neon[(Neon Postgres<br>AWS外・シンガポール)]
   push[Web Pushの配信サービス<br>Apple・Google など]
 
-  device -->|画面を開く| cf
-  device -->|ログイン| cognito
-  cognito -->|登録・ログインのコード| ses
-  ses -->|メール| device
-  cognito -->|登録の前| signup
-  signup --> neon
-  device -->|操作 JWT付き| apigw
-  device -->|画像 署名付きURL| img
-  apigw -->|JWTを検証| api
-  api -->|非同期で起動| worker
-  api -->|予約を作る・消す| sched
-  sched -->|止まったときだけ| worker
-  sched -->|送信時刻に1件ずつ| sender
-  api --> neon
-  worker --> neon
-  sender --> neon
-  worker -->|画像を消す| img
-  worker -->|アカウントを無効化・削除| cognito
-  sender --> push
+  device -->|画面を開く| assets
+  device -->|操作| routes
+  device -->|ログイン| auth
+  device -->|画像 署名付きURL| r2
+  routes --> d1
+  auth --> d1
+  routes -->|ジョブを入れる| queue
+  queue --> consumer
+  consumer --> d1
+  consumer -->|画像を消す| r2
+  cron -->|送信時刻の来た行| d1
+  cron -->|止まったジョブを入れ直す| queue
+  cron --> push
   push -->|通知| device
 ```
 
@@ -56,54 +44,60 @@ flowchart LR
 
 | 流れ | 通るもの |
 |---|---|
-| ログイン | 端末 → Cognito。招待リンクから登録したときだけ`users`の行を作る |
-| 画面の操作 | 端末 → API Gateway（CognitoのJWTを検証）→ Lambda `api` → Neon。`api`は毎回`users`が有効かも確かめる |
-| グッズの画像 | 端末が`api`に頼むと、`api`はグループのメンバーかを確かめてから、S3の署名付きURLを返す。端末はそのURLでS3と直接やりとりする。バケットは公開しない。上げるときは一時置き場（`uploads/`）へのアップロード用URLを出し、端末が上げ終わったら`api`がグループの状態を確かめて、S3の中で本来の場所にコピーする。確定されなかった画像は、S3のライフサイクルの設定で1日後に消える。見るときは有効期限5分の取得用URLを出す（データモデルR12・R13） |
-| 解散・退会・外す | `api`が受け付けて`erasure_jobs`に書き、`erasure-worker`を非同期で起動する。`erasure-worker`はNeon、S3、Cognitoを順に片づける。ジョブを書くときに、止まったら再開させる1回限りの予約もSchedulerに作る。定期的には起動しない |
-| リマインド | `api`がリマインドを作るときに、送信時刻に1回だけ動くSchedulerの予約を作る。その時刻に`notification-sender`が起動し、そのリマインドを引き受けてWeb Pushの配信サービスへ送る。Neonが起きるのは送るときだけ |
+| ログイン | 端末 → Better Auth。招待リンクを開いた人が、その場でパスキーを登録する。ユーザーを作る前に有効な招待のトークンを確かめ、無ければ断る。メールは送らない。ログインの状態はD1に置く |
+| 画面の操作 | 端末 → `routes/`のAPI → D1。APIは毎回ログインの状態とユーザーが有効かを確かめ、グループの操作ではメンバーであることを確かめる。書き込みは先に読んで判断し、どの文にも同じ条件を付けた`batch()`でまとめて流す。同じ条件を付けられないときは、条件が外れたら失敗する確かめの文を先頭に置き、全部を取り消させる（ADR-0008の決定6） |
+| グッズの画像 | 端末が頼むと、APIはメンバーかを確かめてからR2の署名付きURLを返す。上げるときは`uploads/`へのURLを出し、上げ終わったらAPIがグループの状態を確かめ、D1に「確定中」の記録を書いてから本来の場所にコピーする。確定のときにグループがもう有効でなければ、APIがコピーを消す。R2で置き場を一覧して消し、12時間後にもう一度消す。消す範囲は、解散ならグループの画像すべて、退会と外すなら本人の下書きの画像だけで、確定した品目の画像は残す（ADR-0008の決定6）。確定しなかった画像はR2のライフサイクルで1日後に消える。見るときは期限5分のURLを出す（データモデルR12・R13） |
+| 解散・退会・外す | APIが受け付けてジョブの行を書き、Queuesにジョブを入れる。受け手がD1とR2を順に片づける。止まったジョブは1分ごとのCronが見つけて入れ直す。再試行を使い切ったジョブは失敗キューに入り、D1のジョブの行を「失敗」にする。「失敗」の行はCronが入れ直さない |
+| リマインド | APIはリマインドの行に送信時刻を書くだけで、予約は作らない。1分ごとのCronが送信時刻の来た行を引き受け、Web Pushで送る。引き受けに成功した実行だけが送り、`sending`のまま止まった行は10分後に引き受け直す。送信期限（送信時刻の1時間後）を過ぎた行は送らない。D1を戻したときは、Cronを止めた時刻を記録し、送信時刻がその時刻より前の行を送らないものに変えてから再開する |
 
 ## 構成要素
 
 | 要素 | 使うもの | 理由 | 決めた場所 |
 |---|---|---|---|
-| 画面 | PWA。CloudFront + S3に置く | 静的ファイルだけなので、サーバーが要らない。CloudFrontでHTTPSにする | このページ（B-1） |
-| 認証 | Cognito Essentials、登録前Lambda、Amazon SES | 有効な招待からだけ登録し、確認済みのyoin専用メールアドレスからコードを送る | [ADR-0007](decisions/ADR-0007-cognito-email.md)、[最初の1本の設計](designs/first-slice.md) |
-| API | API Gateway HTTP APIとLambda `api` | REST APIより安く、JWTの検証を組み込みで使える | ADR-0002 |
-| 解散・退会・外す | Lambda `erasure-worker` | HTTP APIの30秒の打ち切りを避け、本人がいなくても最後まで進めるため | ADR-0002 |
-| 通知 | EventBridge SchedulerとLambda `notification-sender`、Web Push | PR/FAQで決めた。リマインド1件ごとに1回限りの予約を作る（2026-11-07） | ADR-0002、データモデル |
-| データベース | Neon（Postgres）。AWSの外にある | PR/FAQで決めた。途中で判断を挟めるトランザクションで接続する | ADR-0002 |
-| 画像 | S3（非公開のバケット）と署名付きURL | グループのメンバーだけが見られる、という非機能要件のため | このページ（B-2） |
-| 設定と秘密 | SSM Parameter Store（SecureString） | Neonの接続文字列とWeb PushのVAPID鍵を置く。標準のパラメーターは無料 | このページ（C-1） |
-| 失敗の知らせ | SQSのキュー、CloudWatchのアラーム、メール | リマインドと削除の処理の失敗を見落とさないため | このページ（C-4） |
-| ログ | CloudWatch Logs。保存は7日 | 個人の情報は書かない。保存期間を短く決める | データモデル（ログの方針）、期間はこのページ（C-3） |
-
-結合検証と本番で共有するSESのアカウント単位の抑止設定は、Terraformの`aws_sesv2_account_suppression_attributes`で`BOUNCE`と`COMPLAINT`を明示し、シンガポールで1つだけ管理する。
+| 画面 | React＋ViteのPWA。Workerの静的ファイルとして置く | VoidのSPA＋APIの形で、APIと同じWorkerから出せる | ADR-0008の決定1・決定3 |
+| API | Workers。Voidの`routes/`にHonoの書き方で置く。入力はZodで確かめる | HonoとZodをそのまま使える。型つきの呼び出しは`void/client` | ADR-0008の決定3 |
+| ログイン | VoidのBetter Auth（パスキー） | メールもドメインも要らず0円で済む。招待の確認をユーザーを作る前に入れられる | ADR-0008の決定5 |
+| データベース | D1（SQLite）、Drizzle | Cloudflareにまとめるため（大関の判断）。戻せる期間は無料プランの7日 | ADR-0008の決定1・決定6 |
+| 画像 | R2（非公開）と署名付きURL | メンバーだけが見られる、という要件のため。外への転送は無料 | ADR-0008の決定1 |
+| リマインド | 1分ごとのCron | D1は眠らないので毎分見ても費用が増えない。予約を作る・消す処理が要らない | ADR-0008の決定4 |
+| 解散・退会・外す | Queuesと受け手、失敗キュー | 本人がいなくても最後まで進め、止まっても続きから再開するため | ADR-0008の決定1、ADR-0002の決定6 |
+| 設定と秘密 | Workersのsecret（`void secret put`） | VAPIDの秘密鍵と、招待のトークンを作る値を置く。リポジトリには書かない | ADR-0008の決定1 |
+| ログ | Workersのログ。保存は無料プランの日数 | 個人の情報は書かない。AWSのときの7日より短い（日数は確かめていない） | ADR-0008の決定1 |
+| 配置 | `void deploy`（中でcf CLI）。CIは`CLOUDFLARE_API_TOKEN` | 資源の作成、マイグレーション、配置を1回で行う | ADR-0008の決定3 |
 
 ## 決めたこと
 
-C-1〜C-3は2026-11-13に大関さんが回答フォームで決めた。C-3のほかは、お勧めの案のとおりである。C-4〜C-6は、2026-11-21に大関さんが出した構成の見直しを、Claudeが確かめて決めた。選択肢ごとの利点と欠点は、論点の記録（[aws-architecture](discussions/aws-architecture.md)）にある。C-2は2026-11-22に東京からシンガポールに変え、C-7〜C-9を足した。この4つは工程6の論点の記録（[cost-and-region](discussions/cost-and-region.md)）とADR-0006で決めた。
-
 | | 決めたこと | 理由 | 選ばなかった案 |
 |---|---|---|---|
-| A-1 | Lambdaはどれも呼ばれたときだけ動き、Neonにはその都度つないで、終わったら切る。定期的に動く関数は置かない | 使われていない間はNeonの計算資源が止まり、無料の計算時間に収まる見込みのため | 常駐のサーバー（ECS Fargateなど）。月の固定費がかかり、Neonも起きたままになる |
-| A-2 | LambdaはVPCに入れない | NeonはインターネットごしにTLSでつなぐので、VPCが要らない。NATゲートウェイの月の固定費がかからない | VPCに入れてNATを置く |
-| B-1 | 画面はCloudFront + S3に置く | IaCで全体を同じ形で書けるため | Amplify Hosting（設定がIaCの外に分かれる）、AWSの外（Vercelなど） |
-| B-2 | 画像は署名付きURLで、端末とS3が直接やりとりする。URLは`api`がメンバーかを確かめてから出す。アップロードは一時置き場を通して`api`が確定する。取得用URLの期限は5分で、グループを抜けた人もその間は見られる例外を認める（2026-11-13、Codexのレビューを受けて大関さんが決定） | 画像のデータがLambdaを通らないので、実行時間と費用を抑えられる | Lambdaを通して受け渡す |
-| C-1 | Neonの接続文字列とWeb PushのVAPID鍵は、SSM Parameter Store（SecureString）に置く | 標準のパラメーターは無料のため | Secrets Manager（1つごとに月額がかかる） |
-| C-2 | リージョンはシンガポール（ap-southeast-1）。Neonもシンガポール（aws-ap-southeast-1）に作る（2026-11-22、ADR-0006の決定1。2026-11-13の決定は東京だった） | Neonに東京が無く、往復の多いLambdaとNeonを近くに置くほうが速いため | AWSは東京でNeonだけシンガポール、DBを東京にあるもの（Aurora DSQL、Supabase）に替える |
-| C-3 | CloudWatch Logsの保存期間は7日にする | 個人で作るアプリなので7日で足りると判断し、費用も抑えるため（大関さんの判断。お勧めは14日） | 14日、30日 |
-| C-4 | Schedulerが起動できなかったときと、Lambda（`notification-sender`と`erasure-worker`）が再試行を使い切ったときの送り先を、同じSQSのキューにする。その回の送信を終え、回数の上限または期限で次の再送ができず、一時失敗が残ったときも、`notification-sender`がこのキューに入れる。CloudWatchはキューの可視メッセージ数（`ApproximateNumberOfMessagesVisible`）が0を超えて`ALARM`に変わったらメールで知らせる。欠測は正常とみなす（`TreatMissingData=notBreaching`）。メッセージは4日で自動的に消える。キューからの通知の再送は行わず、オーナーは必要に応じて本人に伝える。Lambdaの自動の再試行は既定の2回のままにし、1時間を過ぎた再試行は捨てる。見張りの予約は、リマインドを予約するときに一緒に作る（2026-11-21） | リマインドが知らないうちに失敗すると、発券忘れを防ぐ目的が成り立たないため。キューに入った関数の失敗と、関数は終わったが届かなかったことの両方を見る | CloudWatch Logsを見に行ったときだけ気づく |
-| C-5 | 通知の中身はDeclarative Web Pushの形にする。Service Workerは対応していない環境のために残し、同じ中身を読んで表示する（2026-11-21） | iOSでService Workerが通知を出し損ねると、購読ごと取り消されることがあるため | 今の形のまま、Service Workerがすべて表示する |
-| C-6 | ログはPowertools for AWS LambdaのLoggerで書く。Idempotencyの機能は使わない（2026-11-21） | 二重送信はNeonの行の引き受けで防いでいて、記録用の表を増やさずに済むため | Idempotencyも使う（DynamoDBなどの表が増える） |
-| C-7 | 費用はAWS Budgetsの月5ドルの予算でメールを送る。Neonの計算時間は週に1回コンソールで見て、上限の半分を超えたらLaunchプランに移す（2026-11-22、ADR-0006の決定5） | 通知だけの予算は無料のため。Neonは操作が1日に散ると無料の上限を超えることがあるので、週に1回見る（Neonを見る間隔は大関さんが決めた。2026-11-22のADR-0006のマージで確定） | Neonの使った量を定期に読む関数を作る |
-| C-8 | API Gatewayのステージの流量の上限は、毎秒20回、瞬間40回（2026-11-22、ADR-0006の決定6） | 瞬間の暴走を抑え、費用の増え方を1日約7ドル（Lambdaの実行時間とログの量を仮に置いた試算で、上限の保証ではない）に抑えるため。Neonの計算時間はこれでは守れない | 上限を置かない |
-| C-9 | API Gatewayの要求の数とLambdaの起動の数（リージョンの合計）に、1時間ごとのCloudWatchのアラームを置き、C-4と同じメールで知らせる（2026-11-22、ADR-0006の決定7） | Budgetsは気づくのが約2日あとで、Neonの計算時間を使い切る前に暴走に気づくため | Neonの使った量を定期に読む関数を作る |
+| D-1 | AWSとNeonは使わず、すべてCloudflareに置く | 管理するものを1つにまとめるため（大関の判断） | DBはNeonのままHyperdrive、画面とAPIだけ移す、移さない |
+| D-2 | Workersの無料プランで、費用は0円にする | 個人開発で、月5ドルもかけたくないため（大関の判断） | Workers Paid（月5ドル） |
+| D-3 | バックエンドはVoidで組み、配置は`void deploy`にする | 土台をVoidに任せ、HonoとDrizzleはそのまま使えるため | Hono単体、cf CLI、wrangler |
+| D-4 | リマインドは1分ごとのCronでD1を見て送る | 予約を作る・消す処理が要らず、毎分見ても費用が増えないため | 1件ごとのDurable Objectのアラーム、Workflows |
+| D-5 | ログインはBetter Authのパスキー。メールは送らない | 無料プランのEmail Serviceは登録済みの宛先にしか送れず、メールにはドメインも要るため | メールのコード（Email ServiceかResend）、Cognitoを残す、外のログインのサービス |
+| D-6 | D1の書き込みは、先に読んでから条件を付けた`batch()`で流す | D1にロックと途中で判断を挟むトランザクションが無いため | グループごとのDurable Object、条件を付けない |
+| D-7 | 画像の決まり（署名付きURL、期限5分、`uploads/`から確定のときにコピー、1日で消す）はAWSのときのまま | R2が署名付きURLとライフサイクルに対応しているため | 変えない理由が無い |
+| D-8 | 結合検証と本番は、Workers・D1・R2を2組作って分ける | 最初の1本の要件F-01のため | 1組で共有する |
+| D-9 | ログの保存は無料プランの日数。名前・通知の内容は書かない | 書かないものはAWSのときの決まり（C-3、データモデルのログの方針）のまま。メールアドレスは持たなくなる | 有料プランで7日にする |
 
 ## 費用の見込み
 
-従来は10人で月約3円（税抜き）と見込んだ。SESで月100通を送り、失敗キュー2個・API Gateway2個・Lambda起動数1個・SESの1時間の送信数1個を合わせた標準アラーム6個が無料枠10個に収まる場合、比較値は月約4.50円（税・クレジット適用前）。Neonも無料枠内とする。元の内訳は[ADR-0006](decisions/ADR-0006-region-and-cost.md#費用の試算)、前提と枠を超えた場合は[最初の1本の設計](designs/first-slice.md#sesを足した費用)を参照する。
+0円。10人で使う見込みで、Workersの無料プランの上限の中に収まる見込みである。無料プランの上限は次のとおり（2026-11-27にCloudflareの資料で確かめた）。Workers・D1・Queuesは、上限を超えても料金はかからず、その日の処理がエラーで止まる。R2だけは、無料の枠を超えると従量の料金がかかるので、APIで画像1枚の大きさとグループごとの枚数に上限を付ける（ADR-0008の決定2）。
+
+| 部品 | 無料プランの上限 |
+|---|---|
+| Workers | 1日10万リクエスト、1回の処理のCPU時間10ミリ秒（Cronも同じ）、Cronは1アカウント5個 |
+| D1 | 1日に読み取り500万行、書き込み10万行。保存は合わせて5GB |
+| R2 | 保存10GB、書き込みの操作月100万回、読み取りの操作月1,000万回 |
+| Queues | 1日1万操作、メッセージの保持は24時間 |
+
+1分ごとのCronは1日に1,440回動き、リクエストの上限の中に入る。送信時刻の索引を使えば、1回の読み取りは数行で済む。CPU時間の10ミリ秒に、Web Pushの暗号化とパスキーの確かめが収まるかは確かめていない。最初の1本の実装の前に、大関の手元で一度だけ計る（ADR-0008の決定2）。
 
 ## 決めないこと
 
-- 独自ドメインを使うか（公開前）
-- 全体図の画像（`images/aws-architecture.svg`）に、シンガポールのリージョンの名前と、C-4のSQS・アラームを描き足すこと。全体図のmermaidは、シンガポールに直した（最初の1本の設計の前）
+- 無料プランの上限に近づいたことの見張り方（AWSのときのBudgetsの代わり）
+- 流量の上限と、要求が急に増えたときの知らせ方（AWSのときのC-8・C-9の代わり）
+- 失敗キューに入ったときの知らせ方（AWSのときのC-4の代わり）
+- 結合検証と本番を、Voidでどう分けるか
+- 独自ドメインを使うか。使わなければ`workers.dev`の名前で出す。パスキーはドメインに結び付くので、決めたら替えない（ADR-0008の決定5）
+- パスキーを持つ端末をすべてなくした人を、前のアカウントに戻す手順
+- 通知の中身はDeclarative Web Pushの形にする（AWSのときのC-5）ことは変えない。Web Pushのライブラリはpushforgeなどから設計書で選ぶ
