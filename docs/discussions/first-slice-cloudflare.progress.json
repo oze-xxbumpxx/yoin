@@ -9,7 +9,10 @@
       "state": "active"
     },
     "design": {
-      "state": "pending"
+      "state": "active",
+      "docs": [
+        "docs/designs/first-slice.md"
+      ]
     },
     "plan": {
       "state": "pending"
@@ -27,5 +30,5 @@
       "state": "pending"
     }
   },
-  "updated_at": "2026-11-27T23:33:02.831Z"
+  "updated_at": "2026-11-27T23:43:41.797Z"
 }
