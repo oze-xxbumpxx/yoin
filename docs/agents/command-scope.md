@@ -35,7 +35,7 @@ DevinにはClaude Codeの危険操作フックが効かないので、起動引�
   - AWS Emulator（ADR-0004の2026-11-25の追記）は、ADR-0008でAWSをやめたので使わない
 
 Cloudflareのアカウント（D1、R2、Queues、Workers、secret）、本番、結合検証には繋がない。もとのAWSとNeonにも繋がない。
-`void deploy`、`void secret put`、`wrangler login`、D1のマイグレーションの適用（`--remote`）、D1を過去の時点に戻す操作もしない。`terraform apply`、`terraform destroy`もしない。
+`void deploy`、`void secret put`、`wrangler login`、D1のマイグレーションの適用（`--remote`）、D1を過去の時点に戻す操作もしない。危険操作のフック（`.claude/hooks/guard-dangerous.mjs`）はこのうちよく使うものを止めるだけで、全部ではない。フックが止めなくても、Cloudflareのアカウントに触れる操作はしない。`terraform apply`、`terraform destroy`もしない。
 リポジトリのファイルや環境変数を、上の3つ以外へ送らない。
 
 Gitが追跡しないディレクトリ（`node_modules`など）を書き換えて、不具合を直したことにしない。

@@ -21,12 +21,13 @@ import { readFileSync } from 'node:fs';
 
 // Cloudflareの操作は、コマンドとして呼ばれたときだけ止める。`rg "void deploy" docs/`のように
 // 検索語や文字列に入っているだけのときは止めない。コマンドの位置は、行の頭か`;` `&` `|` `(`
-// `$(`のあと。前に環境変数の代入、`npx`・`pnpm exec`・`yarn dlx`などの呼び出し、パスが付いてもよい。
+// `$(`のあと、または`bash -c '`・`sh -c "`の引用符の中。前に環境変数の代入、`env`・`sudo`・`time`・
+// `xargs`・`command`・`exec`・`nohup`、`npx`・`pnpm exec|dlx`・`yarn dlx`（オプション付きも）、パスが付いてもよい。
 function cfCmd(body) {
-  return new RegExp(
-    String.raw`(?:^|[;&|(\n]|\$\()\s*(?:\w+=\S*\s+)*(?:(?:npx|bunx|pnpm(?:\s+(?:exec|dlx))?|yarn(?:\s+dlx)?)\s+)?(?:\S*\/)?` +
-      body,
-  );
+  const start = String.raw`(?:^|[;&|(\n]|\$\(|\b(?:ba|z)?sh\s+-\w*c\s+['"])`;
+  const wrappers = String.raw`(?:(?:\w+=\S*|env|sudo|time|xargs|command|exec|nohup)\s+)*`;
+  const runner = String.raw`(?:(?:npx|bunx|pnpm(?:\s+(?:exec|dlx))?|yarn(?:\s+dlx)?)(?:\s+(?:--package\s+\S+|-[\w-]+(?:=\S+)?))*\s+)?`;
+  return new RegExp(start + String.raw`\s*` + wrappers + runner + String.raw`(?:\S*\/)?` + body);
 }
 
 function readStdin() {
@@ -91,11 +92,11 @@ const ALWAYS_DENY = [
   { re: cfCmd(String.raw`void\s+(deploy|secret\s+put)\b`), why: 'Cloudflare 本番操作（void deploy / secret put）' },
   {
     re: cfCmd(
-      String.raw`wrangler\s+(deploy|publish|login|delete|rollback|secret|versions\s+(deploy|upload)|r2|queues|kv|triggers)\b`,
+      String.raw`wrangler\s+(deploy|publish|login|delete|rollback|secret|versions\s+(deploy|upload)|r2|queues|kv|triggers|pages)\b`,
     ),
     why: 'Cloudflare アカウントの操作（wrangler の配置・削除・secret・R2・Queues など）',
   },
-  { re: cfCmd(String.raw`wrangler\s+d1\b[^\n;&|]*--remote\b`), why: 'D1 本番操作（--remote）' },
+  { re: cfCmd(String.raw`(wrangler\s+(d1|dev)|void\s+dev)\b[^\n;&|]*--remote\b`), why: 'Cloudflare の本番の資源につなぐ操作（--remote）' },
   {
     re: cfCmd(String.raw`wrangler\s+d1\s+(create|delete|time-travel)\b`),
     why: 'D1 データベースの作成・削除・過去の時点に戻す操作',
