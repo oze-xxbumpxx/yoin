@@ -175,6 +175,7 @@ eslint-plugin-boundariesで、ADR-0003の決定5の2つを書く。lintはCIと�
 インフラとDBをCloudflareに移し、バックエンドをVoidで組むことにした（[ADR-0008](ADR-0008-cloudflare.md)）。次の決定は置き換えた。
 
 - 決定3（マイグレーションをGitHub Actionsのデプロイで先に流す）：`void deploy`がマイグレーションと配置を1回で行う。手でSQLを流さない決まりは変えない。
+- 決定2のうち、Postgresにしかない書き方（文脈ごとの`pgSchema`、`select().for('share')`のロック）：D1では使えない。表は文脈の名前を頭に付けた名前で定義し、ロックの代わりにADR-0008の決定6の条件付き`batch()`で書く。Drizzleを使い、SQLをdrizzle-kitで作ってレビューで読むことは変えない。
 - 決定4（Neonのサーバーレスドライバー）：D1とDrizzle（Voidの`void/db`）にする。
 - 決定5（Terraform）：`void deploy`にする。資源はVoidがコードから読み取って作る。
 - 決定7のうち、型を`hono/client`で画面と共有すること：Voidの`void/client`にする。React＋Vite、Hono、Zodはそのまま。
@@ -182,4 +183,4 @@ eslint-plugin-boundariesで、ADR-0003の決定5の2つを書く。lintはCIと�
 - 決定8のうち、結合試験のDB（Postgresのコンテナ）：手元でまねるD1に替える。
 - 2026-11-25の追記（AWS Emulator）：要らなくなった。
 
-決定1・2・6と、決定8のそのほかの道具（pnpm、Vitest、fast-check、Playwright、GitHub Actions）は変えない。
+決定1・6と、決定2のそのほか、決定8のそのほかの道具（pnpm、Vitest、fast-check、Playwright、GitHub Actions）は変えない。
