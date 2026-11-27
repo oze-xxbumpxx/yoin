@@ -13,8 +13,7 @@
       "state": "done",
       "docs": [
         "docs/decisions/ADR-0008-cloudflare.md",
-        "docs/architecture.md",
-        "docs/data-model.md"
+        "docs/architecture.md"
       ],
       "approved": "2026-11-27（PR #96のマージ）"
     },
