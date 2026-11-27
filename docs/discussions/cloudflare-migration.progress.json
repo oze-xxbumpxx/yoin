@@ -3,7 +3,7 @@
   "title": "インフラとDBをCloudflareに移すか",
   "level": "L3",
   "page": "https://claude.ai/artifact/2TpDyanYg466ZU2XY84T6b",
-  "round": 1,
+  "round": 2,
   "stages": {
     "requirements": {
       "state": "skipped",

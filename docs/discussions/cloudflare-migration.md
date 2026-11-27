@@ -8,6 +8,8 @@
 
 2026-11-27に大関さんから「インフラ費用を多少かけたとしても、今回作るプロダクトは0円。であれば、Cloudflareでインフラ・DBを管理する形に移したい」と相談があった。いまの設計はAWS（Lambda、API Gateway、EventBridge Scheduler、Cognito、SES、S3、CloudFront、SQS、SSM）とNeonで、工程1〜6は確定している（`docs/architecture.md`、ADR-0002、ADR-0004、ADR-0006、ADR-0007）。基盤を替えるのはADR級の決定なので、候補を比べて大関さんに選んでもらう。
 
+2026-11-27の1回目の答えで、大関さんは「DBもD1に移す形でよい。あくまで個人開発で世には出さない。そこまで高品質なものを期待していない。定義とデプロイはCloudflare用のCLIを使い、Honoも入れたい。アーキテクチャ設計からやり直してよい」と決めた。続けて「cf CLIはどうか。比べてほしい。バックエンドはVoidを使う案はどうか。Cloudflareと相性が良いと思う」と聞かれた。2回目は、定義とデプロイの道具を選び直す問いと、Voidを使うかの問い、D1で書き込みの決まりをどう守るかと、やり直す範囲を足して出す。
+
 ## 前提
 
 - 実装はもう始まっている。`main`にはAWSの初回準備（Terraformの状態バケット、GitHub ActionsのOIDC、SSMの登録スクリプト）とCIが入った。開いているPRは、AWSの環境と監視（#91）、DB変更の仕組み（#92）、画面の共通部分（#93）。土台と製品のIssueは#48〜#73、AWS Emulatorを計画に入れるIssueは#79。
@@ -29,6 +31,8 @@
 - R2（Cloudflareの画像などの置き場）は署名付きURLに対応し、期限は1秒〜7日。ライフサイクルで日数が過ぎたものを消せる。外への転送は無料。
 - CloudflareのEmail Serviceのメール送信はβ版。登録していない宛先へ送れるのはWorkers Paidだけで、月3,000通まで含まれる。
 - Web Pushの暗号はWeb Cryptoで書いたライブラリ（pushforgeなど）がWorkersで動くと書いている。iPhoneへ届くかは試していない。
+- cf（Cloudflareの新しいCLI）は、Cloudflare全体のAPIとWorkersの開発・配置を1つにまとめた道具。2026-09-28に公開のβ、npmの版は1.0.0-rc.6（2026-11-27に確かめた）。設定は`cloudflare.config.ts`で、`wrangler.jsonc`は読まない（`cf migrate`で変換する）。CIは`CLOUDFLARE_API_TOKEN`で動く。正式版のあと、wranglerは最後の版から18か月保守される。2026-11時点の記事では、Durable Objectsの移行はまだ`cf migrate`で扱えない。
+- Void（VoidZeroが作り、2026-10-15にMITライセンスで公開）は、Viteの上に作ったCloudflare向けのフレームワークと配置の道具。npmの版は1.12.2（2026-11-27）。中でHonoを使い、APIの処理はHonoのcontextで書く。D1とDrizzle（`db.batch()`を含む）、Better Authのログイン、Durable Objects（アラームつき）、Cron、Queues、R2、KV、メールの送受信（手元の受信箱で試せる）を持つ。画面は「SPA＋API」の形に対応する。型つきの呼び出しは`hono/client`でなくVoidの`void/client`。`void deploy`はビルド、資源の作成、マイグレーション、配置をまとめて行い、中でcfを使う。エージェント向けの`AGENTS_TEMPLATE.md`とスキルが付いている。無料プランの範囲でも動くと書いている。2026-11-27にnpmのパッケージの文書を読んだだけで、動かしてはいない。
 - WorkersのデプロイはTerraformのCloudflareプロバイダーでも、Cloudflareの道具wrangler（設定ファイルと`wrangler deploy`）でもできる。wranglerは手元でD1・R2・Durable Objects・Queuesをまねて動かせる。
 
 ## 論点
@@ -49,8 +53,8 @@
     - 欠点: いまのAWSの見込み（月約4.50円）より約170倍高い
   - B) 0円で動かす（Cloudflareの無料プラン）
     - 利点: 費用がかからない
-    - 欠点: メールは登録した宛先にしか送れないので、ログインのメールはほかで送る（Cognito、Resendなど）。CPUは1回10ミリ秒まで。上限を超えるとその日のUTCの0時まで失敗する
-- 推奨: A（ログインのメールまでCloudflareにまとめられる。Bだと結局ほかのサービスが残る）
+    - 欠点: メールは登録した宛先にしか送れない。メンバーのアドレスを1人ずつCloudflareに登録し、本人が確認のメールを押すか、ほかのサービス（Resendなど）で送る。CPUは1回10ミリ秒まで、D1は1つ500MBまで、戻せる期間は7日。上限を超えるとその日のUTCの0時まで失敗する
+- 推奨: A（ログインのメールの手間が無く、上限を気にせず使える。世に出さない個人の利用なら、メンバーのアドレスを登録するBも成り立つ）
 
 ### どこまでCloudflareに移し、DBをどうするか
 
@@ -59,7 +63,7 @@
 - 工程: 設計
 - 種類: 設計
 - 優先度: 高
-- 状態: 回答待ち
+- 状態: 決定
 - なぜ今: DBの選び方で、データモデルとADR-0002を作り直すかが決まる。AWS向けのPR #91が進んでいる。
 - 根拠: https://developers.cloudflare.com/d1/worker-api/d1-database/ 、https://developers.cloudflare.com/d1/platform/limits 、https://developers.cloudflare.com/hyperdrive/concepts/how-hyperdrive-works/ 、https://developers.cloudflare.com/hyperdrive/examples/connect-to-postgres/postgres-database-providers/neon/ 、ADR-0002の決定3、`docs/data-model.md`
 - 選択肢:
@@ -76,6 +80,12 @@
     - 利点: 設計も実装中のPRもそのまま。費用は月約4.50円
     - 欠点: 大関さんが望んだCloudflareへのまとめはしない
 - 推奨: A（決めた書き込みの決まりを守ったまま、AWSを丸ごと外せる。Bは管理は1つになるが、データモデルの工程からやり直しになる）
+- 決定: B
+- 推奨と同じか: 違う
+- 理由: 個人開発で世には出さず、そこまで高品質なものを期待していない。管理をCloudflareにまとめたい。アーキテクチャ設計からやり直してよい（大関さん、2026-11-27）
+- 選ばなかった理由: A（NeonとCloudflareの2つを管理することになる）、C（管理するものが3つに増える）、D（Cloudflareにまとめたい）
+- 反映先: ADR-0008、docs/architecture.md、docs/data-model.md（D1で変わるところ）
+- 決めた日: 2026-11-27
 
 ### ログインを何で作るか
 
@@ -88,7 +98,7 @@
 - なぜ今: 認証は人がじっくり見る範囲で、招待リンクを通らない登録を断る仕組みをどこに置くかが変わる。
 - 根拠: ADR-0007、AGENTS.md「認可」、https://developers.cloudflare.com/email-service/index.md 、https://www.better-auth.com/docs/plugins/email-otp
 - 選択肢:
-  - A) Better Auth（TypeScriptの認証ライブラリ）をWorkersで動かし、メールのコードでログインする。メールはCloudflareのEmail Serviceで送る
+  - A) Better Auth（TypeScriptの認証ライブラリ）をWorkersで動かし、メールのコードでログインする。メールはCloudflareのEmail Serviceで送る。Voidを使うなら、Voidに入っているBetter Authにメールのコードの機能を足す
     - 利点: Cloudflareにまとまる。招待の確認を、ユーザーを作る処理の前に自分のコードで入れられる。ログインの状態はNeonの表に置く
     - 欠点: セッションの管理を自分たちのコードで持つので、人が見る差分が増える。Email Serviceはβ版
   - B) CognitoとSESだけAWSに残し、WorkersでCognitoのJWTを確かめる
@@ -107,7 +117,7 @@
 - 種類: 設計
 - 優先度: 高
 - 状態: 回答待ち
-- なぜ今: いまはリマインド1件ごとにSchedulerの1回限りの予約を作る。同じ形をCloudflareで何に置き換えるかで、予約・取り消し・再送の作りが変わる。
+- なぜ今: いまはリマインド1件ごとにSchedulerの1回限りの予約を作る。DBをD1にしたので、1回目と推奨を変えた（1回目はA）。同じ形をCloudflareで何に置き換えるかで、予約・取り消し・再送の作りが変わる。
 - 根拠: https://developers.cloudflare.com/durable-objects/api/alarms 、https://developers.cloudflare.com/workflows/build/sleeping-and-retrying/ 、https://developers.cloudflare.com/queues/configuration/batching-retries/ 、データモデル「リマインドの送り方」、AWS構成のC-4
 - 選択肢:
   - A) リマインド1件ごとにDurable Objectを1つ作り、送信時刻にアラームを置く
@@ -116,12 +126,31 @@
   - B) リマインド1件ごとにWorkflowsを起動し、送信時刻まで眠らせる
     - 利点: 再試行の回数と間隔を手順ごとに決められる
     - 欠点: 眠らせられる長さの上限を確かめていない。取り消しは実行中の手順を止める形になる
-  - C) Cronで1分ごとにNeonを見て、時刻の来たリマインドを送る
-    - 利点: 作りがいちばん単純
-    - 欠点: Neonが1分ごとに起き、無料の計算時間を使い切る（AWS構成のA-1で避けた形）
-- 推奨: A（いまの予約の決まりをそのまま写せて、Neonは送るときだけ起きる）
+  - C) Cronで1分ごとにD1を見て、送信時刻の来たリマインドを送る
+    - 利点: 作りがいちばん単純。予約も取り消しもD1の行を書くだけになる。送れなかったものは次の1分で拾い直せる。D1は眠らないので、Neonのときの「毎分起こして計算時間を使い切る」問題が無い
+    - 欠点: 送信が最大1分遅れる。無料プランではCronの1回のCPUが10ミリ秒までなので、一度に送る端末が多いと足りないおそれがある（試していない）
+- 推奨: C（DBをD1にしたので、毎分見ても費用がかからない。1件ごとの予約を作る・消す・世代を切り替える処理が要らなくなる）
 
-### 環境の定義とデプロイを、何で書くか
+### バックエンドをVoidで組むか
+
+<!-- id: cf-backend -->
+
+- 工程: 設計
+- 種類: 設計
+- 優先度: 高
+- 状態: 回答待ち
+- なぜ今: 大関さんからVoidを使う案が出た。Voidを使うと、ログイン、DBのマイグレーション、Cron、配置をVoidの決まりに沿って作ることになり、ほかの問いの答えも変わる。
+- 根拠: https://blog.cloudflare.com/deploy-with-void/ 、https://flaviocopes.com/void/ 、https://github.com/voidzero-dev/void 、npmの`void@1.12.2`に入っている文書（app-types、auth、durable-state、jobs、email、database）、ADR-0004の決定2・決定7
+- 選択肢:
+  - A) Voidで組む。APIはVoidの`routes/`にHonoの書き方で置き、画面はいまのReact＋Viteを「SPA＋API」の形で載せる。D1とDrizzle、ログイン（Better Auth）、Cron、R2、メール、配置はVoidのものを使う
+    - 利点: 土台（DBのマイグレーション、ログイン、資源の作成、配置、CIの手順）をVoidが持つので、作る量がいちばん少ない。メールを手元の受信箱で受けられるので、ログインのE2Eを試しやすい。Honoの書き方とDrizzleはADR-0004のまま使える
+    - 欠点: 公開から6週間で、利用の記録が少ない。型つきの呼び出しが`hono/client`からVoidの`void/client`に替わる（ADR-0004の決定7）。`routes/`・`crons/`などVoidの置き場所と、ADR-0003の文脈ごとの層（`src/contexts/`）を合わせる決まりを作る。Devinが知らない道具なので、Voidに付いているエージェント向けの文書を読ませる
+  - B) Hono単体で組み、D1・ログイン・Cron・配置は自分たちで組み合わせる
+    - 利点: ADR-0004の形（Hono＋Zod、`hono/client`）のまま。道具が新しすぎる危うさが無い
+    - 欠点: Better Authのつなぎ込み、D1のマイグレーション、Cron、配置の手順を自分たちで作るので、土台のタスクが増える
+- 推奨: A（個人開発で高い品質を求めないなら、土台をVoidに任せて画面とアプリの決まりに時間を使える。中身はHonoとDrizzleとBetter Authなので、Voidをやめるときも書いたコードの多くは残る）
+
+### 定義とデプロイを、どのCLIでするか
 
 <!-- id: cf-iac -->
 
@@ -129,16 +158,20 @@
 - 種類: 設計
 - 優先度: 中
 - 状態: 回答待ち
-- なぜ今: ADR-0004の決定5（Terraform）と、マージ済みの初回準備の作り直し方が変わる。
-- 根拠: https://developers.cloudflare.com/workers/platform/infrastructure-as-code/ 、ADR-0004の決定3・決定5
+- なぜ今: 1回目はwranglerに決めたが、大関さんがcf CLIとの比べを求めた。ADR-0004の決定5（Terraform）と、マージ済みの初回準備の作り直し方が変わる。
+- 根拠: https://blog.cloudflare.com/cloudflare-cf-cli-launch/ 、https://developers.cloudflare.com/changelog/post/2026-09-28-cloudflare-cli-beta/ 、https://flaviocopes.com/cloudflare-cf/ 、https://blog.cloudflare.com/deploy-with-void/ 、https://developers.cloudflare.com/workers/platform/infrastructure-as-code/ 、ADR-0004の決定3・決定5
+- 前の決定: 2026-11-27の1回目でA（wrangler）。大関さんがcf CLIとの比べを求めたので出し直す
 - 選択肢:
-  - A) wranglerの設定ファイルと`wrangler deploy`で書く
-    - 利点: Cloudflareの標準の形で、手元でD1・R2・Durable Objectsをまねる道具も同じ設定を読む。状態ファイルとそのバケットが要らない
-    - 欠点: Terraformの検査（`terraform test`）の代わりを考える。DNSなどWorkersの外の設定は別に持つ
-  - B) TerraformのCloudflareプロバイダーで書く
-    - 利点: ADR-0004の決定5の道具を続けられる
-    - 欠点: 状態ファイルの置き場所をまた作る。Workersのコードの配置は結局wranglerかビルドの手順と組み合わせる
-- 推奨: A（Workersの配置とDurable Objectsの定義が1つの設定にまとまり、状態ファイルを守る仕組みが要らなくなる）
+  - A) Voidの`void deploy`に任せる（中でcfを使う）。Voidを使うときだけ選べる
+    - 利点: D1・R2・Cronなどの資源をコードから読み取って作り、マイグレーションと配置を1回で行う。設定ファイルをほとんど書かない
+    - 欠点: 資源の定義がVoidの決まりに沿う。Voidをやめるときは、cfかwranglerの設定に書き直す
+  - B) cf（1.0.0-rc.6）と`cloudflare.config.ts`で書く
+    - 利点: Cloudflareがこれから標準にする道具。設定をTypeScriptで書ける。画面のVite（React）のビルドと同じ流れで動く
+    - 欠点: まだ正式版の前で、設定や命令が変わることがある。Durable Objectsの移行はまだ扱えない（記事による）
+  - C) wranglerと`wrangler.jsonc`で書く
+    - 利点: いちばん長く使われていて、Durable Objects・D1のマイグレーションまで全部扱える。文書と例が多く、Devinも知っている
+    - 欠点: cfの正式版のあと、18か月で保守が終わる
+- 推奨: A（Voidを使うなら配置まで任せるのがいちばん手間が少ない。Voidを使わないならB。個人開発で、これから標準になるcfに最初から合わせられる）
 
 ### 決めるまで、進んでいる実装をどうするか
 
@@ -151,13 +184,13 @@
 - なぜ今: 移すと決まれば無駄になる作業を、Devinに続けさせないため。
 - 根拠: PR #91・#92・#93、Issue #48・#73・#79
 - 選択肢:
-  - A) AWSにしか関わらないPR #91とIssue #48・#73・#79は止める。DB変更の仕組み（#92）と画面の共通部分（#93）は、どの案でも使うので続ける
-    - 利点: 無駄になる作業を止めつつ、残る作業は進められる
-    - 欠点: Bを選ぶと#92も作り直しになる
+  - A) AWSかPostgresに関わるPR #91（環境と監視）・#92（DB変更の仕組み）と、Issue #48・#50・#73・#79は止める。画面の共通部分（#93）は基盤に関わらないので続ける
+    - 利点: D1とwranglerで作り直す作業を止めつつ、画面は進められる
+    - 欠点: #93のうち、ログインの状態の入れ物はログインの方式が決まってから直すことがある
   - B) 決まるまで全部止める
     - 利点: 作り直しが出ない
     - 欠点: 画面の作業まで止まる
-- 推奨: A（#92はNeonを使い続けるAとCでは無駄にならず、#93は基盤に関わらない）
+- 推奨: A（#92はPostgres向けのdrizzle-kitの仕組みで、D1では作り直しになる。#93は基盤に関わらない）
 
 ### 決めたことを、どこに書くか
 
@@ -177,3 +210,47 @@
     - 利点: 早い
     - 欠点: 差分が大きく、人が見る範囲が混ざる
 - 推奨: A（分担と、検査を別のPRにする決まりのとおり）
+
+### D1で、グループの書き込みの決まりをどう守るか
+
+<!-- id: cf-write-rules -->
+
+- 工程: 設計
+- 種類: 設計
+- 優先度: 高
+- 状態: 回答待ち
+- なぜ今: D1にすると、ADR-0002の決定3（最初にグループの行を`FOR SHARE`でロックし、1つのトランザクションで書く）がそのままでは書けない。データモデルの直し方がこれで決まる。
+- 根拠: ADR-0002の決定3、`docs/data-model.md`の書き込みの順番、https://developers.cloudflare.com/d1/worker-api/d1-database/ 、https://developers.cloudflare.com/d1/platform/limits
+- 選択肢:
+  - A) 先に読んで判断し、書き込みは`batch()`でまとめて流す。各文に「グループが有効」「申込がまだその状態」などの条件を付け、条件が外れて1件も変わらなければ、まとめて取り消して断る
+    - 利点: D1は1つのDBで1度に1つの処理しかしないので、`batch()`の中にほかの書き込みは割り込まない。解散と同時の書き込みも、条件で断れる。いまの決まりに近い形で書ける
+    - 欠点: 読んでから書くまでのあいだに状態が変わると、条件で断ることになり、利用者には「もう一度」を出す。条件を付け忘れる誤りは試験で見つける
+  - B) グループごとにDurable Objectを1つ置き、そのグループの書き込みはすべてそれを通して1本ずつ処理する
+    - 利点: 途中で判断を挟む書き方を、Durable Objectの中でそのまま書ける
+    - 欠点: 読み取りと書き込みの通り道が2つになり、作りが大きくなる。DBもD1とDurable Objectの中のSQLiteに分かれるおそれがある
+  - C) 条件は付けず、解散や退会と同時に来た書き込みの取りこぼしは許す
+    - 利点: 作りがいちばん単純
+    - 欠点: 解散したグループに行が残るなど、データモデルの決まりが崩れる。AGENTS.mdの「データの消失」の決まりに当たる
+- 推奨: A（D1の1度に1つの処理と`batch()`の全部か何もしないかで、ロックと同じ結果を得られる。作りは大きくならない）
+
+### アーキテクチャ設計から、どこまでやり直すか
+
+<!-- id: cf-redo-scope -->
+
+- 工程: 設計
+- 種類: 設計
+- 優先度: 高
+- 状態: 回答待ち
+- なぜ今: 書き直す設計資料の範囲で、次のPRの大きさと、Devinに渡す実装計画の作り直しが決まる。
+- 根拠: 工程1〜6の設計資料（`docs/`）、ADR-0001〜0007、最初の1本の要件定義書・設計書・実装計画
+- 選択肢:
+  - A) アーキテクチャ（`docs/architecture.md`）を書き直し、ADR-0008にまとめる。データモデルはD1で変わるところ（型、書き込みの順番、スキーマの分け方。SQLiteにはスキーマが無いので表の名前の頭に文脈の名前を付ける）だけ直す。PR/FAQ、用語集、文脈、ユーザーストーリー、API設計（Hono）はそのまま使う
+    - 利点: 決めてある何ができるかと画面・APIは変えず、基盤だけ替えられる
+    - 欠点: 最初の1本の設計書の直しと、実装計画の作り直しが要る
+  - B) データモデルの工程（工程3）から作り直す
+    - 利点: D1に合わせて、表の数や分け方から見直せる
+    - 欠点: 決めた28の表の決まりを最初から見直すので、時間がかかる
+  - C) 「世に出さない個人開発」に合わせて、PR/FAQの作る範囲から見直す
+    - 利点: 作る量を減らせる
+    - 欠点: いまの依頼の範囲を越える。決めたユーザーストーリーを選び直す
+- 推奨: A（Honoを含めAPIの形は変わらず、変わるのは置き場所とDBの書き方なので、そこだけ直せば足りる）
