@@ -1,0 +1,32 @@
+{
+  "feature": "cloudflare-migration",
+  "title": "インフラとDBをCloudflareに移すか",
+  "level": "L3",
+  "page": "https://claude.ai/artifact/2TpDyanYg466ZU2XY84T6b",
+  "round": 1,
+  "stages": {
+    "requirements": {
+      "state": "skipped",
+      "reason": "基盤の決定で、要件定義書は作らない（決まったら最初の1本の要件の直しを見る）"
+    },
+    "design": {
+      "state": "waiting"
+    },
+    "plan": {
+      "state": "pending"
+    },
+    "implement": {
+      "state": "pending"
+    },
+    "review": {
+      "state": "pending"
+    },
+    "merge": {
+      "state": "pending"
+    },
+    "reflect": {
+      "state": "pending"
+    }
+  },
+  "updated_at": "2026-11-27T09:40:00.000Z"
+}
