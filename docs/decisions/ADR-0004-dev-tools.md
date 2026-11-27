@@ -169,3 +169,17 @@ eslint-plugin-boundariesで、ADR-0003の決定5の2つを書く。lintはCIと�
 - Terraformの定義をエミュレータに適用して試すかは、まだ決めない。2026-11-25に試そうとしたが、作業環境からTerraformのレジストリにつながらず、試せなかった。それまでは、Terraformに書く実行ロールの権限の誤りは、今どおり結合検証で見つける。エミュレータの試験で使う実行ロールは試験のコードが作るもので、Terraformの定義を確かめたことにはならない。
 
 選ばなかった案は、LocalStackの無料版（CognitoとHTTP APIが入らず、アカウントと認証トークンが要る）、MiniStackとFloci（動くことを確かめた記録が見つからない）、LocalStackの有料版（月45ドル前後）、入れない案（Schedulerの権限や失敗キューの誤りが結合検証まで見つからない）である。
+
+## 2026-11-27の追記（ADR-0008で置き換えた決定）
+
+インフラとDBをCloudflareに移し、バックエンドをVoidで組むことにした（[ADR-0008](ADR-0008-cloudflare.md)）。次の決定は置き換えた。
+
+- 決定3（マイグレーションをGitHub Actionsのデプロイで先に流す）：`void deploy`がマイグレーションと配置を1回で行う。手でSQLを流さない決まりは変えない。
+- 決定4（Neonのサーバーレスドライバー）：D1とDrizzle（Voidの`void/db`）にする。
+- 決定5（Terraform）：`void deploy`にする。資源はVoidがコードから読み取って作る。
+- 決定7のうち、型を`hono/client`で画面と共有すること：Voidの`void/client`にする。React＋Vite、Hono、Zodはそのまま。
+- 2026-11-21の追記のうち、Powertools for AWS LambdaのLogger：Workersのログにする。
+- 決定8のうち、結合試験のDB（Postgresのコンテナ）：手元でまねるD1に替える。
+- 2026-11-25の追記（AWS Emulator）：要らなくなった。
+
+決定1・2・6と、決定8のそのほかの道具（pnpm、Vitest、fast-check、Playwright、GitHub Actions）は変えない。
