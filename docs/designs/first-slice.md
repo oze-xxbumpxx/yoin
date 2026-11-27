@@ -78,7 +78,7 @@ flowchart LR
 | D1 本体 | `yoin`。location hintは`apac`（F-04） |
 | D1 送れた記録 | `yoin-send-log`。本体と別のデータベースにして、本体を過去の時点に戻しても戻らないようにする（データモデルR22） |
 | Cron | `* * * * *`の1個（無料プランの5個のうち1個） |
-| secret | `BETTER_AUTH_SECRET`、`INVITE_TOKEN_SECRET`、`RECOVERY_TOKEN_SECRET`、`SETUP_PASSPHRASE`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT`、`REMINDERS_PAUSED`（ふだんは`0`）。値は大関さんが`void secret put`で置く |
+| secret | `BETTER_AUTH_SECRET`、`INVITE_TOKEN_SECRET`、`RECOVERY_TOKEN_SECRET`、`SETUP_PASSPHRASE`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT`、`MAINTENANCE`（ふだんは`0`。`1`でアプリを閉じ、リマインドも止める）。値は大関さんが`void secret put`で置く |
 | 公開の値 | `VAPID_PUBLIC_KEY`。GitHub Actionsの変数（Secretsではない）に置き、画面のビルドで埋め込む。配置先が1つなので、環境ごとの`config.json`はやめる |
 
 Voidは、自分のアカウントへ配置するときに配置先を1つしか持てない（Voidの文書`reference/cli/deploy.md`。動かしてはいない）。結合検証を作らないと決めた（論点fs-env）ので、この制約に合う。
@@ -115,7 +115,7 @@ sequenceDiagram
 - 入口の札は、入口の種類・対象のID（招待リンク・戻すリンク・はじめの登録）・期限10分を、`BETTER_AUTH_SECRET`から作った鍵でHMACした値にする。D1には書かない。札が無いか、期限切れか、署名が合わなければ、ユーザーを作る前のつなぎ目（Better Authの`databaseHooks.user.create.before`）で断る。
 - 札には乱数の`ticketId`を入れる。ユーザーを作る前のつなぎ目は、同じ`ticketId`で作ったBetter Authのユーザーがすでにあれば断る（作ったユーザーに`ticketId`を持たせる）。札1枚で作れるユーザーは1人だけになる。
 - 札でできるのは、パスキーの登録と、その入口の最後の要求だけである。札でアプリのほかのAPIは呼べない。
-- 認証の条件は3つに分かれる。札を出す3本（`GET /invites/{token}`、`POST /setup/verify`、`GET /recovery/{token}`）はセッションが無くても呼べる。最後の要求（`accept`、`setup/complete`）は、札と、パスキーの登録でできたセッションの両方が要る。ほかのAPIはセッションと`users`の行が要る。戻す2つ（`recovery`、`setup/recover`）は、最後の要求を別に呼ばず、パスキーの登録の中で済ませる（下の「戻すリンク」）。
+- 認証の条件は3つに分かれる。札を出す3本（`GET /invites/{token}`、`POST /setup/verify`、`GET /recovery/{token}`）はセッションが無くても呼べる。未登録の人の最後の要求（初めての人の`accept`、`setup/complete`）は、札と、パスキーの登録でできたセッションの両方が要る。すでに`users`の行がある人が別のグループの招待を受けるときは、札は要らず、ふつうのセッションと招待リンクの確かめだけで`accept`を通す（E-03）。ほかのAPIはセッションと`users`の行が要る。戻す2つ（`recovery`、`setup/recover`）は、最後の要求を別に呼ばず、パスキーの登録の中で済ませる（下の「戻すリンク」）。
 - パスキーを登録したあと最後の要求が届かず、`groups.users`から指されないBetter Authのユーザーが残ったら、1時間後にCronが消す（データモデルR24）。
 - Better Authのパスキーのプラグインで、セッションの無い人の登録をどうつなぐか（セッションなしの登録の設定を使うか、入口でユーザーを作ってから札つきのセッションで登録するか）は、Voidに入っているBetter Authの版で実装の最初に確かめる。どちらでも、上の札とつなぎ目の確かめは入れる。
 
@@ -140,7 +140,7 @@ sequenceDiagram
 - 本人はS-25でリンクを開く。`GET /recovery/{token}`は、使えるかと表示名だけを返し、使えるなら札を出す。使った・切れた・出し直した・取り消したリンクは、どれも同じ`recovery_unusable`にする（E-20）。期限は`expires_at`ちょうどから使えない（B-13）。
 - 本人が札で新しいパスキーを登録すると、Better Authの同じユーザーに足される。パスキーの登録を確かめる同じ要求の中（Better Authの登録のあとのつなぎ目）で、1つの`batch()`に、確かめの文（期限・使用済み・取り消し・所属が`active`）、`used_at`の記入、そのユーザーの古いパスキーと、今のセッションを除くセッションの削除を流す。画面から別の確定の要求は送らない。`POST /recovery/{token}/complete`は、応答が届かなかったときに結果を読み直すためだけに置き、何も書かない。
 - 確かめの文で断られたら、その要求で足したパスキーとセッションを消して`recovery_unusable`を返す。
-- 札を出すとき、`recovery_links.ticket_issued_at`に時刻を書く。パスキーを足したあと`batch()`の前にWorkerが止まると、新しいパスキーが残る。Cronは、`ticket_issued_at`から11分たっても`used_at`が空の行を見つけたら、そのユーザーのパスキーのうち`ticket_issued_at`より後に作ったものとそのセッションを消す。それまでのあいだも、新しいパスキーでは何もできないようにする。APIはセッションの確かめのとき、その人の戻すリンク（またはオーナーの戻しの`setup_state`）に`ticket_issued_at`が入っていて`used_at`が空で、セッションが`ticket_issued_at`より後に作られたものなら、`recovery_pending`の401で断る。確定の`batch()`が通ったときに`ticket_issued_at`を空に戻す。リンクを出し直したときも空に戻し、残ったパスキーとセッションは同じ`batch()`で消す。
+- 札を出すとき、`recovery_links.ticket_issued_at`が空なら時刻を書く。すでに入っていれば書き換えず、最初の札の時刻を保つ。札を出し直しても、前の札で作ったパスキーとセッションが判定から外れないようにするためである。パスキーを足したあと`batch()`の前にWorkerが止まると、新しいパスキーが残る。Cronは、`ticket_issued_at`から11分たっても`used_at`が空の行を見つけたら、そのユーザーのパスキーのうち`ticket_issued_at`より後に作ったものとそのセッションを消す。それまでのあいだも、新しいパスキーでは何もできないようにする。APIはセッションの確かめのとき、その人の戻すリンク（またはオーナーの戻しの`setup_state`）に`ticket_issued_at`が入っていて`used_at`が空で、セッションが`ticket_issued_at`より後に作られたものなら、`recovery_pending`の401で断る。確定の`batch()`が通ったときに`ticket_issued_at`を空に戻す。リンクを出し直したときも空に戻し、残ったパスキーとセッションは同じ`batch()`で消す。
 
 ### オーナー本人の戻し方（F-05b）
 
@@ -280,12 +280,12 @@ sequenceDiagram
 
 ### D1を過去の時点に戻したとき（F-36a）
 
-戻すのは大関さんで、手でSQLは流さない。止める印は、戻しても消えない`yoin-send-log`の`control`に置く。`yoin-send-log`には、戻しても消えてはいけない記録として、送れた記録（`send_log`）と、パスキーを消した記録（`revocations`）を置く。
+戻すのは大関さんで、手でSQLは流さない。戻しているあいだと、戻したあとの突き合わせが終わるまでは、アプリ全体を閉じる。APIとBetter Authのログインは、`MAINTENANCE`が`1`のとき、または`control.paused_at`があって`reconciled_at`が空のとき、すべて503 `maintenance`で断る。戻すと消したはずのパスキーとセッションも本体に戻るので、突き合わせで消し直すまで、古い端末からログインさせないためである。止める印は、戻しても消えない`yoin-send-log`の`control`に置く。`yoin-send-log`には、戻しても消えてはいけない記録として、送れた記録（`send_log`）と、パスキーを消した記録（`revocations`）を置く。
 
-1. 大関さんが`void secret put REMINDERS_PAUSED 1`で止める。次のCronは、`paused_at`が空か`reconciled_at`が入っていれば、`paused_at`に今の時刻を書き、`reconciled_at`を空にする（2回目の戻しでも突き合わせが要る状態になる）。以後は送らない。
+1. 大関さんが`void secret put MAINTENANCE 1`で止める。APIはすぐ503を返し始める。次のCronは、`paused_at`が空か`reconciled_at`が入っていれば、`paused_at`に今の時刻を書き、`reconciled_at`を空にする（2回目の戻しでも突き合わせが要る状態になる）。以後は送らない。
 2. 大関さんがCloudflareの管理画面かcf CLIで、本体のD1（`yoin`）だけを戻したい時点に戻す。
-3. 大関さんが`void secret put REMINDERS_PAUSED 0`で再開する。次のCronは、`paused_at`があって`reconciled_at`が無いとき、送る前に突き合わせをする。`send_log`に記録がある端末は本体でも`sent`にし、対象の端末すべてに記録がある予約は`sent`にする。記録が一部にしか無い予約と、`send_at`が`paused_at`以前の`scheduled`・`sending`の予約は`held`にする。`send_log`の行は、その予約の今の`send_at`と同じ`send_at`のものだけを数える。未送信の予約の時刻を直すと同じIDのまま`send_at`が変わるので、直す前の時刻で送った記録を、直したあとの予約の記録として数えないためである。`held`と`sent`に移すときは、同じ更新で`retry_at`と`claimed_at`を空にする（`retry_at`は`sending`の行だけが持てる）。
-   続けて`revocations`を本体に当て直す。戻した先の時点のあとで消したパスキーとセッション（戻すリンクとオーナーの戻しで消したもの）を、もう一度消す。使った戻すリンクも、`revocations`に残したリンクのIDで`used_at`を入れ直す。終わったら`reconciled_at`を書く。
+3. 大関さんが`void secret put MAINTENANCE 0`で再開する。次のCronは、`paused_at`があって`reconciled_at`が無いとき、送る前に突き合わせをする。`send_log`に記録がある端末は本体でも`sent`にし、対象の端末すべてに記録がある予約は`sent`にする。記録が一部にしか無い予約と、`send_at`が`paused_at`以前の`scheduled`・`sending`の予約は`held`にする。`send_log`の行は、その予約の今の`send_at`と同じ`send_at`のものだけを数える。未送信の予約の時刻を直すと同じIDのまま`send_at`が変わるので、直す前の時刻で送った記録を、直したあとの予約の記録として数えないためである。`held`と`sent`に移すときは、同じ更新で`retry_at`と`claimed_at`を空にする（`retry_at`は`sending`の行だけが持てる）。
+   予約の突き合わせより先に、`revocations`を本体に当て直す。戻した先の時点のあとで消したパスキーとセッション（戻すリンクとオーナーの戻しで消したもの）を、もう一度消す。使った戻すリンクも、`revocations`に残したリンクのIDで`used_at`を入れ直す。終わったら`reconciled_at`を書く。
 4. 突き合わせは1回のCronで20件ずつ進め、全部を終えるまで送らない。10人の規模では数分で終わる（推測）。そのあいだ、ほかの予約の送信も遅れる。送信期限を過ぎた予約は送らない。
 5. オーナーはS-26で1件ずつ決める。`send`はデータモデルの手順5のとおり、送信期限を今から1時間後にして`scheduled`か`sending`に戻し、`send_log`で`sent`にした端末には送らない。`cancel`は`canceled`にする。`send`は、その予約の`dedupe_key`が`history:`で始まらない（今の期限を表している）ときだけ受ける。そうでなければ`cancel`として扱う。
 
@@ -331,8 +331,9 @@ sequenceDiagram
 - 手元のHonoで、`users`の行が無い人・メンバーでない人・オーナーでない人、招待の最後の1回、合言葉の5回目と6回目、オーナーができたあとの`setup/complete`、戻すリンクの24時間ちょうど・使用済み・出し直し、別グループのIDの404を確かめる。
 - fast-checkで、申込からあるべき予約を出す関数（AC-02）、状態の移り方（AC-03）、引き受けと再送と完了（AC-04）を確かめる。Cronを2つ同時に流しても同じ行を2回引き受けないこと、取り消した予約を引き受けないこと、端末の数の上限で止めた回の続きで送れた端末に送り直さないことを含める。
 - 固定の時計で、送信期限の境目を試す。入金期限12:00の3時間前の分（9:00、送信期限10:00）は、9:30に登録すれば次のCronで送り、10:00に登録すれば作らない。前日20時の分（送信期限21:00）も、20:30と21:00で同じに分かれる。Cronが締切ちょうどに起動したら送らない、再送が送信期限に間に合わなければ作らない、送信期限を過ぎた`scheduled`は表示上だけ完了にする、も確かめる。
-- D1を戻す手順は、2回続けて戻しても2回目に突き合わせが流れること、時刻を直した予約で直す前の送信記録を数えないこと、`retry_at`の入った予約を`held`にできること、戻すリンクで消したパスキーが戻したあとも使えないことを試す。
-- D1を戻したあとの手順（AC-06b）は、手元のD1で、`send_log`に一部の端末だけ記録がある予約、全部ある予約、無い予約を作り、`REMINDERS_PAUSED`を1から0に戻して、`held`と`sent`に分かれること、S-26の`send`でまだ送っていない端末にだけ送ることを確かめる。
+- D1を戻す手順は、2回続けて戻しても2回目に突き合わせが流れること、時刻を直した予約で直す前の送信記録を数えないこと、`retry_at`の入った予約を`held`にできること、戻すリンクで消したパスキーが戻したあとも使えないこと、`MAINTENANCE`が`1`のあいだと突き合わせが終わるまでAPIとログインが503になることを試す。
+- 登録済みの人が別のグループの招待を受けると、札なしで参加できることを試す。戻すリンクの札を2回出したとき、1回目の札で作ったパスキーのセッションも`recovery_pending`で断られることを試す。
+- D1を戻したあとの手順（AC-06b）は、手元のD1で、`send_log`に一部の端末だけ記録がある予約、全部ある予約、無い予約を作り、`MAINTENANCE`を1から0に戻して、`held`と`sent`に分かれること、S-26の`send`でまだ送っていない端末にだけ送ることを確かめる。
 - 本番で人が確かめるもの（AC-06c、AC-07〜AC-12）は要件定義書の表のとおり。大関さんがオーナーと2人目の両方を操作する。2人目を退会させる機能はまだ無いので、本番に招くのは大関さんの2つ目のアカウントか、退会の回までいてもらってよい人に限る。
 
 ## 移行とリリース
@@ -357,9 +358,10 @@ flowchart LR
 ```
 
 1. 大関さんが最初に一度だけ、Cloudflareのアカウントのworkers.devの名前を決め、上の資源の表に書き足すPRを出す。
-2. 大関さんがsecretを置く（`void secret put`）。`REMINDERS_PAUSED`は`0`。
+2. 大関さんがsecretを置く（`void secret put`）。`MAINTENANCE`は`0`。
 3. `main`にマージすると、GitHub Actionsが試験を通してから`void deploy`を流す。マイグレーションはこの中で流れ、手で流す手順は作らない（F-02、AC-06）。本番の前の承認の段は置かない。
 4. 大関さんがS-24で合言葉を入れてオーナーになる（P-00、AC-06c）。
+5. オーナーになったら、大関さんが`void secret put SETUP_PASSPHRASE`で合言葉を新しい乱数に替え、新しい値はパスワードの管理の道具にだけ残す。はじめの登録に使った値が、コマンドの履歴やメモからオーナーを戻す鍵として使われないようにするためである。
 
 マイグレーションの誤りで本番が壊れたときは、上の「D1を過去の時点に戻したとき」の手順で戻す。戻せるのは無料プランで7日までである。既存のデータの移行と、古い画面への互換は要らない。
 
@@ -386,7 +388,7 @@ flowchart LR
 | AC-01 パスキーのE2E | Chrome DevTools Protocolの仮の認証器を、contextごとに足す |
 | F-03 合言葉の間違いの上限 | 5回続けて間違えたら1時間試せない |
 | F-05b オーナー本人の戻し方 | S-24で合言葉を入れて、新しいパスキーを足す。使ったら合言葉を替える |
-| F-36a 戻す手順の細部 | `REMINDERS_PAUSED`で止め、`yoin-send-log`の`control`に止めた時刻を置き、再開の最初のCronで突き合わせる |
+| F-36a 戻す手順の細部 | `MAINTENANCE`で止め、`yoin-send-log`の`control`に止めた時刻を置き、再開の最初のCronで突き合わせる |
 | 非機能 1回のCronで送る端末 | 引き受け3件・端末5台（仮。計ってから決め直す） |
 | B-07 残り7日ちょうど | 出さない |
 | B-09 上限 | 枚数1〜99、受付名100字、座席と整理番号200字 |
