@@ -19,6 +19,16 @@
 
 import { readFileSync } from 'node:fs';
 
+// Cloudflareの操作は、コマンドとして呼ばれたときだけ止める。`rg "void deploy" docs/`のように
+// 検索語や文字列に入っているだけのときは止めない。コマンドの位置は、行の頭か`;` `&` `|` `(`
+// `$(`のあと。前に環境変数の代入、`npx`・`pnpm exec`・`yarn dlx`などの呼び出し、パスが付いてもよい。
+function cfCmd(body) {
+  return new RegExp(
+    String.raw`(?:^|[;&|(\n]|\$\()\s*(?:\w+=\S*\s+)*(?:(?:npx|bunx|pnpm(?:\s+(?:exec|dlx))?|yarn(?:\s+dlx)?)\s+)?(?:\S*\/)?` +
+      body,
+  );
+}
+
 function readStdin() {
   try {
     return readFileSync(0, 'utf8');
@@ -78,13 +88,18 @@ const ALWAYS_DENY = [
   { re: /\b(serverless|sls|sst)\s+deploy\b/, why: '本番デプロイ（serverless/sst deploy）' },
   { re: /\bvercel\b[^\n]*--prod\b/, why: '本番デプロイ（vercel --prod）' },
   { re: /\bkubectl\s+(apply|delete)\b[^\n]*prod/i, why: '本番 Kubernetes 変更' },
-  { re: /\bvoid\s+(deploy|secret\s+put)\b/, why: 'Cloudflare 本番操作（void deploy / secret put）' },
+  { re: cfCmd(String.raw`void\s+(deploy|secret\s+put)\b`), why: 'Cloudflare 本番操作（void deploy / secret put）' },
   {
-    re: /\bwrangler\s+(deploy|publish|login|delete|rollback|secret|versions\s+(deploy|upload)|r2|queues|kv|triggers)\b/,
+    re: cfCmd(
+      String.raw`wrangler\s+(deploy|publish|login|delete|rollback|secret|versions\s+(deploy|upload)|r2|queues|kv|triggers)\b`,
+    ),
     why: 'Cloudflare アカウントの操作（wrangler の配置・削除・secret・R2・Queues など）',
   },
-  { re: /\bwrangler\s+d1\b[^\n]*--remote\b/, why: 'D1 本番操作（--remote）' },
-  { re: /\bwrangler\s+d1\s+(create|delete|time-travel)\b/, why: 'D1 データベースの作成・削除・過去の時点に戻す操作' },
+  { re: cfCmd(String.raw`wrangler\s+d1\b[^\n;&|]*--remote\b`), why: 'D1 本番操作（--remote）' },
+  {
+    re: cfCmd(String.raw`wrangler\s+d1\s+(create|delete|time-travel)\b`),
+    why: 'D1 データベースの作成・削除・過去の時点に戻す操作',
+  },
   { re: /\baws\s+deploy\b/, why: 'AWS 本番操作（aws deploy）' },
   { re: /\baws\s+cloudformation\s+deploy\b/, why: 'AWS 本番操作（cloudformation deploy）' },
   { re: /\baws\s+s3\s+(rm|rb)\b/, why: 'AWS S3 削除（s3 rm / rb）' },

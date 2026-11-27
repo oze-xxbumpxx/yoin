@@ -151,6 +151,10 @@ test('破壊的・本番影響コマンドを拒否する', () => {
       'wrangler d1 delete yoin',
       'wrangler r2 object delete yoin-images/a.png',
       'wrangler queues delete erasure',
+      'WRANGLER_SEND_METRICS=false wrangler deploy',
+      'pnpm exec wrangler secret put X',
+      'git status && npx void deploy',
+      './node_modules/.bin/wrangler deploy',
       'rm -rf /',
       'rm -rf $HOME',
     ]) {
@@ -165,6 +169,9 @@ test('D1を手元で使うコマンドは許可する', () => {
   const sb = sandbox();
   try {
     assert.equal(runHook(sb, bash('wrangler d1 migrations apply yoin --local')).code, ALLOW);
+    assert.equal(runHook(sb, bash('rg -n "void deploy" docs/')).code, ALLOW);
+    assert.equal(runHook(sb, bash("grep -rn 'wrangler d1 execute yoin --remote' docs")).code, ALLOW);
+    assert.equal(runHook(sb, bash('git commit -m "wrangler deploy を止める"')).code, ALLOW);
   } finally {
     sb.cleanup();
   }
