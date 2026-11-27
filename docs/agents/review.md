@@ -1,6 +1,6 @@
 # レビュー
 
-もとはリポジトリ直下の`AGENTS.md`の「レビュー」。中身は移しただけで、決まりは変えていない。毎回のレビュー基準（`## Code Review Rules`）は直下の`AGENTS.md`に残している。
+もとはリポジトリ直下の`AGENTS.md`の「レビュー」。中身は移しただけで、決まりは変えていない。毎回のレビュー基準（`## Code Review Rules`）は直下の`AGENTS.md`に残している。2026-11-27に、ADR-0008（AWSとNeonからCloudflareへ移す）に合わせて、AWSとNeonの言葉をCloudflareの言葉に直した。
 
 ## レビュー
 
@@ -26,14 +26,14 @@
 
 根拠は`docs/reviews/human-review-sources.md`。
 
-人が差分を見るのは、次である。アプリのコード、Terraform、`.github/workflows/`のデプロイはまだ無い。実装が始まったら、各項目の場所に置く。
+人が差分を見るのは、次である。2026-11-27にADR-0008でAWSとNeonをCloudflareに替えたので、各項目もCloudflareの言葉で書く。アプリのコードと`.github/workflows/`のデプロイはまだ無い。実装が始まったら、各項目の場所に置く。
 
-- 認証と権限。Cognitoのユーザープール、API GatewayでのJWTの確認、グループのメンバーであることの確認（`docs/architecture.md`、`docs/api.md`）。招待リンクを通らないログインだけでは、ユーザーは作られない。将来はTerraformのCognitoと、`src/contexts/group/`、`src/functions/api/`。
+- 認証と権限。Better Authのパスキーとセッション、`users.status`の確認、グループのメンバーであることの確認（`docs/architecture.md`、`docs/api.md`）。招待リンクを通らないログインだけでは、ユーザーは作られない。将来は`src/contexts/group/`と、VoidのAPIの置き場所`routes/`。
 - お金を受け取る処理。いまは無い。PR/FAQの「やらないこと」に、決済と割り勘の精算がある。足すときは、その変更を人が見る。
-- DBの構造を変える変更と、データを消す処理。Neonへ流すdrizzle-kitのSQL。テーブル定義は各文脈の`infrastructure/`（例は`src/contexts/group/infrastructure/`）。SQLのファイルは`src/contexts/`の外に置く（ADR-0004の決定2）。SQLを置くディレクトリの名前は、まだ決めていない。Neonで過去の時点に戻せるのは、無料プランの6時間までである（ADR-0006の決定3）。解散・退会・外すは、将来`src/usecases/disband-group/`、`src/usecases/withdraw-user/`、`src/functions/erasure-worker/`（置き場所はADR-0002の決定7。処理の分け方は決定5、決定6）。
-- 個人の情報。`groups.users`の表示名、Cognitoに置くアカウント、通知先の`endpoint`（`docs/data-model.md`）。ログに名前、メールアドレス、内容を書かない決まりも、ここである。
-- CI、デプロイ、インフラの設定。`.github/workflows/`はClaudeのレビュー（`claude-code-review.yml`）だけがある。試験、マイグレーション、Terraform、PWAの配置はまだ無い（置く順はADR-0004の決定3）。AWSの資源を書くTerraformのディレクトリはまだ決めていない。AWSの費用の見張り（Budgets、流量の上限、要求数のアラーム。ADR-0006の決定5、決定6、決定7）も、ここに含める。
-- 秘密の値の置き方。Neonの接続文字列、Web PushのVAPIDの秘密鍵、招待リンクのトークンを作る値は、SSM Parameter Storeに置く（接続文字列とVAPID鍵はAWS構成のC-1とADR-0004の決定5、招待リンクの値はADR-0005）。VAPIDの公開鍵は配置のときに置く公開の設定ファイルで画面に渡し、秘密の値ではない（`docs/api.md`）。値そのものは、リポジトリにもTerraformにもPRにも書かない。パラメーターの名前や、それを読む権限を変える変更を人が見る。
+- DBの構造を変える変更と、データを消す処理。D1へ流すdrizzle-kitのSQL。テーブル定義は各文脈の`infrastructure/`（例は`src/contexts/group/infrastructure/`）。SQLのファイルは`src/contexts/`の外に置く（ADR-0004の決定2）。SQLを置くディレクトリの名前は、まだ決めていない。D1で過去の時点に戻せるのは、無料プランの7日までである（ADR-0008）。戻すときの手順は`docs/data-model.md`の「D1を過去の時点に戻したとき」。解散・退会・外すは、将来`src/usecases/disband-group/`、`src/usecases/withdraw-user/`と、Queuesの受け手（処理の分け方はADR-0002の決定5、決定6、動かし方はデータモデルのR23）。
+- 個人の情報。`groups.users`の表示名、Better Authのユーザーとパスキー、通知先の`endpoint`（`docs/data-model.md`）。ログに名前、メールアドレス、内容を書かない決まりも、ここである。
+- CI、デプロイ、インフラの設定。`.github/workflows/`はClaudeのレビュー（`claude-code-review.yml`）だけがある。試験、マイグレーション、`void deploy`による配置はまだ無い。Voidの設定と、D1・R2・Queues・Cronの定義、無料プランの上限とR2の費用（データモデルのR25）も、ここに含める。`infra/terraform/`のAWS向けのファイルは、作り直しの計画で片づける。
+- 秘密の値の置き方。Web PushのVAPIDの秘密鍵、招待リンクのトークンを作る値、Better Authの秘密の値は、Workersのsecretに置く（ADR-0008。招待リンクの値はADR-0005）。CIが使う`CLOUDFLARE_API_TOKEN`はGitHubのSecretsに置く。VAPIDの公開鍵は配置のときに置く公開の設定ファイルで画面に渡し、秘密の値ではない（`docs/api.md`）。値そのものは、リポジトリにも設定ファイルにもPRにも書かない。secretの名前や、トークンの権限を変える変更を人が見る。
 
 設計資料や説明の誤字、画面の見た目だけの調整は、すぐ戻せる。人が差分をじっくり見なくてよい。下の表の「要約で足りる」に入れる。画面のコードはまだ無い。上の範囲のファイルを触る変更は、中身が誤字だけでも人が見る。誤字で「要約で足りる」になるのは、その範囲の外の設計資料や説明だけである。検査そのもの（`REVIEW.md`、`.github/workflows/`、`docs/tests/`の試験の観点、ハーネス、直下の`AGENTS.md`、このファイル）を変えるときは、下の表のとおり人が差分を見る。
 
@@ -47,7 +47,7 @@
 
 | 段 | 何が入るか | ユーザーの読み方 |
 | --- | --- | --- |
-| 必ず見る | DBの表とmigration、グループのメンバー確認などの認可とCognito、データを消す処理（解散・退会・外す）、リマインドの送信時刻と再送、IaC・費用・秘密の値、設計書との食い違いの判断、検査そのものの変更と試験の削除・assertを弱めた箇所 | 差分を読む |
+| 必ず見る | DBの表とmigration、グループのメンバー確認などの認可とBetter Auth、データを消す処理（解散・退会・外す）、リマインドの送信時刻と再送、IaC・費用・秘密の値、設計書との食い違いの判断、検査そのものの変更と試験の削除・assertを弱めた箇所 | 差分を読む |
 | 要約で足りる | それ以外 | Claudeの要約と完了のコメントを見てマージする |
 
 設計書と実装計画（L2 / L3）は中身を読む。

@@ -1,6 +1,6 @@
 # コマンドの範囲
 
-もとはリポジトリ直下の`AGENTS.md`の「コマンドの範囲」。中身は移しただけで、決まりは変えていない。短い禁止は直下の`AGENTS.md`の「してはいけないこと」。
+もとはリポジトリ直下の`AGENTS.md`の「コマンドの範囲」。中身は移しただけで、決まりは変えていない。短い禁止は直下の`AGENTS.md`の「してはいけないこと」。2026-11-27に、ADR-0008（AWSとNeonからCloudflareへ移す）に合わせて、AWSとNeonの言葉をCloudflareの言葉に直した。
 
 ## コマンドの範囲
 
@@ -30,10 +30,12 @@ DevinにはClaude Codeの危険操作フックが効かないので、起動引�
 - このリポジトリのGitHub。`git fetch`、作業ブランチへの`git push`、このリポジトリを見る`gh`
 - パッケージの取得先。依存を新しく足してよいのは、依頼がその依存を含めているときだけ
 - 手元のテストが使うlocalhost
-  - AWS Emulator（ADR-0004の2026-11-25の追記）は、手元で動くのでここに入る。起動するときは、利用状況をAWSへ送る機能を止める（`--telemetry off`か`EMULATOR_TELEMETRY=off`）。止めないと、localhostの外へ通信するため。配布物を取る`downloads.aws.com`は、パッケージの取得先に入る
+  - Voidの手元の開発サーバー（中でD1・R2・Queuesを手元に作る）は、手元で動くのでここに入る。D1は`--local`だけを使う。
+  - void・cf CLI・wranglerは、利用状況をCloudflareなどへ送る機能を止めてから動かす。wranglerは`WRANGLER_SEND_METRICS=false`で止まる。voidとcf CLIの止め方はまだ確かめていない。確かめてこの行に書くPRを、これらを初めて動かす作業より先に出す（ADR-0008）
+  - AWS Emulator（ADR-0004の2026-11-25の追記）は、ADR-0008でAWSをやめたので使わない
 
-AWS、Neon、Cognito、SSM、本番、結合検証には繋がない。
-`terraform apply`、`terraform destroy`、デプロイ、マイグレーションの適用もしない。
+Cloudflareのアカウント（D1、R2、Queues、Workers、secret）、本番、結合検証には繋がない。もとのAWSとNeonにも繋がない。
+`void deploy`、`void secret put`、`wrangler login`、D1のマイグレーションの適用（`--remote`）、D1を過去の時点に戻す操作もしない。危険操作のフック（`.claude/hooks/guard-dangerous.mjs`）はこのうちよく使うものを止めるだけで、全部ではない。フックが止めなくても、Cloudflareのアカウントに触れる操作はしない。`terraform apply`、`terraform destroy`もしない。
 リポジトリのファイルや環境変数を、上の3つ以外へ送らない。
 
 Gitが追跡しないディレクトリ（`node_modules`など）を書き換えて、不具合を直したことにしない。

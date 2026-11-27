@@ -137,11 +137,50 @@ test('破壊的・本番影響コマンドを拒否する', () => {
       'pnpm publish',
       'terraform apply',
       'sst deploy',
+      'void deploy',
+      'pnpm void secret put VAPID_PRIVATE_KEY',
+      'npx wrangler deploy',
+      'wrangler login',
+      'wrangler d1 migrations apply yoin --remote',
+      'wrangler d1 time-travel restore yoin --timestamp 1700000000',
+      'wrangler secret delete VAPID_PRIVATE_KEY',
+      'wrangler secret bulk secrets.json',
+      'wrangler rollback',
+      'wrangler versions deploy',
+      'wrangler d1 export yoin --remote --output out.sql',
+      'wrangler d1 delete yoin',
+      'wrangler r2 object delete yoin-images/a.png',
+      'wrangler queues delete erasure',
+      'WRANGLER_SEND_METRICS=false wrangler deploy',
+      'wrangler pages deploy dist',
+      'wrangler dev --remote',
+      "bash -c 'wrangler deploy'",
+      'sh -c "void deploy"',
+      'env wrangler deploy',
+      'sudo wrangler deploy',
+      'time wrangler deploy',
+      'npx --yes wrangler deploy',
+      'pnpm dlx --package x wrangler deploy',
+      'pnpm exec wrangler secret put X',
+      'git status && npx void deploy',
+      './node_modules/.bin/wrangler deploy',
       'rm -rf /',
       'rm -rf $HOME',
     ]) {
       assert.equal(runHook(sb, bash(command)).code, DENY, `許可されています: ${command}`);
     }
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('D1を手元で使うコマンドは許可する', () => {
+  const sb = sandbox();
+  try {
+    assert.equal(runHook(sb, bash('wrangler d1 migrations apply yoin --local')).code, ALLOW);
+    assert.equal(runHook(sb, bash('rg -n "void deploy" docs/')).code, ALLOW);
+    assert.equal(runHook(sb, bash("grep -rn 'wrangler d1 execute yoin --remote' docs")).code, ALLOW);
+    assert.equal(runHook(sb, bash('git commit -m "wrangler deploy を止める"')).code, ALLOW);
   } finally {
     sb.cleanup();
   }
