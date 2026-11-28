@@ -4,7 +4,7 @@ AWS向けの設定を片づけ、手元のVoidでパスキーとCronを確かめ
 
 - 根拠: [設計書](../designs/first-slice.md)（[PR #100](https://github.com/oze-xxbumpxx/yoin/pull/100)で承認）、[要件定義](../requirements/first-slice.md)、[ADR-0008](../decisions/ADR-0008-cloudflare.md)
 - 試験: [試験計画](../tests/first-slice.md)
-- 変更レベル: L3。大関さんがこの計画と別の設計修正PRをマージしてから、実装をタスクごとにDevinに渡す。
+- 変更レベル: L3。大関さんが[設計資料の修正（PR #104）](https://github.com/oze-xxbumpxx/yoin/pull/104)と[この計画（PR #102）](https://github.com/oze-xxbumpxx/yoin/pull/102)の両方をマージしてから、実装をタスクごとにDevinに渡す。
 
 14画面、本体D1と送信記録用D1、Better Auth、1分ごとのCron、2人のE2Eを作る。本体の業務表は設計のDB一覧にある16表とし、Better Authと別D1の表は数えない。R2、Queues、独自ドメイン、結合検証の環境は作らない。
 グループの切替・退会・解散、ツアー、公演編集、分配、参戦、グッズはこの回に含めない。
@@ -18,7 +18,7 @@ AWS向けの設定を片づけ、手元のVoidでパスキーとCronを確かめ
 | 03 オーナーの復旧 | A 札を出した時刻で未確定を見分ける。時刻が空なだけでは成功としない |
 | 04 古い鍵の失効 | A 別D1に処理中を先に記録する。処理中は対象者の利用を止め、Cronが続きを行う |
 
-このPRは計画だけを更新する。[設計資料の修正](https://github.com/oze-xxbumpxx/yoin/compare/main...devin/1795830960-first-slice-design-decisions)は別PRで先にマージする。設計資料の修正は、下の実装タスクには含めない。
+このPRは計画だけを更新する。設計資料は[PR #104](https://github.com/oze-xxbumpxx/yoin/pull/104)で直す。PR #104とPR #102の両方がマージされるまで、下の実装タスクには着手しない。
 
 ## 渡す順番と担当ファイル
 
