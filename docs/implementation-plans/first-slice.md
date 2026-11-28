@@ -4,7 +4,7 @@ AWS向けの設定を片づけ、手元のVoidでパスキーとCronを確かめ
 
 - 根拠: [設計書](../designs/first-slice.md)（[PR #100](https://github.com/oze-xxbumpxx/yoin/pull/100)で承認）、[要件定義](../requirements/first-slice.md)、[ADR-0008](../decisions/ADR-0008-cloudflare.md)
 - 試験: [試験計画](../tests/first-slice.md)
-- 変更レベル: L3。大関さんがこの計画をマージしてから、実装をタスクごとにDevinに渡す。
+- 変更レベル: L3。大関さんがこの計画と別の設計修正PRをマージしてから、実装をタスクごとにDevinに渡す。
 
 14画面、本体D1と送信記録用D1、Better Auth、1分ごとのCron、2人のE2Eを作る。本体の業務表は設計のDB一覧にある16表とし、Better Authと別D1の表は数えない。R2、Queues、独自ドメイン、結合検証の環境は作らない。
 グループの切替・退会・解散、ツアー、公演編集、分配、参戦、グッズはこの回に含めない。
@@ -18,7 +18,7 @@ AWS向けの設定を片づけ、手元のVoidでパスキーとCronを確かめ
 | 03 オーナーの復旧 | A 札を出した時刻で未確定を見分ける。時刻が空なだけでは成功としない |
 | 04 古い鍵の失効 | A 別D1に処理中を先に記録する。処理中は対象者の利用を止め、Cronが続きを行う |
 
-このPRは計画だけを更新する。食い違う資料は下の担当タスクで直す。
+このPRは計画だけを更新する。[設計資料の修正](https://github.com/oze-xxbumpxx/yoin/compare/main...devin/1795830960-first-slice-design-decisions)は別PRで先にマージする。設計資料の修正は、下の実装タスクには含めない。
 
 ## 渡す順番と担当ファイル
 
@@ -31,10 +31,10 @@ AWS向けの設定を片づけ、手元のVoidでパスキーとCronを確かめ
 | AWSの片づけとCI | `.github/workflows/ci.yml`、`infra/terraform/`、`scripts/`と`scripts/tests/`のAWS向けファイル、`tests/ci/`の対応試験、`package.json`、`pnpm-lock.yaml`、`apps/web/vite.config.ts` | なし | medium | C01 | 削除範囲、残る検査、CIの権限 |
 | CLIの通信を止める | `docs/agents/command-scope.md` | なし | medium | C02 | CLIの版、通信を止める根拠 |
 | Voidの試作 | `docs/implementation-plans/first-slice.md`、`docs/reviews/first-slice-void-spike.md` | CLIの通信を止める | medium | C03 | 登録前の確認、Cookie、Cronの起動結果 |
-| VoidとD1の準備 | `void.config.ts`、`void.lock.json`、`package.json`、`pnpm-lock.yaml`、`vitest.config.ts`、`apps/web/vite.config.ts`、Voidが生成するマイグレーションの置き場所、`docs/architecture.md`、`docs/designs/first-slice.md` | AWSの片づけとCI、Voidの試作 | high | C04 | D1の分離、適用順、資源名とsecret名 |
+| VoidとD1の準備 | `void.config.ts`、`void.lock.json`、`package.json`、`pnpm-lock.yaml`、`vitest.config.ts`、`apps/web/vite.config.ts`、Voidが生成するマイグレーションの置き場所 | AWSの片づけとCI、Voidの試作 | high | C04 | D1の分離、適用順、資源名とsecret名 |
 | 画面の共通部分 | `apps/web/index.html`、`apps/web/public/`、`apps/web/src/{app,styles,components}/`、`apps/web/tests/app/` | VoidとD1の準備 | high | W01 | Cookieを使う通信、利用者交代、通知からの戻り先 |
 | 登録と招待 | `routes/{auth,setup,invites,me,groups}/`、`src/contexts/group/`と対応試験、`apps/web/src/features/join/`、マイグレーション | 画面の共通部分 | high | A01–A04、W02、H01–H02、C06 | パスキー、札、認可、招待・オーナーの書き込み |
-| アカウントを戻す | `routes/{auth,setup,recovery,groups}/`、`src/contexts/group/`と対応試験、`apps/web/src/features/recovery/`、マイグレーション、`docs/designs/first-slice.md`、`docs/data-model.md`、`docs/api.md` | 登録と招待 | high | A05–A06、A11、H09、C06 | 古い鍵・セッションの失効、2つのD1への書き込み順 |
+| アカウントを戻す | `routes/{auth,setup,recovery,groups}/`、`src/contexts/group/`と対応試験、`apps/web/src/features/recovery/`、マイグレーション | 登録と招待 | high | A05–A06、A11、H09、C06 | 古い鍵・セッションの失効、2つのD1への書き込み順 |
 | 公演を下書きから確定 | `routes/groups/`の公演・下書き・選択用一覧、`src/contexts/catalog/`と対応試験、`apps/web/src/features/concert/`、マイグレーション | アカウントを戻す | high | A07、W03、C06 | 下書きの所有者、別グループの資源、確定時のSQL |
 | 申込とリマインド予約 | `routes/groups/`の申込、`src/contexts/{ticket,notification}/`と対応試験、`apps/web/src/features/{ticket,home}/`、マイグレーション | 公演を下書きから確定 | high | A08、W04–W05、N01–N03、H10–H11、C06 | 申込の認可、状態遷移、申込と予約を同時に書くSQL |
 | 通知先とCron | `routes/me/`の購読、`crons/first-slice.ts`、`src/contexts/notification/`と対応試験、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts`、マイグレーション | 申込とリマインド予約 | high | A09、W06、N04–N09、H03–H08、C06 | 送信先、個人情報、引き受けと再送、送れた記録、止まった失効の再開、登録途中の片づけ |
@@ -98,14 +98,12 @@ Voidとcf CLIは起動せず、配布物と説明から利用状況の送信を�
 <!-- delegation-task:void-d1-setup -->
 ### VoidとD1の準備（`void-d1-setup`）
 
-- 主に触るファイル: `void.config.ts`、`void.lock.json`、`package.json`、`pnpm-lock.yaml`、`vitest.config.ts`、`apps/web/vite.config.ts`、Voidが生成するマイグレーションの置き場所、`docs/architecture.md`、`docs/designs/first-slice.md`
+- 主に触るファイル: `void.config.ts`、`void.lock.json`、`package.json`、`pnpm-lock.yaml`、`vitest.config.ts`、`apps/web/vite.config.ts`、Voidが生成するマイグレーションの置き場所
 - 受け持つ試験: C04
 
 本番は1環境だけで、Workerは`yoin`1つ。本体D1は`yoin`（`apac`）、送信記録用D1は`yoin-send-log`に分ける。設定にsecretの値を書かない。
 試作で決めた場所にDBごとのSQLを置き、CIが使う手元の起動と移行のコマンドを用意する。表の定義は順に各文脈へ足す。
 試験専用のSQLを、空の手元のD1に適用する。適用済みのD1では同じSQLを二重に流さないことを確かめる。
-
-構成資料（`docs/architecture.md`のD-8）に、最初の1本は本番1環境と記す。設計書の「対象範囲」は「DB設計」の16表に合わせ、数を埋めるための表は足さない。
 <!-- /delegation-task -->
 
 <!-- delegation-task:web-foundation -->
@@ -133,7 +131,7 @@ PWAの名前・アイコン、明暗、ルーターを揃える。画面の通�
 <!-- delegation-task:account-recovery -->
 ### アカウントを戻す（`account-recovery`）
 
-- 主に触るファイル: `routes/{auth,setup,recovery,groups}/`、`src/contexts/group/`と対応試験、`apps/web/src/features/recovery/`、マイグレーション、`docs/designs/first-slice.md`、`docs/data-model.md`、`docs/api.md`
+- 主に触るファイル: `routes/{auth,setup,recovery,groups}/`、`src/contexts/group/`と対応試験、`apps/web/src/features/recovery/`、マイグレーション
 - 受け持つ試験: A05–A06、A11、H09、C06
 
 メンバーの戻すリンクと、合言葉を使うオーナー本人の戻し方を作る。どちらも元のユーザーに新しい鍵を足し、パスキーの登録要求の中で確定を進める。
@@ -156,8 +154,6 @@ PWAの名前・アイコン、明暗、ルーターを揃える。画面の通�
 同じ記録から再開しても、残す鍵や確定結果を変えない。処理中の回は札やリンクの出し直しで上書きしない。
 
 処理中の記録がない未確定の鍵は、設計のとおりリンクの出し直しや11分後の片づけで消す。片づけと処理中の失効を再開する処理をここで作る。「通知先とCron」が毎分のCronにつなぐ。
-
-設計書の復旧と締め出し、データモデルの失効記録、API資料の結果の読み直しを、時刻の判定と処理中・完了・中止の区別に合わせる。
 <!-- /delegation-task -->
 
 <!-- delegation-task:concerts -->
