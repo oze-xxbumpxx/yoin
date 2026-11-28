@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { build, resolveConfig } from "vite";
@@ -5,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { assertProductionFiles, assertVoidProductionFiles } from "../../scripts/production-boundary.ts";
 
 const configFile = resolve("apps/web/vite.config.ts");
+const checkProduction = resolve("scripts/check-production.ts");
 let fixture: string;
 
 beforeEach(async () => {
@@ -135,5 +137,65 @@ describe("optional Void production outputs", () => {
   it("rejects a present but empty output", async () => {
     await mkdir(join(fixture, "dist/client"), { recursive: true });
     await expect(assertVoidProductionFiles(fixture, [marker])).rejects.toThrow("Missing production output");
+  });
+});
+
+describe("production checker CLI without a PWA", () => {
+  const marker = "test-auth-fixture";
+
+  function runCheck() {
+    return spawnSync(process.execPath, [checkProduction, "--skip-pwa"], { cwd: fixture, encoding: "utf8" });
+  }
+
+  async function writeMarkers(markers: string[]) {
+    const directory = join(fixture, "tests/support");
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, "production-markers.json"), JSON.stringify(markers));
+  }
+
+  async function writeWorker(value: string) {
+    const directory = join(fixture, ".cloudflare/output/v1/workers/default/bundle");
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, "index.js"), `export default ${JSON.stringify(value)};`);
+  }
+
+  it("exits nonzero for a test-only value in an available Void output", async () => {
+    await writeMarkers([marker]);
+    await writeWorker(marker);
+
+    const result = runCheck();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Test-only auth material found in production output");
+  });
+
+  it("exits zero for a clean Void output", async () => {
+    await writeMarkers([marker]);
+    await writeWorker("production");
+
+    expect(runCheck().status).toBe(0);
+  });
+
+  it("exits zero when no outputs exist but the marker list is present", async () => {
+    await writeMarkers([marker]);
+
+    expect(runCheck().status).toBe(0);
+  });
+
+  it("exits nonzero when the marker list is missing", async () => {
+    await writeWorker(marker);
+
+    const result = runCheck();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("ENOENT");
+    expect(result.stderr).toContain("tests/support/production-markers.json");
+  });
+
+  it("exits nonzero when the marker list is empty", async () => {
+    await writeMarkers([]);
+    await writeWorker(marker);
+
+    const result = runCheck();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Expected a non-empty list of test-only auth markers");
   });
 });
