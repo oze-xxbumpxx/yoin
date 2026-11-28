@@ -174,17 +174,17 @@ yoinに登録した人。Better Authの言葉はこのテーブルの`auth_user_
 | `expires_at` | integer | 出した時刻の24時間後。この時刻ちょうどから使えない |
 | `used_at` | integer | null可。使ったら時刻を入れ、もう使えない |
 | `revoked_at` | integer | null可。出し直したときと、相手が外れた・抜けた・退会したときに入れる |
-| `ticket_issued_at` | integer | null可。リンクを開いてパスキーを登録する札を最初に出した時刻。出し直しても書き換えない。止まって残ったパスキーをCronが片づけ、確定前のセッションを断るのに使う |
+| `recovery_attempts` | text | 復旧IDをキーとする未確定の回の一覧（JSON）。下の「未確定の回」に従う |
 | `completed_recovery_id` | text | null可。確定した回の`revocations.id`。使い終わったリンクの行を7日後に消すまで残す |
 | `created_at` | integer |  |
 
 新しいパスキーは、前と同じBetter Authのユーザーに足す。本体の書き込みは、次の処理を1つの`batch()`にまとめる。
 
 - 期限・使用済み・取り消し・所属が`active`かを確かめる。
-- `used_at`と`completed_recovery_id`を入れ、札の時刻を空にする。
-- 古いパスキーを消す。セッションは今のものだけを残す。
+- `used_at`と`completed_recovery_id`を入れ、確定した回だけを一覧から外す。
+- 古いパスキーとセッションを消す。確定した回と、別の未確定の回の鍵・セッションは残す。
 
-使い終わった行と切れた行は、Cronが7日後に消す。
+使い終わった行と切れた行は、未確定の回を片づけてから、Cronが7日後に消す。
 
 #### `groups.setup_state`はじめの登録の状態
 
@@ -196,8 +196,20 @@ yoinに登録した人。Better Authの言葉はこのテーブルの`auth_user_
 | `failed_count` | integer | 合言葉を続けて間違えた回数。合えば0に戻す |
 | `locked_until` | integer | null可。5回続けて間違えたら、1時間後の時刻を入れる。この時刻までは試せない |
 | `owner_user_id` | uuid | null可。はじめの登録でオーナーになったユーザー（users.id）。オーナー本人を戻すときの相手 |
-| `ticket_issued_at` | integer | null可。オーナー本人を戻す札を最初に出した時刻。値があれば未確定とする。本体の確定、または中止や11分後の片づけで空にする。空なだけでは復旧の成功とはみなさない |
+| `recovery_attempts` | text | 復旧IDをキーとする未確定の回の一覧（JSON）。下の「未確定の回」に従う |
 | `completed_recovery_id` | text | null可。最後に確定した回の`revocations.id`。次の回が確定したときだけ書き換える |
+
+#### 未確定の回
+
+メンバーは戻すリンクの行、オーナーははじめの登録の状態の行に未確定の回を持つ。札は保存しない。新しい表は増やさない。
+
+| 各項目の値 | 説明 |
+|---|---|
+| `ticket_issued_at` | その回で最初に札を出した時刻。同じ回では書き換えない |
+| `passkey_id`・`session_id` | その回で足した鍵とセッションのID。登録と同じ`batch()`で記録する。登録前は空 |
+| `previous_completed_recovery_id` | オーナーの回では、札を出した時点の`completed_recovery_id`。本体の確定時にも一致するかを確かめる |
+
+一覧を更新するときは、`batch()`で対象の回を確かめ、その復旧IDの項目だけを変える。中止や11分後の片づけでは、その回の鍵とセッションを消すのと同時に項目を外す。別の回の項目は残す。
 
 #### `groups.erasure_jobs`解散・退会の進み具合
 
