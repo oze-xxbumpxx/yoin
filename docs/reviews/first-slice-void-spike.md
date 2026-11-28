@@ -174,4 +174,49 @@ run_spike /usr/bin/env | /usr/bin/cut -d= -f1
 | `node …/void/dist/cli/cli.mjs --version` | 終了コード0、`1.12.2` |
 | 同じ入口に`init --toolchain vite --framework react --starter static --deploy none --no-git`を渡す | 終了コード0、`Created a static React Pages starter` |
 
-試作ディレクトリに`pages/index.tsx`、`vite.config.ts`、`void.config.ts`などができた。依存の指定は用意したロックファイルと一致し、出力に依存のインストールはなかった。遮断は緩めていない。C02は未完了のまま。開発サーバーの起動、C03のパスキー・Cookie・CronとD1の試験はまだ行っていない。CPU時間は、パスキーの確かめとPushの暗号を手元で動かせるようになってから、製品の実装前にオーナーが計る。
+試作ディレクトリに`pages/index.tsx`、`vite.config.ts`、`void.config.ts`などができた。依存の指定は用意したロックファイルと一致し、出力に依存のインストールはなかった。
+
+### 遮断下でCronから手元のD1に1行を書けた
+
+コードを書く前に、Void 1.12.2に同梱された`docs/guide/jobs.md`、`docs/guide/database.md`、`docs/guide/database/d1.md`、`docs/reference/structure.md`を読んだ。配布物の`dist/index.mjs`でも、D1の自動設定と開発時の移行処理を確かめた。依存は追加していない。
+
+作業クローンの外にある雛形で、各起動の直前に`/usr/bin/python3 preflight.py`を実行し、`lsof`と`netstat`で待ち受けを一覧にした。`scutil --proxy`で有効な設定はなかった。起動ごとに空の`HOME`を用意し、`env -i`で`PATH`、`HOME`、`TMPDIR`、`LANG`だけを渡した。
+
+| 起動前の確認（SQL生成・開発サーバー・ビルドの3回で同じ結果） | 遮断なし | 遮断あり |
+|---|---|---|
+| HTTPS（`example.com`） | HTTP 200 | 終了コード6、名前解決失敗 |
+| OSの名前解決（毎回新しい`sslip.io`の名前） | `192.0.2.7`に解決 | 名前解決失敗 |
+| 直接IPv4 TCP（`172.66.147.243:443`）とUDP（`8.8.8.8:53`） | TCP接続、UDP応答あり | いずれも`EPERM` |
+| 直接IPv6 TCP（`[2001:4860:4860::8888]:443`） | `EHOSTUNREACH`（経路なし） | `EPERM` |
+| IPv4ループバック | 接続成功 | 接続成功 |
+| ホストに存在する認証情報パス5件、模擬パスと空ファイル15件 | 読めた | 全件拒否 |
+
+ホストに存在しない認証情報パスは前と同じ6件だった。3回とも、待ち受けの要点は「配布物と雛形の準備」の前にある表と同じだった。`devin-remote`のループバックは32403番だけで、初起動時にあった54175番は見つからなかった。待ち受けサービスが外へ中継しないことは試していない。
+
+| 遮断下で行った操作 | 結果 |
+|---|---|
+| `node node_modules/void/dist/cli/cli.mjs db generate` | 終了コード0。`db/migrations/20261128064426_wandering_mauler.sql`に`cron_runs`のSQLを生成 |
+| `node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5187 --strictPort` | 起動時に手元のD1へSQLを適用。Cronを1件検出 |
+| `GET http://127.0.0.1:5187/api/cron-runs` | HTTP 200、`[]` |
+| `POST http://127.0.0.1:5187/__void/scheduled` | HTTP 200、`{"ok":true}` |
+| 再び`GET http://127.0.0.1:5187/api/cron-runs` | HTTP 200、`[{"scheduledTime":1795848000000,"cron":"* * * * *"}]` |
+| `node node_modules/vite/bin/vite.js build` | 終了コード0。Workerと静的ファイルを出力 |
+
+HTTPの3回は、同じ遮断の下でPythonの`http.client`から送った。発火の本文は`{"cron":"* * * * *","scheduledTime":1795848000000}`とし、`.void/dev-trigger-token`を`x-void-dev-trigger`ヘッダーに渡した。読み出し用のWorkerルートは`void/db`で同じD1を読み、発火の前後を比べた。
+
+最初のSQL生成は、起動前の確認を判定するスクリプトがループバックの比較結果の右列を見落とし、`AssertionError`で起動前に止まった。判定を直し、確認をすべてやり直した。
+
+開発サーバーでは、Miniflareが`Request.cf`の取得を試み、`Error: getaddrinfo ENOTFOUND workers.cloudflare.com`を出した。Miniflareは代替値を使い、起動とD1の読み書きは続いた。外部通信が必須で試作を中止した操作はない。遮断は緩めず、外部への接続やリモートでの移行は行っていない。
+
+| 決めた置き場所（Voidプロジェクトのルートから） | 試作で確かめた内容 |
+|---|---|
+| 画面は`pages/` | React雛形の入口は`pages/index.tsx` |
+| SQLは`db/migrations/`、表の定義は`db/schema.ts` | SQLを生成し、開発サーバーが手元のD1へ適用 |
+| Cronの受け手は`crons/first-slice.ts` | `cron`を公開し、`defineScheduled`でD1へ書く |
+| D1の明示設定を置く場合は`void.config.ts`の`cloudflare.d1_databases` | 試作は明示設定なし。Voidが標準の`DB`（名前`default`、ID`local`）を追加 |
+
+PWAを使わない雛形のビルドでは、`.cloudflare/output/v1/workers/default/bundle/`にWorker、同じ階層の`assets/`に静的ファイルを出した。`worker.config.json`にはD1の`DB`とCronの式が入っていた。`dist/ssr/`と`dist/client/`にも出力があり、Workerの入口と静的ファイルのマニフェストはそれぞれ主出力と一致した。
+
+読み出し用の`routes/api/cron-runs.dev.ts`は開発時だけ使い、Workerのビルド済みJavaScriptにはそのルートが入っていなかった。試作コードはリポジトリに入れていない。計画の担当パスとCIの出力検査は、この試作の後続作業で揃える。
+
+今回はCronと手元のD1までとし、パスキーとCookieはまだ試していない。CLIの通信を止める試験（C02）も未完了のまま。CPU時間は、パスキーの確かめとPushの暗号を手元で動かせるようになってから、製品の実装前にオーナーが計る。
