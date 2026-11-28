@@ -1,0 +1,18 @@
+issue: 51
+title: 'first-slice: 画面の共通部分とログイン状態の入れ物を作る'
+agent: 'devin'
+model: 'swe-2-1-high'
+runner: 'cloud'
+change_level: 2
+delegated_at: '2026-11-24T23:52:54Z'
+reviews: []
+escalations: 0
+outcome: 'merged'
+gh:
+  pr: 93
+  pr_created_at: '2026-11-26T22:54:47Z'
+  merged_at: '2026-11-28T01:25:46Z'
+  closed_at: '2026-11-28T01:25:46Z'
+  commits: 1
+  ci_first_pass: true
+  closes_linked: true
