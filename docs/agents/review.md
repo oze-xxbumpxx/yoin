@@ -26,16 +26,16 @@
 
 根拠は`docs/reviews/human-review-sources.md`。
 
-人が差分を見るのは、次である。2026-11-27にADR-0008でAWSとNeonをCloudflareに替えたので、各項目もCloudflareの言葉で書く。アプリのコードと`.github/workflows/`のデプロイはまだ無い。実装が始まったら、各項目の場所に置く。
+人が差分を見るのは、次である。2026-11-27にADR-0008でAWSとNeonをCloudflareに替えたので、各項目もCloudflareの言葉で書く。
 
 - 認証と権限。Better Authのパスキーとセッション、`users.status`の確認、グループのメンバーであることの確認（`docs/architecture.md`、`docs/api.md`）。招待リンクを通らないログインだけでは、ユーザーは作られない。将来は`src/contexts/group/`と、VoidのAPIの置き場所`routes/`。
 - お金を受け取る処理。いまは無い。PR/FAQの「やらないこと」に、決済と割り勘の精算がある。足すときは、その変更を人が見る。
 - DBの構造を変える変更と、データを消す処理。D1へ流すdrizzle-kitのSQL。テーブル定義は各文脈の`infrastructure/`（例は`src/contexts/group/infrastructure/`）。SQLのファイルは`src/contexts/`の外に置く（ADR-0004の決定2）。SQLを置くディレクトリの名前は、まだ決めていない。D1で過去の時点に戻せるのは、無料プランの7日までである（ADR-0008）。戻すときの手順は`docs/data-model.md`の「D1を過去の時点に戻したとき」。解散・退会・外すは、将来`src/usecases/disband-group/`、`src/usecases/withdraw-user/`と、Queuesの受け手（処理の分け方はADR-0002の決定5、決定6、動かし方はデータモデルのR23）。
 - 個人の情報。`groups.users`の表示名、Better Authのユーザーとパスキー、通知先の`endpoint`（`docs/data-model.md`）。ログに名前、メールアドレス、内容を書かない決まりも、ここである。
-- CI、デプロイ、インフラの設定。`.github/workflows/`はClaudeのレビュー（`claude-code-review.yml`）だけがある。試験、マイグレーション、`void deploy`による配置はまだ無い。Voidの設定と、D1・R2・Queues・Cronの定義、無料プランの上限とR2の費用（データモデルのR25）も、ここに含める。`infra/terraform/`のAWS向けのファイルは、作り直しの計画で片づける。
+- CI、デプロイ、インフラの設定。`.github/workflows/`には、Claudeのレビュー（`claude-code-review.yml`）と品質確認（`ci.yml`）がある。品質確認はPRと`main`へのpushで動く。ハーネス試験、lint（文脈の境界を含む）、型チェック、Vitestを実行する。対象があればPWAをビルドし、成果物に試験専用のコードや値が入っていないかも調べる。本番には配置しない。Voidの設定と、D1・R2・Queues・Cronの定義、無料プランの上限とR2の費用（データモデルのR25）も、ここに含める。`infra/terraform/`のAWS向けのファイルは、作り直しの計画で片づける。
 - 秘密の値の置き方。Web PushのVAPIDの秘密鍵、招待リンクのトークンを作る値、Better Authの秘密の値は、Workersのsecretに置く（ADR-0008。招待リンクの値はADR-0005）。CIが使う`CLOUDFLARE_API_TOKEN`はGitHubのSecretsに置く。VAPIDの公開鍵は配置のときに置く公開の設定ファイルで画面に渡し、秘密の値ではない（`docs/api.md`）。値そのものは、リポジトリにも設定ファイルにもPRにも書かない。secretの名前や、トークンの権限を変える変更を人が見る。
 
-設計資料や説明の誤字、画面の見た目だけの調整は、すぐ戻せる。人が差分をじっくり見なくてよい。下の表の「要約で足りる」に入れる。画面のコードはまだ無い。上の範囲のファイルを触る変更は、中身が誤字だけでも人が見る。誤字で「要約で足りる」になるのは、その範囲の外の設計資料や説明だけである。検査そのもの（`REVIEW.md`、`.github/workflows/`、`docs/tests/`の試験の観点、ハーネス、直下の`AGENTS.md`、このファイル）を変えるときは、下の表のとおり人が差分を見る。
+設計資料や説明の誤字、画面の見た目だけの調整は、すぐ戻せる。人が差分をじっくり見なくてよい。下の表の「要約で足りる」に入れる。上の範囲のファイルを触る変更は、中身が誤字だけでも人が見る。誤字で「要約で足りる」になるのは、その範囲の外の設計資料や説明だけである。検査そのもの（`REVIEW.md`、`.github/workflows/`、`docs/tests/`の試験の観点、ハーネス、直下の`AGENTS.md`、このファイル）を変えるときは、下の表のとおり人が差分を見る。
 
 上の範囲を含むPRは、説明の冒頭（雛形の「重点的に見てほしいところ」）に、どの範囲を触ったかを書く。その変更は、誤字や見た目と混ぜず、小さいPRに分ける。分けたあとも、上の範囲を触ったことは各PRの冒頭に書く。
 

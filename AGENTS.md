@@ -17,9 +17,11 @@ Devinが自分の出したPRで、レビューの指摘を直すときの決ま�
 
 ## セットアップと確認
 
-アプリのコードはまだ無い。インストール、lint、型チェック、テスト、ビルドのコマンドはまだ無い。
+Webアプリのコードは`apps/web/`にある。
 
-- いま通すコマンドは`bash .claude/scripts/run-quality-gates.sh`。ハーネス試験だけが実行され、lint、型チェック、テスト、ビルドはunknownになる。
+- 依存は`pnpm install --frozen-lockfile`で入れる。
+- `bash .claude/scripts/run-quality-gates.sh`を引数なしで実行すると、ハーネス試験、`pnpm lint`、`pnpm type-check`、`pnpm test`が動く。
+- Webのビルドは`pnpm build:web`。Lambdaのビルドは`pnpm build:lambda`だが、対象のコードがあるときだけ実行する。どちらも上の品質確認には含まれない。
 - ハーネス試験を全部見るときは`node --test .claude/tests/*.test.mjs`。
 - 依存を足すのは、依頼がその依存を含めているときだけにする。足すときはpnpmとロックファイルを入れる（ADR-0004）。
 - コードの名前には、用語集の英語名をそのまま使う（例: `Concert`、`Attendance`、`TicketApplication`、`MerchItem`）。
