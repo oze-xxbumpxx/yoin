@@ -1,4 +1,6 @@
 import { isAbsolute, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import ts from "typescript";
 import { defineConfig } from "vite";
 import type { Plugin } from "vite";
@@ -66,6 +68,7 @@ function productionInputs(): Plugin {
 export default defineConfig({
   envDir: false,
   envPrefix: [],
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   build: { outDir: "../../dist/pwa", emptyOutDir: true },
-  plugins: [productionInputs()],
+  plugins: [tailwindcss(), productionInputs()],
 });
