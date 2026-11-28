@@ -1,214 +1,275 @@
 # 実装計画: 招待からリマインドがiPhoneに届くまで
 
-- 前提となる設計書: [最初の1本の設計](../designs/first-slice.md)（[PR #32](https://github.com/oze-xxbumpxx/yoin/pull/32)で承認）
-- 要件と試験: [要件定義](../requirements/first-slice.md)、[試験計画](../tests/first-slice.md)
-- レベル: L3
-- 実装ルート: 計画がマージされた後、Devinにタスクごとに委譲します。
-- 判断理由: 既定どおりです。土台と製品を別の差分で確認し、結合検証で一つにつなぎます。
+AWS向けの設定を片づけ、手元のVoidでパスキーとCronを確かめてから、招待から通知までを作る。本番はCloudflareの無料プランに1つだけ置く。
 
-計画のマージ後、土台のIssue（旧#34〜#39）は下の作業単位から作り直します。計画段階では実装も実環境の変更もしません。作る範囲は設計の11画面、14テーブルと対応API、登録前・通知送信のLambdaまでです。退会、解散、ツアー、参戦記録、分配、支払い、失敗キューからの手動再送は作りません。
+- 根拠: [設計書](../designs/first-slice.md)（[PR #100](https://github.com/oze-xxbumpxx/yoin/pull/100)で承認）、[要件定義](../requirements/first-slice.md)、[ADR-0008](../decisions/ADR-0008-cloudflare.md)
+- 試験: [試験計画](../tests/first-slice.md)
+- 変更レベル: L3。[PR #104](https://github.com/oze-xxbumpxx/yoin/pull/104)はマージ済み。[復旧の追加設計（PR #105）](https://github.com/oze-xxbumpxx/yoin/pull/105)と[この計画（PR #102）](https://github.com/oze-xxbumpxx/yoin/pull/102)の両方がマージされてから、実装をタスクごとにDevinに渡す。
 
-## 作業の分け方と主なファイル
+14画面、本体D1と送信記録用D1、Better Auth、1分ごとのCron、2人のE2Eを作る。本体の業務表は設計のDB一覧にある16表とし、Better Authと別D1の表は数えない。R2、Queues、独自ドメイン、結合検証の環境は作らない。
+グループの切替・退会・解散、ツアー、公演編集、分配、参戦、グッズはこの回に含めない。
 
-下表は新規作成先です。画面の置き場所・CI・DBの設定など、先行タスクで作った共有ファイルへの配線は、先行タスクがマージされてから行います。依存とファイルが重ならないタスクだけを、別々の作業用クローンで並行して進めます。SWE-2.1のeffortを表に示します。「必ず見る」は[REVIEW.md](../../REVIEW.md)で人が差分を見る範囲です。「なし」の行でも通常のレビューは行います。
+## 大関さんの決定（2026-11-28）
 
-| タスク | 区分 | 主に触るファイル | 先に要るタスク | effort | 受け持つ試験 | 必ず見る |
-| --- | --- | --- | --- | --- | --- | --- |
-| 初回準備 | 土台 | `infra/terraform/bootstrap/main.tf`、`scripts/bootstrap-ssm.ts` | なし | high | なし | S3状態、IAM、OIDC、SSM |
-| 環境と監視 | 土台 | `infra/terraform/main.tf`、`infra/terraform/environments/` | 初回準備の名前・ARNの取り決め | high | I10 | IaC、権限、費用、通知 |
-| CIと成果物 | 土台 | `package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`、`vitest.config.ts`、`.github/workflows/ci.yml`、`apps/web/vite.config.ts` | なし | medium | なし | CIと境目の検査 |
-| DB変更の仕組み | 土台 | `db/drizzle.config.ts`、`db/migrations/`の検査設定、`scripts/check-migrations.ts`・`scripts/migrate.ts` | CIと成果物 | high | I03 | SQL、削除条件、適用権限 |
-| 画面の共通部分 | 製品 | `apps/web/index.html`、`apps/web/package.json`、`apps/web/components.json`、`apps/web/public/`、`apps/web/src/app/`・`styles/`・`components/ui/`、`apps/web/tests/app/` | CIと成果物 | high | U07 | ログイン状態、通信とキャッシュの分離 |
-| オーナーと招待参加 | 製品 | `src/contexts/group/`、`src/functions/pre-sign-up/`、`src/functions/api/`、`scripts/seed-initial-data.ts`、`apps/web/src/features/join/` | DB変更の仕組み・画面の共通部分 | high | U08、U09、I01 | 登録、認可、グループのSQL・個人情報 |
-| 公演を下書きから確定 | 製品 | `src/contexts/catalog/`、`apps/web/src/features/concert/` | オーナーと招待参加 | high | I11 | SQL、グループの参照・更新権限 |
-| チケット申込から受取 | 製品 | `src/contexts/ticket/`、`apps/web/src/features/ticket/`・`home/` | 公演を下書きから確定 | high | U01、U04、U06、I02、I12 | SQL、他人の申込の更新拒否 |
-| iPhoneへの通知 | 製品 | `src/contexts/notification/`、`src/functions/notification-sender/`、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts` | チケット申込から受取 | high | U02、U03、U05、I04〜I07、I09、I13 | 購読情報、送信権限、DBと予約 |
-| 変更を確かめる道具 | 確認 | `.claude/skills/verify-first-slice/SKILL.md`、`.agents/skills/verify-first-slice`（リンク） | オーナーと招待参加 | medium | なし | PR前に使う検査の手順と両方の入口 |
-| 2人で通す試験 | 確認 | `playwright.config.ts`、`tests/e2e/`、`tests/support/` | iPhoneへの通知 | high | E2E-01、E2E-02 | 試験専用の認証が本番に混ざらない差分 |
-| 2人の操作手順を道具に足す | 確認 | `.claude/skills/verify-first-slice/SKILL.md` | 変更を確かめる道具・2人で通す試験 | medium | なし | PR前に使う2人の検査の手順 |
-| 結合検証と承認付き本番配置 | 土台・最終確認 | `.github/workflows/deploy.yml`、`scripts/check-deployment-sha.ts`、`scripts/write-release-config.ts` | 初回準備・環境と監視・全製品成果物と2人の自動試験 | high | I08 | 承認、デプロイ、OIDC、DB |
+| 判断 | 選んだ案 |
+|---|---|
+| 01 配置先 | A 本番1環境。結合検証の環境は作らない |
+| 02 本体の表 | A 用途が明記された業務16表に合わせる |
+| 03 オーナーの復旧 | A 札を出した時刻で未確定を見分ける。時刻が空なだけでは成功としない |
+| 04 古い鍵の失効 | A 別D1に処理中を先に記録する。処理中は対象者の利用を止め、Cronが続きを行う |
 
-## 実装手順
+大関さんは復旧中止の片づけに「A 回ごとに片づける」を選んだ。中止した復旧IDの鍵とセッションだけを消し、別の未確定の回は引き続き使わせない。
 
-各タスクは担当の自動試験と品質コマンドを通し、人が見る結果とまだ見ていない結果を分けて残します。製品の各タスクで、その文脈のテーブル定義と必要なSQLを作ります。SQL生成と共通のAPIルート登録・画面ルート登録は、前に入った変更を取り込んで順に行います。通知の追加時にチケットの書き込みと接続します。接続前にチケットを単独で本番へ出しません。
+このPRは計画だけを更新する。復旧IDごとの片づけは[PR #105](https://github.com/oze-xxbumpxx/yoin/pull/105)で定める。PR #105とこの計画がマージされるまで、下の実装タスクには着手しない。
 
-<!-- delegation-task:bootstrap -->
-### 初回準備: 環境ごとの状態、権限、設定を用意する
+## 渡す順番と担当ファイル
 
-- 対象: `infra/terraform/bootstrap/`、`scripts/bootstrap-ssm.ts`。旧#35に対応します。
-- effort: high
-- 先に要るタスク: なし
-- 受け持つ試験: なし
-- やること: オーナーがNeonをシンガポールに2つ作り、Macの暗号化された場所で初回のTerraformを適用します。作ったS3の初回専用キーへ `terraform init -migrate-state` で移します。初回・結合検証・本番の状態キーとTerraform用ロックを分け、CIに初回分を許しません。GitHub ActionsはOIDCの短期認証だけを使います。SSMの秘密はオーナーが登録し、Terraformは名前とARNだけを使います。ランタイム・DB変更・初期データが読める名前を範囲ごとに分けます。
-- Devinの完了条件（PRとCIで確かめる）: Terraformの検査と権限の差分で、状態キーの分離とCIから初回用キーへのアクセスを許さないことを確かめます。初回移行の手順を残し、秘密や状態をログ・成果物に置きません。
-- オーナーが実環境で確かめること（要るデータと、それを誰が作るか）: M09。オーナーがAWS・Neonの環境、SSMの値、Macで作る初回状態を用意します。移行後に状態が読めて `terraform plan` に意図しない差分がなく、CIから初回用キーの読み書きを拒むことを確かめてから、ローカル状態と一時バックアップを破棄します。
+「先に要る」は、作業を始める前にmainへ入っているタスク。依存がなく、担当ファイルも重ならないものだけを別のクローンで並行して渡す。
+以下の画面パスは既存の`apps/web/`を起点とする。Voidの雛形に合わせる必要があれば「Voidの試作」で置き場所を記録し、後続タスクのパスを揃えてから渡す。
+委譲コマンドには、各見出しの横に示した小文字の名前を`first-slice:<タスク名>`の形で渡す。
+
+| タスク | 主に触るファイル | 先に要る | SWE-2.1 effort | 受け持つ試験 | 人が必ず見る範囲 |
+|---|---|---|---|---|---|
+| AWSの片づけとCI | `.github/workflows/ci.yml`、`infra/terraform/`、`scripts/`と`scripts/tests/`のAWS向けファイル、`tests/ci/`の対応試験、`package.json`、`pnpm-lock.yaml`、`apps/web/vite.config.ts` | なし | medium | C01 | 削除範囲、残る検査、CIの権限 |
+| CLIの通信を止める | `docs/agents/command-scope.md` | なし | medium | C02 | CLIの版、通信を止める根拠 |
+| Voidの試作 | `docs/implementation-plans/first-slice.md`、`docs/reviews/first-slice-void-spike.md` | CLIの通信を止める | medium | C03 | 登録前の確認、Cookie、Cronの起動結果 |
+| VoidとD1の準備 | `void.config.ts`、`void.lock.json`、`package.json`、`pnpm-lock.yaml`、`vitest.config.ts`、`apps/web/vite.config.ts`、Voidが生成するマイグレーションの置き場所 | AWSの片づけとCI、Voidの試作 | high | C04 | D1の分離、適用順、資源名とsecret名 |
+| 画面の共通部分 | `apps/web/index.html`、`apps/web/public/`、`apps/web/src/{app,styles,components}/`、`apps/web/tests/app/` | VoidとD1の準備 | high | W01 | Cookieを使う通信、利用者交代、通知からの戻り先 |
+| 登録と招待 | `routes/{auth,setup,invites,me,groups}/`、`src/contexts/group/`と対応試験、`apps/web/src/features/join/`、マイグレーション | 画面の共通部分 | high | A01–A04、W02、H01–H02、C06 | パスキー、札、認可、招待・オーナーの書き込み |
+| アカウントを戻す | `routes/{auth,setup,recovery,groups}/`、`src/contexts/group/`と対応試験、`apps/web/src/features/recovery/`、マイグレーション | 登録と招待 | high | A05–A06、A11、H09、C06 | 古い鍵・セッションの失効、2つのD1への書き込み順 |
+| 公演を下書きから確定 | `routes/groups/`の公演・下書き・選択用一覧、`src/contexts/catalog/`と対応試験、`apps/web/src/features/concert/`、マイグレーション | アカウントを戻す | high | A07、W03、C06 | 下書きの所有者、別グループの資源、確定時のSQL |
+| 申込とリマインド予約 | `routes/groups/`の申込、`src/contexts/{ticket,notification}/`と対応試験、`apps/web/src/features/{ticket,home}/`、マイグレーション | 公演を下書きから確定 | high | A08、W04–W05、N01–N03、H10–H11、C06 | 申込の認可、状態遷移、申込と予約を同時に書くSQL |
+| 通知先とCron | `routes/me/`の購読、`crons/first-slice.ts`、`src/contexts/notification/`と対応試験、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts`、マイグレーション | 申込とリマインド予約 | high | A09、W06、N04–N09、H03–H08、C06 | 送信先、個人情報、引き受けと再送、送れた記録、止まった失効の再開、登録途中の片づけ |
+| D1を戻したあとの突き合わせ | `crons/first-slice.ts`、`routes/groups/`の保留、`routes/auth/`と共通の認証処理、`src/contexts/{group,notification}/`と対応試験、`apps/web/src/features/held-reminders/`、マイグレーション | 通知先とCron | high | A10、D01–D04、C06–C07 | 再開までの締め出し、鍵の失効、保留後の送信、本体の16表 |
+| 2人のE2E | `playwright.config.ts`、`tests/e2e/first-slice/`、`tests/support/first-slice/`、`package.json`と`pnpm-lock.yaml` | D1を戻したあとの突き合わせ | high | X01–X02 | 試験専用の認証器とPushの受け手が製品に入らないこと |
+| 変更を確かめる道具 | `.claude/skills/verify-first-slice/`、`.agents/skills/verify-first-slice` | 2人のE2E | medium | X03 | 実行先、使うデータ、結果の残し方 |
+| PRの試験と本番配置 | `.github/workflows/{ci,deploy}.yml`、`tests/ci/`の配置試験 | 2人のE2E | high | C05 | PRとmainの権限差、デプロイ時のSQL、無料プラン |
+
+機能ごとにマイグレーションを足す作業は直列にする。後続は最新のmainからブランチを切り、両方の手元のD1に必要なSQLを適用してから試験する。 製品のSQLを足す各タスクは、追加するSQLで試験（C06）を行う。
+試験コードは各workspaceの`tests/`に置く。実装ファイルの構成に合わせ、Vitestの実行対象に入ったことを確かめる。
+
+## 各タスクで作るものと終わりの条件
+
+<!-- delegation-task:remove-aws-ci -->
+### AWSの片づけとCI（`remove-aws-ci`）
+
+- 主に触るファイル: `.github/workflows/ci.yml`、`infra/terraform/`、`scripts/`と`scripts/tests/`のAWS向けファイル、`tests/ci/`の対応試験、`package.json`、`pnpm-lock.yaml`、`apps/web/vite.config.ts`
+- 受け持つ試験: C01
+
+最初の片づけはアプリを変更しない検査専用のPRにする。`infra/terraform/`、AWS向けの構築・配置スクリプト、その専用試験と参照を消す。
+
+| 対象 | 外すもの |
+|---|---|
+| `scripts/` | `bootstrap-ssm.ts`、`build-lambda.ts`、`package-release.sh`、旧成果物専用の`sha256.sh` |
+| `scripts/tests/`、`tests/ci/` | `bootstrap-ssm.test.ts`、`release.test.ts`、旧構成を前提とする試験データ |
+| `.github/workflows/ci.yml` | Lambda・旧認証と配置成果物の検査 |
+| `package.json`、`pnpm-lock.yaml`、`apps/web/vite.config.ts` | AWS SDK、Lambdaのスクリプト、旧本番設定の参照 |
+
+AWSに接続しない。残す検査を一覧にし、AWSを呼ぶ参照が無く、品質確認が通れば完了とする。
+文脈の境界、品質スクリプト、試験用のコードや値が製品に入らないことを確かめる検査は残す。出力先に依存する検査は、Voidの出力先が決まってからつなぎ直す。
 <!-- /delegation-task -->
 
-<!-- delegation-task:environment -->
-### 環境と監視: 同じ定義から結合検証と本番を作る
+<!-- delegation-task:disable-cli-telemetry -->
+### CLIの通信を止める（`disable-cli-telemetry`）
 
-- 対象: `infra/terraform/`の初回構成以外。旧#36に対応します。
-- effort: high
-- 先に要るタスク: 初回準備の名前・ARNの取り決め
-- 受け持つ試験: I10
-- やること: AWSをシンガポールに置き、API Gateway、3つのLambda、Cognito、Scheduler、S3・CloudFront、失敗キューを環境別に用意します。全APIルートに対象環境のJWT検査を付け、CORSも対象のPWAに限ります。SESの送信元と利用申請はオーナーが担当します。CognitoはADR-0007のメールOTPを使い、プールを手で直しません。月5ドルのBudgets、SES抑止、Lambda・SESの共有警報は結合検証のTerraformだけで管理します。これらの共有資源は本番にも効くため、オーナーがPRで差分を読んでマージします。
-- Devinの完了条件（PRとCIで確かめる）: I10で両環境のTerraform定義を検査します。秘密値を含めず、共有資源は結合検証側にだけ定義します。Lambdaは製品成果物がそろってから配置する手順を用意します。
-- オーナーが実環境で確かめること（要るデータと、それを誰が作るか）: M06・M07・M10。オーナーが検証用宛先、招待、失敗試験のデータを用意し、CIが対象SHAの成果物を作ります。最初の実配置の後にLambdaのSHA・時刻のタグ、警報、流量、ログ保持と、認証・監視の動作を確かめます。
+- 主に触るファイル: `docs/agents/command-scope.md`
+- 受け持つ試験: C02
+
+Voidとcf CLIは起動せず、配布物と説明から利用状況の送信を止める方法を調べる。`docs/agents/command-scope.md`の変更は、CLIを初めて動かす作業より前に別のPRで承認を得る。
+止め方がわからなければCLIを動かさず、わからない点を大関さんに渡す。
 <!-- /delegation-task -->
 
-<!-- delegation-task:ci-artifacts -->
-### CIと成果物: 外部サービスなしで検査し、一度だけビルドする
+<!-- delegation-task:void-spike -->
+### Voidの試作（`void-spike`）
 
-- 対象: `.github/workflows/ci.yml`、ルートのpnpm設定とVitestの設定、`apps/web/vite.config.ts`。旧#37に対応します。
-- effort: medium
-- 先に要るタスク: なし
-- 受け持つ試験: なし
-- やること: PRとmainで、lint、型、境目、Vitest、使い捨てPostgreSQL、Playwright、ビルドの実在する検査を必須にします。製品の試験は各タスクから追加します。最初はランナー内の検査だけを有効にし、未実装の製品試験を成功扱いにしません。LambdaとPWAの成果物をテスト済みの完全SHAにひも付けます。PWAは環境値なしで1回ビルドし、結合検証と本番は同じものを使います。
-- 完了条件: 一つでも失敗したSHAはデプロイへ渡らず、別SHAの成果物は使えません。試験の入口・JWTの発行者・鍵が製品に入らない検査を後続のE2Eとつなぎ、試験ファイルが実際に検出されることを確かめます。CIからAWS、Neon、実メール、実Pushへ接続しません。
+- 主に触るファイル: `docs/implementation-plans/first-slice.md`、`docs/reviews/first-slice-void-spike.md`
+- 受け持つ試験: C03
+
+最初にVoidを使う作業は、捨てられる手元の試作に限る。採用する版で次の3点を試し、版・操作・結果を残す。製品コードに試作は入れない。
+
+| 確かめること | 終わりの条件 |
+|---|---|
+| セッションなしのパスキー登録 | 札のある人だけ登録でき、札が無い人はユーザーを作る前に断られる。設定でできなければ、設計の札付きセッション案を比べる |
+| Cookieの`Domain` | 実際の`Set-Cookie`で`Domain`なしと`__Host-`の属性を確かめる。設定できなければ、設計にある同じアカウントに他のWorkerを置かない案を大関さんに渡す |
+| Cronの置き場所 | `crons/`に置いた受け手が、手元でスケジュールイベントを受けてローカルD1に書ける |
+
+画面とマイグレーションの置き場所を雛形から決め、この計画のパスを更新する。3点のうち満たせないものは結果と候補を示し、設計を変える場合は大関さんの判断を待つ。
+パスキーの確かめとPushの暗号に使うCPU時間は、要件のとおり製品の実装前に大関さんが手元で計る。計測の条件と結果を残し、10ミリ秒に収まらなければ送る台数を見直す。それでも収まらなければ費用の方針を大関さんに聞く。
 <!-- /delegation-task -->
 
-<!-- delegation-task:db-migrations -->
-### DB変更の仕組み: SQLをデプロイの流れだけで流す
+<!-- delegation-task:void-d1-setup -->
+### VoidとD1の準備（`void-d1-setup`）
 
-- 対象: `db/drizzle.config.ts`、`db/migrations/`、`scripts/check-migrations.ts`、`scripts/migrate.ts`。旧#38に対応します。
-- effort: high
-- 先に要るタスク: CIと成果物
-- 受け持つ試験: I03
-- やること: drizzle-kitの設定と生成・適用の入口を作ります。CIは `drizzle-kit check` とjournalの時刻順を確かめます。適用前にはDBに未記録の古いSQLがないか確認します。削除するSQLの `requires-deployed` は各Lambdaの版と切替時刻、旧版の最大実行時間15分の経過を確かめてから適用します。利用をやめる変更と削除を分けます。
-- 完了条件: 空のDBへの適用、同じSQLの再実行、時刻違反と削除条件の未成立を使い捨てDBで確かめます。環境の設定はデプロイが渡し、手で実環境にSQLを流す手順は作りません。
+- 主に触るファイル: `void.config.ts`、`void.lock.json`、`package.json`、`pnpm-lock.yaml`、`vitest.config.ts`、`apps/web/vite.config.ts`、Voidが生成するマイグレーションの置き場所
+- 受け持つ試験: C04
+
+本番は1環境だけで、Workerは`yoin`1つ。本体D1は`yoin`（`apac`）、送信記録用D1は`yoin-send-log`に分ける。設定にsecretの値を書かない。
+試作で決めた場所にDBごとのSQLを置き、CIが使う手元の起動と移行のコマンドを用意する。表の定義は順に各文脈へ足す。
+試験専用のSQLを、空の手元のD1に適用する。適用済みのD1では同じSQLを二重に流さないことを確かめる。
 <!-- /delegation-task -->
 
 <!-- delegation-task:web-foundation -->
-### 画面の共通部分とログイン状態の入れ物を作る
+### 画面の共通部分（`web-foundation`）
 
-- 対象: `apps/web/index.html`、`apps/web/package.json`、`apps/web/components.json`、`apps/web/public/manifest.webmanifest`とアイコン、`apps/web/src/app/`・`styles/`・`components/ui/`、`apps/web/tests/app/`。
-- effort: high
-- 先に要るタスク: CIと成果物
-- 受け持つ試験: U07
-- やること: F-48のmanifestとアイコンを置きます。F-42〜F-45の色の変数とFigtreeを使い、Tailwind CSSとshadcn/uiを使える形にします。React Router、TanStack Query、`hono/client`の共通の入口を作ります。招待参加のタスクが、実際のAPI型とCognitoの操作をこの入口につなぎます。
-- ログイン状態: セッションごとにQueryClientを作り、キーにユーザーIDとグループIDを含めます。ログアウト・会員交代では通信を中断し、古いキャッシュと端末の認証情報を消します。Safariとホーム画面のPWAは別のログイン状態を持ちます。招待や通知から戻る先は同一オリジンのパスだけにします。通知先はログアウトでは消さず、Service WorkerにはJWTを渡しません。
-- 完了条件: U07で、yoinのmanifestとアイコン、明暗の色と書体、画面の移り方、会員を交代したときの通信とキャッシュの分離を確かめます。実際のメールOTPと2人の操作は後続のタスクでつなぎます。
+- 主に触るファイル: `apps/web/index.html`、`apps/web/public/`、`apps/web/src/{app,styles,components}/`、`apps/web/tests/app/`
+- 受け持つ試験: W01
+
+PWAの名前・アイコン、明暗、ルーターを揃える。画面の通信は`void/client`を使う。ログイン情報はBetter AuthのCookieで扱い、利用者が替わるときは旧通信とキャッシュを消す。
+通知の戻り先は同じアプリの申込に限る。前の人の応答や下書きが次の人に出なければ完了とする。Bearer認証の実装は引き継がない。
 <!-- /delegation-task -->
 
-<!-- delegation-task:invite-and-join -->
-### オーナーと招待参加: 2人が同じグループを開ける
+<!-- delegation-task:setup-and-invites -->
+### 登録と招待（`setup-and-invites`）
 
-- 対象: `src/contexts/group/`、`src/functions/api/`・`pre-sign-up/`、`scripts/seed-initial-data.ts`、`apps/web/src/features/join/`。
-- effort: high
-- 先に要るタスク: DB変更の仕組み・画面の共通部分
-- 受け持つ試験: U08、U09、I01
-- やること: 環境別の初期データ、S-01のメールOTP、S-02の参加、S-21の招待を作ります。初期データの再実行ではCognitoの既存subを使い、DB側は1トランザクションで重複なく作ります。登録前Lambdaは招待のハッシュ、期限、残り枠とグループ状態を検査し、登録開始数だけを1文で更新します。参加枠は参加の取引で使い、登録開始とは分けます。ログにはトークンや個人情報を出しません。
-- 完了条件: オーナーの招待から2人目の登録・参加・ホーム表示まで通ります。招待なしの新規登録、使えない招待、権限のない発行を拒み、最後の1枠を2人で使えません。U08で招待の期限と利用数の境目、U09でメールのコードが誤り・期限切れなら再送でき、要求上限では時間を置く案内が出ることを確かめます。実メールと実プールの確認は結合検証でオーナーが行います。
+- 主に触るファイル: `routes/{auth,setup,invites,me,groups}/`、`src/contexts/group/`と対応試験、`apps/web/src/features/join/`、マイグレーション
+- 受け持つ試験: A01–A04、W02、H01–H02、C06
+
+はじめの登録と招待にだけ、登録用の札を出す。札は10分だけ使え、ほかのAPIは呼べない。パスキーだけを登録してもアプリのユーザーは作らない。
+合言葉の上限、招待の最後の1枠、はじめのオーナーの同時登録を確かめる。条件が外れたらD1の書き込みをまとめて戻し、その回で作った認証情報を片づける。
+申込などで使うセッション・所属の確認もここで用意する。所属とグループの状態は、書き込みの`batch()`の先頭でも確かめる。
+先頭の確かめの文が使う補助表`write_guards`を本体に作る（データモデルの「書き込みの順番」）。業務16表には数えない。
 <!-- /delegation-task -->
 
-<!-- delegation-task:concert -->
-### 公演を下書きから確定し、一覧と詳細に出す
+<!-- delegation-task:account-recovery -->
+### アカウントを戻す（`account-recovery`）
 
-- 対象: `src/contexts/catalog/`、`apps/web/src/features/concert/`、対応API・SQL。
-- effort: high
-- 先に要るタスク: オーナーと招待参加
-- 受け持つ試験: I11
-- やること: 会場・アーティストを選ぶ／追加する、単発公演を下書きから確定する、S-06〜S-08で一覧と詳細を開く流れを作ります。下書きは本人だけが読み書きでき、確定済み公演は同じグループで読めます。
-- 完了条件: 保存や確定の再送で行が増えず、別グループ・不在・本人でない場合を契約どおりに区別します。今日を日本時間の「これから」に入れ、足りない欄を画面で示します。
+- 主に触るファイル: `routes/{auth,setup,recovery,groups}/`、`src/contexts/group/`と対応試験、`apps/web/src/features/recovery/`、マイグレーション
+- 受け持つ試験: A05–A06、A11、H09、C06
+
+メンバーの戻すリンクと、合言葉を使うオーナー本人の戻し方を作る。どちらも元のユーザーに新しい鍵を足し、パスキーの登録要求の中で確定を進める。
+
+署名した札に復旧IDを入れる。メンバーの戻すリンクとオーナーの登録状態に、復旧IDごとの未確定の項目を持つ。同じ回の札を出し直しても、その回の最初の時刻を保つ。
+
+鍵・セッションとその回との対応は本体の同じ`batch()`で書く。採用するBetter Authでこの書き込みと認証の拒否を手元で確かめる。未確定の鍵とセッションは、その回を確定するまで使わせない。
+
+結果を読み直すAPIは、その回の本体の確定と別D1の完了を確かめる。未確定の項目がないだけでは成功を返さず、書き込みもしない。メンバーは引き続きリンクの`used_at`を使う。
+
+本人、札、新しい鍵を確かめたあと、別D1の`revocations`にその回を識別できる処理中の記録を残す。同じ利用者に複数の処理中の記録を作らない。記録できたと確かめられないときは本体を確定せず、成功も返さない。
+
+記録後は処理中の間、対象者の新旧の鍵によるログインとAPI利用を止める。失効記録を読めず処理が終わったかを確認できないときも、利用を通さない。
+
+本体で古い鍵とセッションを消し、確定した回だけを未確定の一覧から外す。別の未確定の回は変えない。本体の確定を確認できてから別D1を完了にし、成功を返す。2つのD1をまたぐ`batch()`は使わない。
+
+リンクの期限切れなどで本体が確定を断ったと確認できたら、中止する根拠を処理中の記録に残す。復旧IDで指定した回の鍵・セッションと未確定の項目だけを、同じ`batch()`で消す。
+
+片づけを確認してから記録を中止に変え、利用者全体の締め出しを解く。旧鍵と既存のセッションは使える。別の回の未確定の鍵とセッションは引き続き使わせない。完了にはせず、`recovery_unusable`を返す。本体の確定結果が不明なら中止にせず、処理中のまま確かめ直す。
+本体の片づけ直後に止まったら、次のCronが中止する根拠と本体の片づけを確かめ、別D1を中止にする。新しい鍵が無いだけでは中止と判断しない。
+
+同じ記録から再開しても、残す鍵や確定結果を変えない。処理中の回は札やリンクの出し直しで上書きしない。
+
+リンクを出し直すときは先に前のリンクを無効にし、鍵とセッションは消さない。前のリンクの回は、処理中を記録したなら中止し、記録がなければ11分後にCronで片づける。
+
+新しく処理中を記録できるのは、その回の最初の札から11分未満とする。処理中の記録がない回を片づけるときは、削除直前に別D1を確かめ、復旧IDごとに消す。「通知先とCron」が毎分のCronにつなぐ。
 <!-- /delegation-task -->
 
-<!-- delegation-task:ticket -->
-### チケット申込を作り、受取済みまで進める
+<!-- delegation-task:concerts -->
+### 公演を下書きから確定（`concerts`）
 
-- 対象: `src/contexts/ticket/`、`apps/web/src/features/ticket/`・`home/`、対応API・SQL。
-- effort: high
-- 先に要るタスク: 公演を下書きから確定
-- 受け持つ試験: U01、U04、U06、I02、I12
-- やること: 申込の作成・編集・状態変更・削除を作ります。本人の期限と受取可否は表示時に計算します。S-05のホームには最も近い公演、本人の次の行動と期限の帯を出します。券は設計と画面見本を使い、12色の明暗で読みやすさを保ちます。
-- 完了条件: 申込から当選、入金済み、受取済みまで通ります。別のメンバーは読めても編集できません。状態遷移と期限の境目、券の文字の配置とコントラストを試験計画どおりに確認します。I12では同じ作成を送り直しても申込が1行のままで、同じIDで結果発表日時を変えた作成は元の申込を変えずに拒み、削除を送り直しても申込が残らないことを確かめます。
+- 主に触るファイル: `routes/groups/`の公演・下書き・選択用一覧、`src/contexts/catalog/`と対応試験、`apps/web/src/features/concert/`、マイグレーション
+- 受け持つ試験: A07、W03、C06
+
+単発の公演1件を下書きにして、会場とアーティストを選ぶか新しく入力し、公演として確定する。
+一覧と詳細に出ること、別グループの資源を使えないこと、作った人だけが下書きを書き換えられることを確かめる。
 <!-- /delegation-task -->
 
-<!-- delegation-task:reminders -->
-### 期限の予約とiPhoneへの通知をつなぐ
+<!-- delegation-task:tickets-and-reminders -->
+### 申込とリマインド予約（`tickets-and-reminders`）
 
-- 対象: `src/contexts/notification/`、`src/functions/notification-sender/`、`apps/web/src/features/push/`・`service-worker.ts`、対応API・SQL。
-- effort: high
-- 先に要るタスク: チケット申込から受取
-- 受け持つ試験: U02、U03、U05、I04〜I07、I09、I13
-- やること: チケットの変更とSchedulerの世代切替をつなぎ、登録端末へのPush、見張り、端末別の再開を作ります。予約の引き受け・端末別の送信結果・失敗表示を設計の取引単位で扱います。S-03・S-23の案内とホームの通知先の帯、ログアウト後の通知からの復帰をつなぎます。
-- 完了条件: 各期限から正しい予約が作られ、取り消し済み・古い世代は送信しません。一部の失敗で他端末を飛ばさず、再送上限と締切を守ります。I13では、申込の作成・削除を送り直しても送信と見張りの予約が重複せず、同じIDで結果発表日時を変えた作成を拒んでも元の予約が変わらないことを確かめます。試験計画の固定時計・並行実行で確かめ、実着信は結合検証のホーム画面から開くiPhoneで確認します。
+- 主に触るファイル: `routes/groups/`の申込、`src/contexts/{ticket,notification}/`と対応試験、`apps/web/src/features/{ticket,home}/`、マイグレーション
+- 受け持つ試験: A08、W04–W05、N01–N03、H10–H11、C06
+
+申込の作成・編集・状態変更・削除の4本で、同じ関数を使って予約を合わせる。申込と予約は1つのD1の`batch()`で書く。
+日付、申込の状態、次の期限、券の表示を作る。他人の申込を読むときは、本人だけに見せる結果を返さない。試験で4本すべての書き込みと競合を確かめる。
 <!-- /delegation-task -->
 
-<!-- delegation-task:verification-skill -->
-### 変更を確かめる道具を、招待の流れから使う
+<!-- delegation-task:push-and-cron -->
+### 通知先とCron（`push-and-cron`）
 
-- 対象: `.claude/skills/verify-first-slice/SKILL.md`、`.agents/skills/verify-first-slice`（リンク）。
-- effort: medium
-- 先に要るタスク: オーナーと招待参加
-- 受け持つ試験: なし
-- やること: アプリの起動・試験データ・招待の操作・証拠の残し方をClaude Code側のスキルに書きます。`.agents/skills/verify-first-slice`から`../../.claude/skills/verify-first-slice`を指し、Devinも同じ手順を使います。
-- 完了条件: DevinとClaude CodeがPRを出す前に、スキルに従ってローカルで動作を確かめられます。
-- 必ず見る: 人が検査手順と両方の入口の差分を読みます。
+- 主に触るファイル: `routes/me/`の購読、`crons/first-slice.ts`、`src/contexts/notification/`と対応試験、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts`、マイグレーション
+- 受け持つ試験: A09、W06、N04–N09、H03–H08、C06
+
+購読とService Workerをつなぎ、Cronは期限前の予約を引き受けて送る。送れた記録は別のD1に先に書く。再送は送れていない端末だけにする。
+登録途中の認証情報（N08）、使用済みのリンク、古い送信・失効記録も設計どおりに片づける。失敗は本人だけに示す。手元のPushの受け手で回数と中身を確かめる。
+毎分のCronで処理中の失効を続ける（N09）。本体が確定を断ったと確認できれば、登録要求の中で断られたときと同じ手順で中止にする。処理中の記録は古くても消さない。安全に続けられず中止も確かめられないときは、対象者を止めたまま大関さんに知らせる。秘密や個人情報は出さない。
+引き受け3件・端末5台は仮の上限である。試作の計測を踏まえ、送信の試験で上限に達した回の続きを確かめる。
 <!-- /delegation-task -->
 
-<!-- delegation-task:two-user-verification -->
-### 2人のE2Eを自動で通す
+<!-- delegation-task:d1-reconciliation -->
+### D1を戻したあとの突き合わせ（`d1-reconciliation`）
 
-- 対象: `playwright.config.ts`、`tests/e2e/`、`tests/support/`。
-- effort: high
-- 先に要るタスク: iPhoneへの通知
-- 受け持つ試験: E2E-01、E2E-02
-- やること: Playwrightでは2つの独立したcontextで、招待から受取済みまで操作します。ランナー内だけで署名した試験JWTを使い、製品の認証設定を緩めません。
-- 完了条件: 使い捨てDBから再現でき、製品ビルドが試験入口と鍵を含まず、試験JWTを受けないことを検査できます。
+- 主に触るファイル: `crons/first-slice.ts`、`routes/groups/`の保留、`routes/auth/`と共通の認証処理、`src/contexts/{group,notification}/`と対応試験、`apps/web/src/features/held-reminders/`、マイグレーション
+- 受け持つ試験: A10、D01–D04、C06–C07
+
+停止中はログイン・APIを503にし、Cronの送信も止める。再開後は失効記録を先に当て直し、次に送れた端末と保留する予約を分ける。
+本体を戻したあとも、別D1の完了済みの失効を当て直し、処理中の失効は残す鍵と確定結果を確かめて続ける。新しい鍵が戻した先に無いなど続けられない場合は、対象者の締め出しを残し、大関さんに知らせる。
+中止した記録では失効を当て直さず、古い鍵と既存のセッションは消さない。戻した本体では復旧IDが一致する鍵・セッションと項目だけを片づける。別の未確定の回は残し、利用を断り続ける。完了した記録の当て直しでも、その回の未確定の項目だけを外す。
+大関さんが本番で戻す手順と、手元のD1だけで試す手順を分ける。途中停止・2回目の戻し・オーナーの送信または取り消しを試し、再送対象が増えなければ完了とする。
+すべての移行を適用した手元のD1で、本体の業務表が設計の16表と一致することを確かめる。補助表`write_guards`が本体にあることは別に確かめる（C07）。
 <!-- /delegation-task -->
 
-<!-- delegation-task:verification-skill-walkthrough -->
-### 2人の操作手順を確かめの道具に足す
+<!-- delegation-task:two-user-e2e -->
+### 2人のE2E（`two-user-e2e`）
 
-- 対象: `.claude/skills/verify-first-slice/SKILL.md`。
-- effort: medium
-- 先に要るタスク: 変更を確かめる道具・2人で通す試験
-- 受け持つ試験: なし
-- やること: 確かめの道具に、招待から公演・チケット申込・受取までの2人の操作順と証拠の残し方を追記します。E2Eの試験は変更しません。
-- 完了条件: DevinとClaude Codeの両方の入口から同じ手順が読め、使い捨てDBで2人の流れを操作できます。
-- 必ず見る: 人が2人の検査手順の差分を読みます。
+- 主に触るファイル: `playwright.config.ts`、`tests/e2e/first-slice/`、`tests/support/first-slice/`、`package.json`と`pnpm-lock.yaml`
+- 受け持つ試験: X01–X02
+
+手元のVoidサーバーでPlaywrightを動かす。Chromiumの2つのcontextで別々の仮の認証器を使う。オーナーの登録から、2人目の参加、公演、受取済みまでを通す。
+ログアウトして別の人で入り直す試験と、Pushの送信先・中身・回数の試験も入れる。試験用の受け手は製品に含めない。
 <!-- /delegation-task -->
 
-<!-- delegation-task:deploy-approval -->
-### 結合検証を通した版を、承認後に本番に出す
+<!-- delegation-task:verify-first-slice -->
+### 変更を確かめる道具（`verify-first-slice`）
 
-- 対象: `.github/workflows/deploy.yml`、`scripts/check-deployment-sha.ts`、`scripts/write-release-config.ts`。旧#39に対応します。
-- effort: high
-- 先に要るタスク: 初回準備・環境と監視・全製品成果物と2人の自動試験
-- 受け持つ試験: I08
-- やること: 試験・ビルド → 結合検証のSQL → Terraform → 初期データ → PWA配置・キャッシュ更新の順に進めます。配置時に公開の `config.json`（API URL、CognitoのプールIDとクライアントID、VAPID公開鍵）を環境別に置きます。秘密鍵は配らず、設定をCloudFrontやService Workerでキャッシュしません。結合検証が `main` の先頭を選び直すなら、そのSHAで試験を通した成果物だけを使います。
-- 本番の承認: 配置した完全SHAを承認画面に表示します。本番ジョブだけに本番用の同時実行グループ（`cancel-in-progress: false`）を設定し、古い承認待ちはオーナーが断ります。本番では `main` を取り直しません。権限取得前にDeployments APIを読み、`integration`の最新成功SHAと不一致・取得不能なら停止します。`production`の最新成功SHAより古い、または順序・履歴が不明なら停止します。本番の成功履歴が0件でも、履歴が取得でき、オーナーが初回と確認した場合だけ進めます。
-- Devinの完了条件（PRとCIで確かめる）: I08の代替履歴で、起動時と実配置のSHAが違っても、成功記録には実配置の完全SHAを渡すことを確かめます。承認・照合の成功前には本番の権限を取らず、承認した成果物だけを使う処理を確認します。承認だけの実行やS3の本番デプロイ用ロックは作りません。
-- オーナーが実環境で確かめること（要るデータと、それを誰が作るか）: D01〜D04。CIが完全SHA付きの成果物を作り、オーナーが結合検証を通った候補2〜3件を続けて送り、本番の承認を操作します。完了条件は、`integration`の配置記録のSHAが、実際に配置したSHAであることを確かめることです。起動時と実配置のSHAが違う場合も確かめます。最初の実デプロイで、待ち列、古い実行の拒否、未承認・照合失敗では本番を変えず、承認した版だけを出すことを確認します。次の本番承認では、照合が読む `production` の最新成功記録と前回実際に配置したSHAが一致することを確かめます。
+- 主に触るファイル: `.claude/skills/verify-first-slice/`、`.agents/skills/verify-first-slice`
+- 受け持つ試験: X03
+
+`verify-first-slice`に、手元のD1に試験データを用意し、Voidの開発サーバーで2人のE2Eを通す手順を書く。
+起動・試験・後片づけのコマンド、観点ID、残す結果の場所を記す。ローカル以外を使わず、別の人が手順を読んで同じ結果を得られれば完了とする。
 <!-- /delegation-task -->
 
-## 依存関係
+<!-- delegation-task:ci-and-deploy -->
+### PRの試験と本番配置（`ci-and-deploy`）
 
-```mermaid
-flowchart LR
-    B["初回準備"] --> I["環境と監視"]
-    C["CIと成果物"] --> M["DB変更の仕組み"]
-    C --> A["画面の共通部分"]
-    M --> G["オーナーと招待参加"] --> V["公演の確定"] --> T["チケット申込"] --> N["iPhoneへの通知"] --> E["2人のE2E"]
-    A --> G
-    G --> W["変更を確かめる道具"]
-    W --> X["2人の操作手順を道具に足す"]
-    E --> X
-    I --> D["結合検証と承認付き本番配置"]
-    E --> D
-    D --> S["オーナーが結合検証でiPhoneを確認"]
-    S --> P["承認した同じ版を本番に配置"]
-```
+- 主に触るファイル: `.github/workflows/{ci,deploy}.yml`、`tests/ci/`の配置試験
+- 受け持つ試験: C05
 
-## 推奨として決め打ちした点
+アプリと別のPRで、型チェック、lint、Vitest、fast-check、手元のD1への移行とPlaywrightをCIにつなぐ。PRの試験に本番の権限は渡さない。
+`main`へのマージで、試験後に`void deploy`がSQLを適用して配置する。GitHubのSecretsには`CLOUDFLARE_API_TOKEN`、公開変数には`VAPID_PUBLIC_KEY`を使う。
+手元の試験で失敗時に配置へ進まないことを確かめる。実際の配置は大関さんの準備と承認を待つ。
+<!-- /delegation-task -->
 
-| まだ実装方法が決まっていない点 | 計画に置く推奨 | 選ばなかった案 |
-| --- | --- | --- |
-| 実際に配置した版を成功履歴に残す方法 | 結合検証の配置を終えた後、選び直した版の完全SHAを指定した配置記録に成功を記録します。本番の検査が読む記録と同じものを試験で読み返します。 | ワークフローの起動時のSHAに結びつく自動記録だけに任せる。実際に出した版と違うおそれがあります。 |
-| 土台の定義ができてから実環境を確認する順番 | オーナーによるS3・OIDCなどの初回準備を先に済ませます。製品成果物と2人の自動試験がそろってから、本当の配置と承認を通します。 | 空の成果物や仮のLambdaで先に実配置する。製品が動く構成を確かめられず、試すだけの経路が残ります。 |
+## 本番に出す人と戻す人
 
-## 試験計画・止め方・戻し方
+大関さんがworkers.devの名前を決め、設計書の資源表に記録する。名前は初回配置後に変えない。大関さんがsecretを置き、配置を始めるPRのマージで承認する。
+本番の試験も大関さんが行う。最初の登録とオーナーを戻したあとは、大関さんが合言葉を替える。
 
-- [試験計画](../tests/first-slice.md)の自動試験は各PRとmainで通します。結合検証の実AWS・iPhoneと本番の承認はオーナーが担当し、実施者・環境・完全SHAと結果を残します。退会ができるまでは、2人目を本番に招きません。
-- 途中で失敗したら次の段に進みません。本番で部分的に変更された疑いがあれば次の実行を承認せず、DB・Lambda・配置と予約の状態をオーナーが確かめます。DB変更は旧Lambdaと両立させ、過去のSHAを配置して復旧したことにはしません。DBの事故では書き込みと送信を止め、Neonの復元可能な範囲（通常最大6時間）を確認します。Cognito・Schedulerと照合し、有効な申込から将来の予約だけを組み直して再開します。
-- 更新対象は試験計画、起動・試験の手順、初回準備とリリースの手順です。実装時に [データモデル](../data-model.md)の表・制約と [API](../api.md)の入出力を照合します。設計から外れる変更を黙って足さず、新たな設計変更として扱います。
+マージ前の不具合は、そのPRで直すか取り下げる。本番のSQLに誤りがあれば、大関さんが設計の手順で停止し、本体のD1だけを戻す。停止時刻が記録されたことを確かめてから戻す。
+送信・失効記録用D1は戻さない。手でSQLを流さず、突き合わせが終わるまで再開しない。
+
+## 設計の要件と担当
+
+設計の要件表の各行を、実装タスクと試験に対応させる。個々の受け入れ条件と境界の試験は[試験計画](../tests/first-slice.md)に置く。
+
+| 設計書の節 | 要件 | 担当タスク・試験 |
+|---|---|---|
+| 変更後構成・移行とリリース | F-01〜F-04、F-01a | VoidとD1の準備、登録と招待、D1を戻したあとの突き合わせ、PRの試験と本番配置（C04–C05、C07、H01） |
+| ログインとユーザーを作る入口 | F-03、F-05〜F-08、F-05a、F-05b、F-10、F-11、E-02、E-16、E-19〜E-21、B-13、B-14 | Voidの試作、登録と招待、アカウントを戻す、通知先とCron（C03、A01–A06、A11、N08–N09、W01–W02、H01–H02、H09） |
+| API設計・DB設計 | F-07、F-09、F-13、F-14、F-19〜F-24、F-26〜F-33、F-36a、F-39〜F-41、E-01〜E-08、E-14、E-15、E-18、E-22、B-08、B-09、B-11、B-12 | 登録と招待からD1を戻したあとの突き合わせまで（A01–A10、N01–N03、D01–D04） |
+| フロントエンド設計 | F-06、F-08、F-11〜F-18（F-17aを含む）、F-22〜F-28、F-30〜F-32、F-37b〜F-48、E-09、E-15〜E-17、B-05〜B-07、B-11 | 画面の共通部分、登録と招待、公演を下書きから確定、申込とリマインド予約、通知先とCron（W01–W06、H02、H07–H08、H10–H11） |
+| リマインドの送り方 | F-27〜F-37（F-37aを含む）、E-05〜E-08、E-10〜E-13、B-01〜B-05、B-10 | 申込とリマインド予約、通知先とCron（A08、N01–N07、W04、H03–H06） |
+| D1を過去の時点に戻したとき | F-36a、E-22 | アカウントを戻す、通知先とCron、D1を戻したあとの突き合わせ（A10–A11、N09、D01–D04） |
+| エラー処理・ログと監視・性能 | F-04、F-36、E-10〜E-12、E-16、非機能要件 | VoidとD1の準備、通知先とCron、PRの試験と本番配置（C04–C05、A01、N04–N07、W02） |
+| テスト方針 | F-49、F-50、AC-01〜AC-12 | 2人のE2E、変更を確かめる道具、PRの試験と本番配置、大関さんの本番試験（X01–X03、H01–H11。自動試験の内訳は試験計画を参照） |
+
+## 前のIssueとPRの引き継ぎ先
+
+以前のIssueを閉じるか、作り直すかは大関さんが決める。この計画では閉じない。
+
+| 前のIssue・PR | 新しい担当 | 引き継ぐもの |
+|---|---|---|
+| [#51](https://github.com/oze-xxbumpxx/yoin/issues/51)、[PR #93](https://github.com/oze-xxbumpxx/yoin/pull/93) | 画面の共通部分 | 明暗、PWAの見た目、通信とキャッシュの分離、戻り先。認証はBetter AuthのCookieに替える |
+| [#57](https://github.com/oze-xxbumpxx/yoin/issues/57) | 公演を下書きから確定 | 下書き、確定、一覧と詳細。書き込みはD1に替える |
+| [#63](https://github.com/oze-xxbumpxx/yoin/issues/63) | 申込とリマインド予約 | 申込と状態変更。D1で予約も同時に合わせる |
+| [#70](https://github.com/oze-xxbumpxx/yoin/issues/70) | 変更を確かめる道具 | 手元のVoidで登録と招待を確かめる |
+| [#71](https://github.com/oze-xxbumpxx/yoin/issues/71) | 2人のE2E | 2人を別々のcontextで操作する。ログインは仮の認証器を使う |
+| [#72](https://github.com/oze-xxbumpxx/yoin/issues/72) | 変更を確かめる道具 | 2人のE2Eを通す手順 |
