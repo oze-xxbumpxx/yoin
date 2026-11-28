@@ -28,6 +28,8 @@ AWS向けの設定を片づけ、手元のVoidでパスキーとCronを確かめ
 以下の画面パスは既存の`apps/web/`を起点とする。Voidの雛形に合わせる必要があれば「Voidの試作」で置き場所を記録し、後続タスクのパスを揃えてから渡す。
 委譲コマンドには、各見出しの横に示した小文字の名前を`first-slice:<タスク名>`の形で渡す。
 
+CLIの通信を止める試験（C02）が未完了でも、[コマンドの範囲](../agents/command-scope.md#外へ通信できない環境でだけvoidの試作を許す)の条件を満たせば、Voidの試作（`void-spike`、C03）だけを先に進められる。この例外は後続のVoidの利用には適用しない。
+
 | タスク | 主に触るファイル | 先に要る | SWE-2.1 effort | 受け持つ試験 | 人が必ず見る範囲 |
 |---|---|---|---|---|---|
 | AWSの片づけとCI | `.github/workflows/ci.yml`、`infra/terraform/`、`scripts/`と`scripts/tests/`のAWS向けファイル、`tests/ci/`の対応試験、`package.json`、`pnpm-lock.yaml`、`apps/web/vite.config.ts` | なし | medium | C01 | 削除範囲、残る検査、CIの権限 |
