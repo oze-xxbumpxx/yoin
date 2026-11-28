@@ -104,3 +104,56 @@ run_spike /usr/bin/env | /usr/bin/cut -d= -f1
 ```
 
 最後の行が出すのは、渡した環境変数の名前だけである。名前を試作の記録に残す。通信と読み取りの確認も`run_spike`で行い、すべての起動条件を満たしてから、同じ方法で試作を起動する。
+
+## #114の起動前の確認（2026-11-28）
+
+#116が`main`に入ったあと、macOS 26.6.2（arm64）で通信の遮断とファイルの読み取り拒否を確かめた。作業クローンの外に試作用のディレクトリを作り、上と同じプロファイルにホストのホームの実パスを渡した。`env -i`から渡した変数は`PATH`、`HOME`、`TMPDIR`、`LANG`だけで、`HOME`は空と確かめた。Voidとcfは起動していない。
+
+| 通信の確認 | 遮断なし | 遮断あり |
+|---|---|---|
+| HTTPS（`https://example.com`） | HTTP 200 | 終了コード6、名前解決に失敗 |
+| OSの名前解決（未使用の`sslip.io`配下の名前） | `192.0.2.7`に解決 | 名前解決に失敗 |
+| IPv4 TCP（`example.com`の解決先`104.20.23.154:443`に直接接続） | 接続成功 | `EPERM` |
+| IPv4 UDP（`8.8.8.8:53`へのDNS問い合わせ） | 問い合わせに対応する応答を受信 | `EPERM` |
+| IPv6 TCP（`[2001:4860:4860::8888]:443`に直接接続） | `EHOSTUNREACH`、経路なし | `EPERM` |
+| IPv4ループバック（`127.0.0.1`） | 接続成功 | 接続成功 |
+
+| 読み取りの対象 | 遮断なし | 遮断あり |
+|---|---|---|
+| ホストにある`~/.ssh`、`~/.gitconfig`、`~/Library/Keychains`、`/Library/Keychains`、`/System/Library/Keychains` | 読めた | 拒否 |
+| ホストの`~/.aws`、`~/.config`、`~/.npmrc`、`~/.git-credentials`、`~/.git-credential-cache`、`~/.wrangler` | 存在しない | 未実施 |
+| ホストのホーム配下の全対象を模したファイルとディレクトリ、各対象ディレクトリ内の空ファイル | 読めた | 拒否 |
+
+読み取りでは存在と成否だけを記録した。キーチェーンのAPIや表にない保存先は試していない。
+
+| 待ち受け | 確認したサービス |
+|---|---|
+| TCP、全IPv4アドレス | `devin-remote`（6080、6789、6790、9876）、`launchd`のSSH（22） |
+| TCP、全IPv6アドレス | `launchd`のSSH（22） |
+| TCP、IPv4ループバック | `devin-remote`（32403） |
+| UDP、固定ポート | `mDNSResponder`（5353、IPv4・IPv6）、`netbiosd`（137、138）、`syslogd`（64809）、`replicatord`（56858）、`fitnessintelligence`（54409、65509） |
+| UDP、ポート表示なし | `airportd`、`configd_sim`、`identityservices`、`wifip2pd` |
+
+`lsof`と`netstat`で待ち受けを調べた。有効なシステムプロキシ設定は見つからなかった。待ち受けサービスが外へ中継しないことは試していない。IPv6は遮断なしで届く宛先との比較ができなかった。
+
+### 配布物と雛形の準備
+
+取得先はnpmレジストリに限り、ロックファイルの配布元と整合性情報を確かめ、`npm ci --ignore-scripts`で入れた。まずVoidの配布物を調べ、別の空のディレクトリに既存画面と同じReactの静的な雛形を作るための依存を置いた。
+
+| 用途 | 入れた版 |
+|---|---|
+| CLIと手元のWorkers実行環境 | `void@1.12.2`、同梱の`cf@1.0.0-rc.5`、`miniflare@5.20261123.1-beta`、`workerd@1.20261123.1`、`@cloudflare/workerd-darwin-arm64@1.20261123.1` |
+| Reactの静的な雛形 | `@void/react@1.12.2`、`react@19.3.1`、`react-dom@19.3.1`、`hono@4.13.23` |
+| 雛形の開発用 | `vite@8.4.0`、`typescript@7.0.2`、`oxc-transform-react@0.156.0`、`@types/react@19.3.3`、`@types/react-dom@19.3.0` |
+
+`workerd`と`esbuild`（0.18.20、0.25.12、0.28.2）の`postinstall`は`node install.js`で、機種に合う実行ファイルを探して版を確かめる。見つからない場合は取得も試みる。macOS arm64用の実行ファイルは任意の依存パッケージから取得できた。`fsevents@2.3.3`にも配布済みのarm64対応バイナリがあった。これらを入れるためにインストールスクリプトが必須だという根拠は見つからなかった。スクリプトもバイナリも動かしていない。
+
+`create-void@1.12.2`は配布物を読むだけにした。配布物の`dist/main-CYIGj7S3.mjs`では、Voidのインストール、`void init`、雛形の依存のインストールを順に呼ぶ。新しい場所でこの入口を使うと、通常はパッケージの取得が要るので使わない。
+
+`void init`は同梱の雛形と画像からファイルを作る（`dist/init-B2VZ2Hut.mjs`）。`--deploy none`はVoidやCloudflareへの接続設定を飛ばす。依存を足すとインストールを呼び、雛形が書く`postinstall`は`void prepare`を呼ぶ。依存を先にそろえたReactの静的な雛形なら、このインストールの分岐を通らないと読める。遮断の下での動作はまだ試していない。D1を使う雛形の生成と試験もまだ行っていない。
+
+### 初起動は対応するNode.jsを用意してから
+
+このMacのNode.jsは`v24.21.0`で、Voidの入口（`dist/cli/cli.mjs`）は`^24.22.0 || >=26.12.0`を満たさないと本体を読み込まずに終了する。cfも`^22.23.0 || ^24.22.0 || ^26.12.0`を求める。両方に合うNode.jsを用意し、その実行ファイルを使う設定で起動前の確認をやり直す。
+
+最初に試すのは、遮断の下で対応する`node`に配布済みの`void/dist/cli/cli.mjs --version`を渡す方法。版の確認後は、別に用意した試作ディレクトリで`init --toolchain vite --framework react --starter static --deploy none --no-git`を試す案とする。追加の通信が必要になったら遮断を緩めずに止める。CPU時間は、パスキーの確かめとPushの暗号を手元で動かせるようになってから、製品の実装前にオーナーが計る。
