@@ -10,21 +10,16 @@
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
-    "build:web": "vite build apps/web",
-    "build:lambda": "node scripts/build-lambda.ts"
+    "build:web": "vite build apps/web"
   },
   "devDependencies": {
     "@types/node": "24.19.2",
     "@typescript-eslint/parser": "8.74.0",
-    "esbuild": "0.28.2",
     "eslint": "9.39.5",
     "eslint-import-resolver-typescript": "4.4.5",
     "eslint-plugin-boundaries": "5.4.0",
     "typescript": "5.9.3",
     "vite": "7.3.8",
     "vitest": "4.1.12"
-  },
-  "dependencies": {
-    "@aws-sdk/client-ssm": "3.930.0"
   }
 }

@@ -1,6 +1,0 @@
-{
-  "runtime": ["database-url", "invite-hmac-key", "vapid-private-key"],
-  "pre-sign-up": ["database-url"],
-  "migration": ["database-url"],
-  "seed": ["owner-email", "owner-display-name"]
-}

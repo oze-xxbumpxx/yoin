@@ -10,14 +10,13 @@ export function assertProductionInput(path: string): void {
 export async function assertProductionFiles(
   root: string,
   testMarkers: readonly string[],
-  excludedFiles: readonly string[] = [],
 ): Promise<void> {
   async function checkDirectory(directory: string): Promise<void> {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       const path = join(directory, entry.name);
       const name = relative(root, path);
       assertProductionInput(name);
-      if (excludedFiles.includes(name) || /^(\.env($|\.)|.*\.(pem|key)$)/u.test(entry.name)) {
+      if (/^(\.env($|\.)|.*\.(pem|key)$)/u.test(entry.name)) {
         throw new Error(`Forbidden file in production output: ${name}`);
       }
       if (entry.isDirectory()) {

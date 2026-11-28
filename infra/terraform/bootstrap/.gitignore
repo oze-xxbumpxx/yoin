@@ -1,8 +1,0 @@
-.terraform/
-*.tfstate*
-*.tfplan
-*.tfvars
-*.tfvars.json
-*.tfbackend
-crash*.log
-backend.tf

@@ -1,21 +1,17 @@
-# CIが確かめた版を配置へ渡す
+# CIが確かめること
 
-PRはmainと合わせたコミットを検査します。mainへのpushでは、そのコミットを検査します。GitHubの必須チェックに設定する名前は`Quality`です。
+GitHubの必須チェックは`Quality`です。PRではmainと合わせたコミットを、mainへのpushではそのコミットを検査します。どちらも、チェックアウトしたSHAがGitHubの指定と一致することを確かめます。
 
-## 製品の試験を追加するとき
+## すべてのPRで動く検査
 
-- 単体試験は各workspaceの`tests/`に置きます。Vitestが`*.test.*`と`*.spec.*`を探し、CIの出力に実行したファイルを表示します。
-- DB変更のタスクは`check:migrations`をルートの`package.json`に追加します。DBを使う試験は`tests/integration/`に置き、`test:integration`で実行します。Neonと同じメジャー版の使い捨てPostgreSQLをランナーで立ち上げ、localhostだけを接続先にします。
-- 2人の試験は`playwright.config.ts`と`tests/e2e/`を追加します。CIはPlaywrightで試験を列挙してから実行します。代替のAPI・メール・Pushと使い捨てDBだけを使い、配置用のファイルは書き換えません。
-- 試験用の認証コードは`tests/support/`に置きます。試験の経路、JWTの発行者、鍵を識別する**秘密ではない**文字列を`tests/support/production-markers.json`に配列で列挙します。CIは製品ファイルにその文字列がないか調べます。ルートの`test:production-auth`はビルド済みの`dist/pwa`と`dist/lambda/api`を使い、製品が試験の入口を公開せず、試験JWTを拒むことを確かめます。
-- 画面が`apps/web/index.html`に加わると、Viteは環境の値を取り込まずに`dist/pwa`を作ります。各Lambdaは`src/functions/<名前>/index.ts`から`dist/lambda/<名前>/index.mjs`を作ります。LambdaとPWAのメインバンドルでは、依存するモジュールに`tests/`以下がないことを確かめます。ViteはWeb Workerを別にビルドするため、最初のWeb Workerを追加するときは、その依存モジュールも検査に含めます。
-- Viteは開発時もビルド時も`.env`や`VITE_*`の値を取り込みません。画面のビルドでは、`import.meta.env`から`MODE`、`DEV`、`PROD`、`BASE_URL`、`SSR`を直接読む場合だけを許します。
-- 現時点では開発サーバーは`/config.json`を返しません。画面の共通部分を作るタスクで、ローカル開発とE2Eが使う手元用の`/config.json`を開発サーバーから返すようにします。手元用のファイルは配置用の成果物に入れません。
+- `pnpm install --frozen-lockfile`で、ロックファイルどおりに依存を入れます。
+- 品質確認に必要なスクリプトがあることを確かめます。ハーネス、lint、型チェック、Vitestを実行します。Vitestには、文脈の境界と、試験用のコードや値を製品に入れないための試験も含みます。
+- `apps/web/index.html`があるので、PWAをビルドして`dist/pwa`を検査します。試験用のファイルや値、`.env`、鍵のファイルが製品出力に入っていないことを確かめます。試験用の値は、必要になったら`tests/support/production-markers.json`に秘密ではない目印として列挙します。
 
-まだ用意していない製品の検査は、成功とせず実行結果の概要に「未実行」と書きます。製品のビルドと試験がそろうまでは、配置用の成果物を出しません。
+Viteは開発時もビルド時も`.env`や`VITE_*`の値を取り込みません。画面のビルドで`import.meta.env`から直接読めるのは、Viteが用意する`MODE`、`DEV`、`PROD`、`BASE_URL`、`SSR`だけです。
 
-## 配置側が受け取るもの
+## 対象ができてから動く検査
 
-mainの`CI`が成功した実行から、対象の完全SHAと同じ`head_sha`を持つ実行IDを選びます。その実行の`yoin-<完全SHA>`だけを取得し、`SHA`が対象の完全SHAと一致することを確かめます。成果物を展開した場所で`bash /path/to/yoin/scripts/sha256.sh -c SHA256SUMS`を実行し、中身も照合します。失敗した実行や別のSHAは使いません。
+マイグレーション検査（`check:migrations`）、結合試験（`test:integration`）、Playwrightは、対応するコマンドか設定があるときだけ動きます。対象がなければ、成功ではなく「未実行」と記録します。
 
-成果物の中身は`pwa/`、`lambda/{api,pre-sign-up,notification-sender}.zip`、`SHA`、`SHA256SUMS`です。結合検証と本番では同じ`pwa/`を使います。`config.json`はビルドや成果物に入れず、配置するときに各環境に置きます。
+Voidの試作（`void-spike`）でPWA以外の出力先を確かめ、その出力の検査をつなぎ直します。
