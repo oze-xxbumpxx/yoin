@@ -26,7 +26,7 @@ AWS向けの設定を片づけ、手元のVoidでパスキーとCronを確かめ
 | アカウントを戻す | `routes/{auth,setup,recovery,groups}/`、`src/contexts/group/`と対応試験、`apps/web/src/features/recovery/`、マイグレーション | 登録と招待 | high | A05–A06、H09、C06 | 古い鍵・セッションの失効、2つのD1への書き込み順 |
 | 公演を下書きから確定 | `routes/groups/`の公演・下書き・選択用一覧、`src/contexts/catalog/`と対応試験、`apps/web/src/features/concert/`、マイグレーション | アカウントを戻す | high | A07、W03、C06 | 下書きの所有者、別グループの資源、確定時のSQL |
 | 申込とリマインド予約 | `routes/groups/`の申込、`src/contexts/{ticket,notification}/`と対応試験、`apps/web/src/features/{ticket,home}/`、マイグレーション | 公演を下書きから確定 | high | A08、W04–W05、N01–N03、H10–H11、C06 | 申込の認可、状態遷移、申込と予約を同時に書くSQL |
-| 通知先とCron | `routes/me/`の購読、`crons/first-slice.ts`、`src/contexts/notification/`と対応試験、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts`、マイグレーション | 申込とリマインド予約 | high | A09、W06、N04–N07、H03–H08、C06 | 送信先、個人情報、引き受けと再送、送れた記録 |
+| 通知先とCron | `routes/me/`の購読、`crons/first-slice.ts`、`src/contexts/notification/`と対応試験、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts`、マイグレーション | 申込とリマインド予約 | high | A09、W06、N04–N08、H03–H08、C06 | 送信先、個人情報、引き受けと再送、送れた記録、登録途中の片づけ |
 | D1を戻したあとの突き合わせ | `crons/first-slice.ts`、`routes/groups/`の保留、`routes/auth/`と共通の認証処理、`src/contexts/{group,notification}/`と対応試験、`apps/web/src/features/held-reminders/`、マイグレーション | 通知先とCron | high | A10、D01–D04、C06 | 再開までの締め出し、鍵の失効、保留後の送信 |
 | 2人のE2E | `playwright.config.ts`、`tests/e2e/first-slice/`、`tests/support/first-slice/`、`package.json`と`pnpm-lock.yaml` | D1を戻したあとの突き合わせ | high | X01–X02 | 試験専用の認証器とPushの受け手が製品に入らないこと |
 | 変更を確かめる道具 | `.claude/skills/verify-first-slice/`、`.agents/skills/verify-first-slice` | 2人のE2E | medium | X03 | 実行先、使うデータ、結果の残し方 |
@@ -152,10 +152,10 @@ PWAの名前・アイコン、明暗、ルーターを揃える。画面の通�
 ### 通知先とCron（`push-and-cron`）
 
 - 主に触るファイル: `routes/me/`の購読、`crons/first-slice.ts`、`src/contexts/notification/`と対応試験、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts`、マイグレーション
-- 受け持つ試験: A09、W06、N04–N07、H03–H08、C06
+- 受け持つ試験: A09、W06、N04–N08、H03–H08、C06
 
 購読とService Workerをつなぎ、Cronは期限前の予約を引き受けて送る。送れた記録は別のD1に先に書く。再送は送れていない端末だけにする。
-登録途中の認証情報、使用済みのリンク、古い送信・失効記録も設計どおりに片づける。失敗は本人だけに示す。手元のPushの受け手で回数と中身を確かめる。
+登録途中の認証情報（N08）、使用済みのリンク、古い送信・失効記録も設計どおりに片づける。失敗は本人だけに示す。手元のPushの受け手で回数と中身を確かめる。
 引き受け3件・端末5台は仮の上限である。試作の計測を踏まえ、送信の試験で上限に達した回の続きを確かめる。
 <!-- /delegation-task -->
 
@@ -215,7 +215,7 @@ PWAの名前・アイコン、明暗、ルーターを揃える。画面の通�
 | 設計書の節 | 要件 | 担当タスク・試験 |
 |---|---|---|
 | 変更後構成・移行とリリース | F-01〜F-04、F-01a | VoidとD1の準備、登録と招待、PRの試験と本番配置（C04–C05、H01） |
-| ログインとユーザーを作る入口 | F-03、F-05〜F-08、F-05a、F-05b、F-10、F-11、E-02、E-16、E-19〜E-21、B-13、B-14 | Voidの試作、登録と招待、アカウントを戻す（C03、A01–A06、W01–W02、H01–H02、H09） |
+| ログインとユーザーを作る入口 | F-03、F-05〜F-08、F-05a、F-05b、F-10、F-11、E-02、E-16、E-19〜E-21、B-13、B-14 | Voidの試作、登録と招待、アカウントを戻す、通知先とCron（C03、A01–A06、N08、W01–W02、H01–H02、H09） |
 | API設計・DB設計 | F-07、F-09、F-13、F-14、F-19〜F-24、F-26〜F-33、F-36a、F-39〜F-41、E-01〜E-08、E-14、E-15、E-18、E-22、B-08、B-09、B-11、B-12 | 登録と招待からD1を戻したあとの突き合わせまで（A01–A10、N01–N03、D01–D04） |
 | フロントエンド設計 | F-06、F-08、F-11〜F-18（F-17aを含む）、F-22〜F-28、F-30〜F-32、F-37b〜F-48、E-09、E-15〜E-17、B-05〜B-07、B-11 | 画面の共通部分、登録と招待、公演を下書きから確定、申込とリマインド予約、通知先とCron（W01–W06、H02、H07–H08、H10–H11） |
 | リマインドの送り方 | F-27〜F-37（F-37aを含む）、E-05〜E-08、E-10〜E-13、B-01〜B-05、B-10 | 申込とリマインド予約、通知先とCron（A08、N01–N07、W04、H03–H06） |
