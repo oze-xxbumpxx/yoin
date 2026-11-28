@@ -10,5 +10,6 @@
 - 採用スタック（ADR-0008、2026-11-27）: Cloudflareの無料プラン（Workers、D1、R2、Queues、Cron）、Void（中でHonoを使う。配置は`void deploy`）、Better Authのパスキー、Web Push。秘密の値はWorkersのsecret。道具はADR-0004のうち、TypeScript、Drizzle ORM、React＋Vite、HonoとZod、eslint-plugin-boundaries、pnpm・Vitest・fast-check・Playwright・GitHub Actionsを続けて使う。AWS（Lambda、EventBridge Scheduler、Cognito、S3、CloudFront、SSM）、Neon、Terraform、Powertools for AWS Lambdaはやめた。`infra/terraform/`と`scripts/`のAWS向けのファイルは、作り直しの計画で片づける。
 - コードの名前には、用語集の英語名をそのまま使う（例: `Concert`、`Attendance`、`TicketApplication`、`MerchItem`）。
 - スタック固有の規約は、採用済みの技術にだけ適用する。存在しない設計書・コマンド・レビュー結果をあるものとして扱わない。
-- 品質コマンド: まだ無い。ハーネスの`run-quality-gates.sh`はロックファイルからパッケージマネージャーを選び、実在するものだけを実行する。
+- Webアプリのコードは`apps/web/`にある。
+- `bash .claude/scripts/run-quality-gates.sh`を引数なしで実行すると、ハーネス試験、lint、型チェック、テストが動く。ビルドは別に実行する。コマンドは直下の`AGENTS.md`の「セットアップと確認」にある。
 
