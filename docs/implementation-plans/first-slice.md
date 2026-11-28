@@ -87,7 +87,7 @@ Voidとcf CLIは起動せず、配布物と説明から利用状況の送信を�
 - 主に触るファイル: `docs/implementation-plans/first-slice.md`、`docs/reviews/first-slice-void-spike.md`
 - 受け持つ試験: C03
 
-最初にVoidを使う作業は、捨てられる手元の試作に限る。採用する版で次の3点を試し、版・操作・結果を残す。製品コードに試作は入れない。
+最初にVoidを使う作業は、捨てられる手元の試作に限る。Voidの起動は、[`docs/agents/command-scope.md`の例外](../agents/command-scope.md#外へ通信できない環境でだけvoidの試作を許す)の条件（外への通信の遮断、認証情報の持ち込み禁止、起動前の確認）を満たすときだけ行う。採用する版で次の3点を試し、版・操作・結果を残す。製品コードに試作は入れない。
 
 | 確かめること | 終わりの条件 |
 |---|---|
