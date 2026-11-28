@@ -32,8 +32,8 @@ DevinにはClaude Codeの危険操作フックが効かないので、起動引�
 - 手元のテストが使うlocalhost
   - Voidの手元の開発サーバー（中でD1・R2・Queuesを手元に作る）は、手元で動くのでここに入る。D1は`--local`だけを使う。
   - void・cf CLI・wranglerは、利用状況をCloudflareなどへ送る機能を止めてから動かす。wranglerは`WRANGLER_SEND_METRICS=false`で止まる。
-  - cf CLIは、この手順が別のPRで承認されるまで起動しない。承認後は、起動するたびに環境変数`CF_SEND_TELEMETRY`を`false`にする。確認した版は`cf@0.15.0`、`cf@1.0.0-rc.5`、`cf@1.0.0-rc.6`。ほかの版は、止め方を確かめるまで起動しない。
-  - Void自身の利用状況の送信を止める方法は未確認のため、Voidは起動しない。Voidが呼ぶcfに渡す設定だけでは、Void自身の送信を止めたことにならない。
+  - cf CLIは、大関さんがこの手順の変更を承認し、その変更が`main`に入ってから起動できる。起動するたびに環境変数`CF_SEND_TELEMETRY`を`false`にする。確認した版は`cf@0.15.0`、`cf@1.0.0-rc.5`、`cf@1.0.0-rc.6`。ほかの版は、止め方を確かめるまで起動しない。
+  - この承認で起動できるのはcf CLIだけ。Void自身の送信を止める方法は未確認なので、試験（C02）は完了していない。Voidが呼ぶcfの送信を止めても、Void自身は起動しない。
   - 根拠は[CLIの版と送信を止める方法の調査（C02）](https://github.com/oze-xxbumpxx/yoin/blob/eb6cdbd2cf5ae7f832fffcb182ae8ebc5514e03e/docs/reviews/first-slice-cli-telemetry.md)。この手順は、下にあるCloudflareのアカウントなどへの接続の禁止を変えない（ADR-0008）。
   - AWS Emulator（ADR-0004の2026-11-25の追記）は、ADR-0008でAWSをやめたので使わない
 
