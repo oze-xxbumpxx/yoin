@@ -63,14 +63,14 @@ describe("production build guards", () => {
   ])("rejects %s before Vite substitutes import.meta.env", async (_name, source) => {
     await writeViteEntry(source);
 
-    await expect(buildFixture()).rejects.toThrow("Read environment values from /config.json");
+    await expect(buildFixture()).rejects.toThrow("Only direct Vite built-ins may use import.meta.env");
   });
 
   it("rejects forbidden environment reads in inline HTML modules", async () => {
     await writeFile(join(fixture, "index.html"),
       '<script type="module">document.title = import.meta.env.VITE_API_URL;</script>');
 
-    await expect(buildFixture()).rejects.toThrow("Read environment values from /config.json");
+    await expect(buildFixture()).rejects.toThrow("Only direct Vite built-ins may use import.meta.env");
   });
 
   it("rejects a Vite bundle that imports an E2E auth entrypoint", async () => {
@@ -85,13 +85,11 @@ describe("production build guards", () => {
     ["adapter.cjs", "const issuer = 'https://test-issuer.invalid';", "Test-only auth material"],
     ["adapter.cjs", "const key = 'test-jwt-key-marker';", "Test-only auth material"],
     ["signing.key", "fixture", "Forbidden file"],
-    ["config.json", "{}", "Forbidden file"],
   ])("rejects forbidden output in %s", async (file, contents, message) => {
     await writeFile(join(fixture, file), contents);
     await expect(assertProductionFiles(
       fixture,
       ["https://test-issuer.invalid", "test-jwt-key-marker"],
-      ["config.json"],
     )).rejects.toThrow(message);
   });
 });

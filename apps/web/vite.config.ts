@@ -49,7 +49,7 @@ function productionInputs(): Plugin {
         const file = ts.createSourceFile(htmlModule ? id : path, code, ts.ScriptTarget.Latest, true);
         const reference = findForbiddenEnvReference(file);
         if (reference !== null) {
-          this.error("Read environment values from /config.json; only direct Vite built-ins may use import.meta.env", reference.getStart(file));
+          this.error("Only direct Vite built-ins may use import.meta.env", reference.getStart(file));
         }
       },
     },

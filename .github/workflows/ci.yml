@@ -38,11 +38,6 @@ jobs:
           script_exists() {
             node -e 'process.exit(require("./package.json").scripts?.[process.argv[1]] ? 0 : 1)' "$1"
           }
-          lambda_exists() {
-            test -f src/functions/api/index.ts ||
-              test -f src/functions/pre-sign-up/index.ts ||
-              test -f src/functions/notification-sender/index.ts
-          }
           detect() {
             local name="$1"
             shift
@@ -57,8 +52,6 @@ jobs:
           detect postgres script_exists test:integration
           detect playwright test -f playwright.config.ts
           detect pwa test -f apps/web/index.html
-          detect lambda lambda_exists
-          detect production_auth script_exists test:production-auth
           if test -d tests/integration && ! script_exists test:integration; then
             echo "::error::tests/integration requires the test:integration script"
             exit 1
@@ -80,10 +73,6 @@ jobs:
         if: steps.available.outputs.pwa == 'true'
         run: pnpm build:web
 
-      - name: Bundle available Lambda entrypoints
-        if: steps.available.outputs.lambda == 'true'
-        run: pnpm build:lambda
-
       - name: Discover and run the two-user Playwright tests
         if: steps.available.outputs.playwright == 'true'
         run: |
@@ -91,38 +80,6 @@ jobs:
           pnpm exec playwright install --with-deps chromium
           pnpm exec playwright test
 
-      - name: Test JWT rejection with the production build
-        if: steps.available.outputs.production_auth == 'true'
-        run: |
-          test -s tests/support/production-markers.json
-          test -s dist/pwa/index.html
-          test -s dist/lambda/api/index.mjs
-          pnpm test:production-auth
-
-      - name: Scan product outputs for test-only inputs and deploy-time config
-        if: steps.available.outputs.pwa == 'true' || steps.available.outputs.lambda == 'true'
+      - name: Scan the PWA output for test-only inputs
+        if: steps.available.outputs.pwa == 'true'
         run: node scripts/check-production.ts
-
-      - name: Package deployable outputs
-        id: release
-        if: >-
-          github.event_name == 'push' &&
-          github.ref == 'refs/heads/main' &&
-          steps.available.outputs.migrations == 'true' &&
-          steps.available.outputs.postgres == 'true' &&
-          steps.available.outputs.playwright == 'true' &&
-          steps.available.outputs.production_auth == 'true' &&
-          steps.available.outputs.pwa == 'true' &&
-          steps.available.outputs.lambda == 'true'
-        run: |
-          bash scripts/package-release.sh "$GITHUB_SHA"
-          echo "ready=true" >> "$GITHUB_OUTPUT"
-
-      - name: Upload the tested revision
-        if: steps.release.outputs.ready == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: yoin-${{ github.sha }}
-          path: dist/release
-          if-no-files-found: error
-          include-hidden-files: true

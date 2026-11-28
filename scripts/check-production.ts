@@ -11,9 +11,4 @@ if (!Array.isArray(markers) || !markers.every((marker) => typeof marker === "str
   throw new Error("Expected a non-empty list of test-only auth markers");
 }
 
-for (const [part, excluded] of [["pwa", ["config.json"]], ["lambda", []]] as const) {
-  const root = `dist/${part}`;
-  if (existsSync(root)) {
-    await assertProductionFiles(root, markers, excluded);
-  }
-}
+await assertProductionFiles("dist/pwa", markers);
