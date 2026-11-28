@@ -219,4 +219,44 @@ PWAを使わない雛形のビルドでは、`.cloudflare/output/v1/workers/defa
 
 読み出し用の`routes/api/cron-runs.dev.ts`は開発時だけ使い、Workerのビルド済みJavaScriptにはそのルートが入っていなかった。試作コードはリポジトリに入れていない。計画の担当パスとCIの出力検査は、この試作の後続作業で揃える。
 
-今回はCronと手元のD1までとし、パスキーとCookieはまだ試していない。CLIの通信を止める試験（C02）も未完了のまま。CPU時間は、パスキーの確かめとPushの暗号を手元で動かせるようになってから、製品の実装前にオーナーが計る。
+### Chromeが遮断下で起動できず、パスキーとCookieは未判定
+
+使い捨ての雛形に`better-auth@1.7.28`、`@better-auth/passkey@1.7.28`、`playwright-core@1.65.1`を追加した。計画とADRに版番号の指定がなかったため、npmレジストリの`latest`を使った。Void 1.12.2が要求するBetter Authの範囲（`^1.7.27`）にも入る。
+
+取得は遮断の外で`npm install --ignore-scripts --save-exact --no-audit --no-fund --registry=https://registry.npmjs.org better-auth@1.7.28 @better-auth/passkey@1.7.28 playwright-core@1.65.1`を使った。ロックファイルの取得先はnpmレジストリだけだった。ブラウザはMacにあるChrome 154.0.8037.93を使い、別途ダウンロードしていない。
+
+開発サーバーとChromeの起動前に、同じプロファイルで起動前の確認をそれぞれやり直した。空の`HOME`を起動ごとに用意し、`env -i`で`PATH`、`HOME`、`TMPDIR`、`LANG`だけを渡した。有効なシステムプロキシ設定はなかった。
+
+| 確認（サーバー・Chromeの2回で同じ結果） | 遮断なし | 遮断あり |
+|---|---|---|
+| HTTPSとOSの名前解決 | HTTP 200、名前解決成功 | 名前解決失敗 |
+| 直接IPv4 TCP（`104.20.23.154:443`）・UDP（`8.8.8.8:53`） | 接続・応答あり | いずれも`EPERM` |
+| 直接IPv6 TCP | `EHOSTUNREACH`（経路なし） | `EPERM` |
+| IPv4ループバック | 接続成功 | 接続成功 |
+| ホストに存在する認証情報パス5件と模擬パス15件 | 読めた | 全件拒否 |
+
+サーバーの起動前に`lsof`と`netstat`で見た待ち受けの要点は、前のCron試作と同じだった。Chromeの起動前には、ループバックに`devin-remote`の追加の待ち受け1件と、Node.js・workerdの待ち受けがあった。UDPの待ち受けは変わらなかった。
+
+遮断下で`node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5188 --strictPort`を実行した。Voidは`Applied Better Auth migrations`を出し、手元の開発サーバーが起動した。Miniflareは前回と同じく`workers.cloudflare.com`を名前解決できず、代替値で続いた。
+
+次に、同じ遮断の下で`node test-c03-passkey.mjs <試作専用プロファイル>`を実行した。PlaywrightはChrome自身のサンドボックスも有効にした。ブラウザが直接つなぐ宛先を`localhost`に限る起動設定を渡したが、次のエラーでChromeが終了した。
+
+```text
+Failed to bind() …/com.google.Chrome.…/SingletonSocket: Operation not permitted (1)
+Failed to create a ProcessSingleton for your profile directory.
+exitCode=21
+```
+
+Chromeはプロファイルの二重起動を防ぐため、起動時にローカルのUnixソケットを作る。承認済みのプロファイルが許すのはローカルIPの通信で、このソケットの作成は拒否された。遮断や認証情報の読み取り拒否を変えず、ここで止めた。ページを開く前だったため、CDPの`WebAuthn.addVirtualAuthenticator`は呼べなかった。
+
+| 試験項目 | 結果 |
+|---|---|
+| 招待トークンあり・セッションなしのパスキー登録 | 未判定。ブラウザが起動せず、登録要求を送っていない |
+| 招待トークンがない場合はユーザー作成の前に拒否 | 未判定。拒否の応答とD1の件数を確認できていない |
+| 実際の`Set-Cookie`の`Domain`と`__Host-`の属性 | 未判定。登録の応答を取得できていない |
+
+配布物では、パスキープラグインに`registration.requireSession: false`、`resolveUser`、`afterVerification`がある。試作では合成の招待トークンを使い、登録選択肢を返す前と、ユーザーを作る前の`databaseHooks.user.create.before`で確かめる形にした。これらが手元で動くことは確認していない。
+
+設計のもう一方の候補は、入口で札を確かめてユーザーを先に作り、札つきのセッションでパスキーを登録する方法である。こちらはプラグインの通常のセッション必須の流れを使える一方、登録が終わらない場合にもユーザーが残り得る。今回はブラウザの起動で止まったため、セッションなしの登録ができないとは判断せず、候補の切り替えも行っていない。
+
+再開には、外への通信と認証情報の読み取りを遮断したままChromeのローカルソケットが使える環境が必要である。現在のプロファイルを変更するか、別の使い捨て環境を使うかはオーナーの判断を待つ。CLIの通信を止める試験（C02）と、オーナーが行うCPU計測も未完了のまま。
