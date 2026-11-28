@@ -300,6 +300,8 @@ Set-Cookie: __Host-yoin.session_token=[redacted]; Max-Age=31536000; Path=/; Http
 
 ### オーナーの手元でCPU時間と実ブラウザを確かめる
 
+試作一式（`yoin-c03-owner-spike.tar.gz`）はリポジトリに入れず、Devinのセッションの添付としてオーケストレーションBotからオーナーに渡す。
+
 手順は、作業クローンの隣に置く試作ディレクトリ`void-spike-work/`を起点とする。試作一式（`yoin-c03-owner-spike.tar.gz`）をその中に展開すると、`preflight.py`、`sandbox-passkey.py`、`starter/`が揃う。クローンの名前は`yoin`とし、試作専用のNode.js 24.22.3を`void-spike-work/node/bin/`に置く。
 
 依存がまだなければ、`starter/`で`npm ci --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org`を遮断の外で一度だけ実行する。手元のデータや認証情報は持ち込まない。以後の実行は同じ遮断の下で行う。起動前の確認が通らなければ中止する。
