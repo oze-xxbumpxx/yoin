@@ -83,3 +83,24 @@ That setting covers the bundled `cf` subprocess, not necessarily Void itself. We
 | IPv4のループバック（`127.0.0.1`） | 接続成功 | 接続成功 |
 
 確認したのは、表にあるパスの読み取りだけである。キーチェーンのAPIや、表にない保存先は試していない。Voidとcfは起動していない。
+
+### 要る環境変数だけを渡す
+
+上のプロファイルを作業クローンの外に保存し、その絶対パスを`profile`に入れる。`PATH`に実行に要る道具を足すときは、そのディレクトリの絶対パスだけを足す。ホストの`PATH`は引き継がない。
+
+```sh
+host_home="$(cd "$HOME" && pwd -P)" || exit 1
+spike_dir="$(/usr/bin/mktemp -d /tmp/yoin-void-spike.XXXXXXXX)" || exit 1
+/bin/mkdir "$spike_dir/home" "$spike_dir/tmp" || exit 1
+
+run_spike() (
+  cd "$spike_dir" || exit 1
+  /usr/bin/env -i PATH=/usr/bin:/bin HOME="$spike_dir/home" \
+    TMPDIR="$spike_dir/tmp" LANG=C \
+    /usr/bin/sandbox-exec -D "HOST_HOME=$host_home" -f "$profile" "$@"
+)
+
+run_spike /usr/bin/env | /usr/bin/cut -d= -f1
+```
+
+最後の行が出すのは、渡した環境変数の名前だけである。名前を試作の記録に残す。通信と読み取りの確認も`run_spike`で行い、すべての起動条件を満たしてから、同じ方法で試作を起動する。
