@@ -80,6 +80,12 @@ jobs:
           pnpm exec playwright install --with-deps chromium
           pnpm exec playwright test
 
-      - name: Scan the PWA output for test-only inputs
-        if: steps.available.outputs.pwa == 'true'
-        run: node scripts/check-production.ts
+      - name: Scan production outputs for test-only inputs
+        env:
+          PWA_AVAILABLE: ${{ steps.available.outputs.pwa }}
+        run: |
+          if test "$PWA_AVAILABLE" = true; then
+            node scripts/check-production.ts
+          else
+            node scripts/check-production.ts --skip-pwa
+          fi

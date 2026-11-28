@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { build, resolveConfig } from "vite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { assertProductionFiles } from "../../scripts/production-boundary.ts";
+import { assertProductionFiles, assertVoidProductionFiles } from "../../scripts/production-boundary.ts";
 
 const configFile = resolve("apps/web/vite.config.ts");
 let fixture: string;
@@ -91,5 +91,49 @@ describe("production build guards", () => {
       fixture,
       ["https://test-issuer.invalid", "test-jwt-key-marker"],
     )).rejects.toThrow(message);
+  });
+});
+
+describe("optional Void production outputs", () => {
+  const marker = "test-auth-fixture";
+  const outputs = [
+    ".cloudflare/output/v1/workers/default/bundle",
+    ".cloudflare/output/v1/workers/another/assets",
+    "dist/ssr",
+    "dist/client",
+  ];
+
+  it("allows a checkout without Void outputs", async () => {
+    await mkdir(join(fixture, "dist/pwa"), { recursive: true });
+    await expect(assertVoidProductionFiles(fixture, [marker])).resolves.toBeUndefined();
+    await mkdir(join(fixture, ".cloudflare/output/v1/workers"), { recursive: true });
+    await expect(assertVoidProductionFiles(fixture, [marker])).resolves.toBeUndefined();
+  });
+
+  it("allows clean output from multiple Workers, SSR, and the client", async () => {
+    for (const output of outputs) {
+      await mkdir(join(fixture, output), { recursive: true });
+      await writeFile(join(fixture, output, "index.js"), "export const name = 'production';");
+    }
+    await expect(assertVoidProductionFiles(fixture, [marker])).resolves.toBeUndefined();
+  });
+
+  it.each(outputs)("rejects test-only values in %s even when the other outputs are absent", async (output) => {
+    await mkdir(join(fixture, output), { recursive: true });
+    await writeFile(join(fixture, output, "index.js"), marker);
+
+    await expect(assertVoidProductionFiles(fixture, [marker])).rejects.toThrow("Test-only auth material");
+  });
+
+  it("rejects a bundled test input identified by its source map", async () => {
+    const output = join(fixture, "dist/ssr");
+    await mkdir(output, { recursive: true });
+    await writeFile(join(output, "index.js.map"), JSON.stringify({ sources: ["../../tests/support/auth.ts"] }));
+    await expect(assertVoidProductionFiles(fixture, [marker])).rejects.toThrow("Test input is not allowed");
+  });
+
+  it("rejects a present but empty output", async () => {
+    await mkdir(join(fixture, "dist/client"), { recursive: true });
+    await expect(assertVoidProductionFiles(fixture, [marker])).rejects.toThrow("Missing production output");
   });
 });
