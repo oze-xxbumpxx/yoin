@@ -35,9 +35,8 @@ description: >
 
 ## 昇格判定
 
-各知見について、[memory-policy.md](../../../docs/claude-code/memory-policy.md)の昇格条件
-（同問題3回 / 同訂正2回 / 同種重大指摘複数 / 重大不具合 / 複数Agentの認識不足 /
-継続的浪費 / 成功パターンの複数再現）を満たすか判定する。
+各知見について、[memory-policy.md](../../../docs/claude-code/memory-policy.md)の昇格条件を
+満たすか判定する。同じ問題の発生回数は、[改善候補にする回数](../../../docs/agents/improvement.md)を使う。
 
 - 満たす → 改善候補としてcandidateに起票し、`improvement-backlog.md`に1行追記。
 - 満たさない → 「Memory留め（昇格せず）」と明記し、再発監視のためbacklogの留め置き表へ。
