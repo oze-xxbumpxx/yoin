@@ -34,7 +34,7 @@ CLIの通信を止める試験（C02）が未完了でも、[コマンドの範�
 |---|---|---|---|---|---|
 | AWSの片づけとCI | `.github/workflows/ci.yml`、`infra/terraform/`、`scripts/`と`scripts/tests/`のAWS向けファイル、`tests/ci/`の対応試験、`package.json`、`pnpm-lock.yaml`、`apps/web/vite.config.ts` | なし | medium | C01 | 削除範囲、残る検査、CIの権限 |
 | CLIの通信を止める | `docs/agents/command-scope.md` | なし | medium | C02 | CLIの版、通信を止める根拠 |
-| Voidの試作 | `docs/implementation-plans/first-slice.md`、`docs/reviews/first-slice-void-spike.md` | CLIの通信を止める | medium | C03 | 登録前の確認、Cookie、Cronの起動結果 |
+| Voidの試作 | `docs/implementation-plans/first-slice.md`、`docs/reviews/first-slice-void-spike.md`、`.github/workflows/ci.yml`、`scripts/check-production.ts`、`scripts/production-boundary.ts`、`tests/ci/production-boundary.test.ts`、`tests/support/production-markers.json`、`docs/ci-artifacts.md` | CLIの通信を止める | medium | C03 | 登録前の確認、Cookie、Cronの起動結果 |
 | VoidとD1の準備 | `void.config.ts`、`void.lock.json`、`package.json`、`pnpm-lock.yaml`、`vitest.config.ts`、`vite.config.ts`、`db/schema.ts`、`db/migrations/` | AWSの片づけとCI、Voidの試作 | high | C04 | D1の分離、適用順、資源名とsecret名 |
 | 画面の共通部分 | `pages/index.tsx`、`public/`、`apps/web/tests/app/` | VoidとD1の準備 | high | W01 | Cookieを使う通信、利用者交代、通知からの戻り先 |
 | 登録と招待 | `routes/{auth,setup,invites,me,groups}/`、`src/contexts/group/`と対応試験、`pages/join/`、`db/migrations/` | 画面の共通部分 | high | A01–A04、W02、H01–H02、C06 | パスキー、札、認可、招待・オーナーの書き込み |
@@ -84,7 +84,7 @@ Voidとcf CLIは起動せず、配布物と説明から利用状況の送信を�
 <!-- delegation-task:void-spike -->
 ### Voidの試作（`void-spike`）
 
-- 主に触るファイル: `docs/implementation-plans/first-slice.md`、`docs/reviews/first-slice-void-spike.md`
+- 主に触るファイル: `docs/implementation-plans/first-slice.md`、`docs/reviews/first-slice-void-spike.md`、`.github/workflows/ci.yml`、`scripts/check-production.ts`、`scripts/production-boundary.ts`、`tests/ci/production-boundary.test.ts`、`tests/support/production-markers.json`、`docs/ci-artifacts.md`
 - 受け持つ試験: C03
 
 最初にVoidを使う作業は、捨てられる手元の試作に限る。Voidの起動は、[`docs/agents/command-scope.md`の例外](../agents/command-scope.md#外へ通信できない環境でだけvoidの試作を許す)の条件（外への通信の遮断、認証情報の持ち込み禁止、起動前の確認）を満たすときだけ行う。採用する版で次の3点を試し、版・操作・結果を残す。製品コードに試作は入れない。
