@@ -196,7 +196,7 @@ yoinに登録した人。Better Authの言葉はこのテーブルの`auth_user_
 | `failed_count` | integer | 合言葉を続けて間違えた回数。合えば0に戻す |
 | `locked_until` | integer | null可。5回続けて間違えたら、1時間後の時刻を入れる。この時刻までは試せない |
 | `owner_user_id` | uuid | null可。はじめの登録でオーナーになったユーザー（users.id）。オーナー本人を戻すときの相手 |
-| `ticket_issued_at` | integer | null可。オーナー本人を戻す札を最初に出した時刻。値があれば未確定とする。本体の確定時か中止の片づけで空にする。空なだけでは復旧の成功とはみなさない |
+| `ticket_issued_at` | integer | null可。オーナー本人を戻す札を最初に出した時刻。値があれば未確定とする。本体の確定、または中止や11分後の片づけで空にする。空なだけでは復旧の成功とはみなさない |
 | `completed_recovery_id` | text | null可。最後に確定した回の`revocations.id`。次の回が確定したときだけ書き換える |
 
 #### `groups.erasure_jobs`解散・退会の進み具合
