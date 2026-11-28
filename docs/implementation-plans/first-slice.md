@@ -25,7 +25,7 @@ AWS向けの設定を片づけ、手元のVoidでパスキーとCronを確かめ
 ## 渡す順番と担当ファイル
 
 「先に要る」は、作業を始める前にmainへ入っているタスク。依存がなく、担当ファイルも重ならないものだけを別のクローンで並行して渡す。
-以下の画面パスは`pages/`を起点とする。Voidの雛形に合わせる必要があれば「Voidの試作」で置き場所を記録し、後続タスクのパスを揃えてから渡す。
+Voidの画面は、C04で準備するVoidプロジェクトのルートにある`pages/`に置く。この計画の`pages/`、`public/`、`vite.config.ts`はそのルートからのパスとする。C01の`apps/web/vite.config.ts`は、既存PWAのビルド設定を指す。
 委譲コマンドには、各見出しの横に示した小文字の名前を`first-slice:<タスク名>`の形で渡す。
 
 CLIの通信を止める試験（C02）が未完了でも、[コマンドの範囲](../agents/command-scope.md#外へ通信できない環境でだけvoidの試作を許す)の条件を満たせば、Voidの試作（`void-spike`、C03）だけを先に進められる。この例外は後続のVoidの利用には適用しない。
@@ -36,7 +36,7 @@ CLIの通信を止める試験（C02）が未完了でも、[コマンドの範�
 | CLIの通信を止める | `docs/agents/command-scope.md` | なし | medium | C02 | CLIの版、通信を止める根拠 |
 | Voidの試作 | `docs/implementation-plans/first-slice.md`、`docs/reviews/first-slice-void-spike.md` | CLIの通信を止める | medium | C03 | 登録前の確認、Cookie、Cronの起動結果 |
 | VoidとD1の準備 | `void.config.ts`、`void.lock.json`、`package.json`、`pnpm-lock.yaml`、`vitest.config.ts`、`vite.config.ts`、`db/schema.ts`、`db/migrations/` | AWSの片づけとCI、Voidの試作 | high | C04 | D1の分離、適用順、資源名とsecret名 |
-| 画面の共通部分 | `pages/index.tsx`、`public/`、`apps/web/src/{app,styles,components}/`、`apps/web/tests/app/` | VoidとD1の準備 | high | W01 | Cookieを使う通信、利用者交代、通知からの戻り先 |
+| 画面の共通部分 | `pages/index.tsx`、`public/`、`apps/web/tests/app/` | VoidとD1の準備 | high | W01 | Cookieを使う通信、利用者交代、通知からの戻り先 |
 | 登録と招待 | `routes/{auth,setup,invites,me,groups}/`、`src/contexts/group/`と対応試験、`pages/join/`、`db/migrations/` | 画面の共通部分 | high | A01–A04、W02、H01–H02、C06 | パスキー、札、認可、招待・オーナーの書き込み |
 | アカウントを戻す | `routes/{auth,setup,recovery,groups}/`、`src/contexts/group/`と対応試験、`pages/recovery/`、`db/migrations/` | 登録と招待 | high | A05–A06、A11、H09、C06 | 古い鍵・セッションの失効、2つのD1への書き込み順 |
 | 公演を下書きから確定 | `routes/groups/`の公演・下書き・選択用一覧、`src/contexts/catalog/`と対応試験、`pages/concert/`、`db/migrations/` | アカウントを戻す | high | A07、W03、C06 | 下書きの所有者、別グループの資源、確定時のSQL |
@@ -114,8 +114,10 @@ PWA以外のVoidの出力先を特定し、試験用のコードや値が入ら�
 <!-- delegation-task:web-foundation -->
 ### 画面の共通部分（`web-foundation`）
 
-- 主に触るファイル: `pages/index.tsx`、`public/`、`apps/web/src/{app,styles,components}/`、`apps/web/tests/app/`
+- 主に触るファイル: `pages/index.tsx`、`public/`、`apps/web/tests/app/`
 - 受け持つ試験: W01
+
+共通部品とスタイルの置き場所は、試作の雛形からは決めていない。
 
 PWAの名前・アイコン、明暗、ルーターを揃える。画面の通信は`void/client`を使う。ログイン情報はBetter AuthのCookieで扱い、利用者が替わるときは旧通信とキャッシュを消す。
 通知の戻り先は同じアプリの申込に限る。前の人の応答や下書きが次の人に出なければ完了とする。Bearer認証の実装は引き継がない。
