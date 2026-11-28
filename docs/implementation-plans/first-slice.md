@@ -22,17 +22,17 @@ AWS向けの設定を片づけ、手元のVoidでパスキーとCronを確かめ
 | Voidの試作 | `docs/implementation-plans/first-slice.md`、`docs/reviews/first-slice-void-spike.md` | CLIの通信を止める | medium | C03 | 登録前の確認、Cookie、Cronの起動結果 |
 | VoidとD1の準備 | `void.config.ts`、`void.lock.json`、`package.json`、`pnpm-lock.yaml`、`vitest.config.ts`、`apps/web/vite.config.ts`、Voidが生成するマイグレーションの置き場所 | AWSの片づけとCI、Voidの試作 | high | C04 | D1の分離、適用順、資源名とsecret名 |
 | 画面の共通部分 | `apps/web/index.html`、`apps/web/public/`、`apps/web/src/{app,styles,components}/`、`apps/web/tests/app/` | VoidとD1の準備 | high | W01 | Cookieを使う通信、利用者交代、通知からの戻り先 |
-| 登録と招待 | `routes/{auth,setup,invites,me,groups}/`、`src/contexts/group/`と対応試験、`apps/web/src/features/join/`、マイグレーション | 画面の共通部分 | high | A01–A04、W02、H01–H02 | パスキー、札、認可、招待・オーナーの書き込み |
-| アカウントを戻す | `routes/{auth,setup,recovery,groups}/`、`src/contexts/group/`と対応試験、`apps/web/src/features/recovery/`、マイグレーション | 登録と招待 | high | A05–A06、H09 | 古い鍵・セッションの失効、2つのD1への書き込み順 |
-| 公演を下書きから確定 | `routes/groups/`の公演・下書き・選択用一覧、`src/contexts/catalog/`と対応試験、`apps/web/src/features/concert/`、マイグレーション | アカウントを戻す | high | A07、W03 | 下書きの所有者、別グループの資源、確定時のSQL |
-| 申込とリマインド予約 | `routes/groups/`の申込、`src/contexts/{ticket,notification}/`と対応試験、`apps/web/src/features/{ticket,home}/`、マイグレーション | 公演を下書きから確定 | high | A08、W04–W05、N01–N03、H10–H11 | 申込の認可、状態遷移、申込と予約を同時に書くSQL |
-| 通知先とCron | `routes/me/`の購読、`crons/first-slice.ts`、`src/contexts/notification/`と対応試験、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts`、マイグレーション | 申込とリマインド予約 | high | A09、W06、N04–N07、H03–H08 | 送信先、個人情報、引き受けと再送、送れた記録 |
-| D1を戻したあとの突き合わせ | `crons/first-slice.ts`、`routes/groups/`の保留、`routes/auth/`と共通の認証処理、`src/contexts/{group,notification}/`と対応試験、`apps/web/src/features/held-reminders/`、マイグレーション | 通知先とCron | high | A10、D01–D04 | 再開までの締め出し、鍵の失効、保留後の送信 |
+| 登録と招待 | `routes/{auth,setup,invites,me,groups}/`、`src/contexts/group/`と対応試験、`apps/web/src/features/join/`、マイグレーション | 画面の共通部分 | high | A01–A04、W02、H01–H02、C06 | パスキー、札、認可、招待・オーナーの書き込み |
+| アカウントを戻す | `routes/{auth,setup,recovery,groups}/`、`src/contexts/group/`と対応試験、`apps/web/src/features/recovery/`、マイグレーション | 登録と招待 | high | A05–A06、H09、C06 | 古い鍵・セッションの失効、2つのD1への書き込み順 |
+| 公演を下書きから確定 | `routes/groups/`の公演・下書き・選択用一覧、`src/contexts/catalog/`と対応試験、`apps/web/src/features/concert/`、マイグレーション | アカウントを戻す | high | A07、W03、C06 | 下書きの所有者、別グループの資源、確定時のSQL |
+| 申込とリマインド予約 | `routes/groups/`の申込、`src/contexts/{ticket,notification}/`と対応試験、`apps/web/src/features/{ticket,home}/`、マイグレーション | 公演を下書きから確定 | high | A08、W04–W05、N01–N03、H10–H11、C06 | 申込の認可、状態遷移、申込と予約を同時に書くSQL |
+| 通知先とCron | `routes/me/`の購読、`crons/first-slice.ts`、`src/contexts/notification/`と対応試験、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts`、マイグレーション | 申込とリマインド予約 | high | A09、W06、N04–N07、H03–H08、C06 | 送信先、個人情報、引き受けと再送、送れた記録 |
+| D1を戻したあとの突き合わせ | `crons/first-slice.ts`、`routes/groups/`の保留、`routes/auth/`と共通の認証処理、`src/contexts/{group,notification}/`と対応試験、`apps/web/src/features/held-reminders/`、マイグレーション | 通知先とCron | high | A10、D01–D04、C06 | 再開までの締め出し、鍵の失効、保留後の送信 |
 | 2人のE2E | `playwright.config.ts`、`tests/e2e/first-slice/`、`tests/support/first-slice/`、`package.json`と`pnpm-lock.yaml` | D1を戻したあとの突き合わせ | high | X01–X02 | 試験専用の認証器とPushの受け手が製品に入らないこと |
 | 変更を確かめる道具 | `.claude/skills/verify-first-slice/`、`.agents/skills/verify-first-slice` | 2人のE2E | medium | X03 | 実行先、使うデータ、結果の残し方 |
 | PRの試験と本番配置 | `.github/workflows/{ci,deploy}.yml`、`tests/ci/`の配置試験 | 2人のE2E | high | C05 | PRとmainの権限差、デプロイ時のSQL、無料プラン |
 
-機能ごとにマイグレーションを足す作業は直列にする。後続は最新のmainからブランチを切り、両方の手元のD1に必要なSQLを適用してから試験する。
+機能ごとにマイグレーションを足す作業は直列にする。後続は最新のmainからブランチを切り、両方の手元のD1に必要なSQLを適用してから試験する。 製品のSQLを足す各タスクは、追加するSQLで試験（C06）を行う。
 試験コードは各workspaceの`tests/`に置く。実装ファイルの構成に合わせ、Vitestの実行対象に入ったことを確かめる。
 
 ## 各タスクで作るものと終わりの条件
@@ -92,7 +92,7 @@ Voidとcf CLIは起動せず、配布物と説明から利用状況の送信を�
 
 Workerは`yoin`1つ。本体D1は`yoin`（`apac`）、送信記録用D1は`yoin-send-log`に分ける。設定にsecretの値を書かない。
 試作で決めた場所にDBごとのSQLを置き、CIが使う手元の起動と移行のコマンドを用意する。表の定義は順に各文脈へ足す。
-空の手元のD1に適用でき、同じSQLを適用済みのD1で二重に流さないことを確かめる。
+試験専用のSQLを、空の手元のD1に適用する。適用済みのD1では同じSQLを二重に流さないことを確かめる。
 <!-- /delegation-task -->
 
 <!-- delegation-task:web-foundation -->
@@ -109,7 +109,7 @@ PWAの名前・アイコン、明暗、ルーターを揃える。画面の通�
 ### 登録と招待（`setup-and-invites`）
 
 - 主に触るファイル: `routes/{auth,setup,invites,me,groups}/`、`src/contexts/group/`と対応試験、`apps/web/src/features/join/`、マイグレーション
-- 受け持つ試験: A01–A04、W02、H01–H02
+- 受け持つ試験: A01–A04、W02、H01–H02、C06
 
 はじめの登録と招待にだけ、登録用の札を出す。札は10分だけ使え、ほかのAPIは呼べない。パスキーだけを登録してもアプリのユーザーは作らない。
 合言葉の上限、招待の最後の1枠、はじめのオーナーの同時登録を確かめる。条件が外れたらD1の書き込みをまとめて戻し、その回で作った認証情報を片づける。
@@ -120,7 +120,7 @@ PWAの名前・アイコン、明暗、ルーターを揃える。画面の通�
 ### アカウントを戻す（`account-recovery`）
 
 - 主に触るファイル: `routes/{auth,setup,recovery,groups}/`、`src/contexts/group/`と対応試験、`apps/web/src/features/recovery/`、マイグレーション
-- 受け持つ試験: A05–A06、H09
+- 受け持つ試験: A05–A06、H09、C06
 
 メンバーの戻すリンクと、合言葉を使うオーナー本人の戻し方を作る。どちらも元のユーザーに新しい鍵を足し、パスキーの登録要求の中で確定する。
 古い鍵とセッションを無効にする記録は本体の外に残す。本体と記録用D1をまたぐ書き込みは1つの`batch()`だと扱わない。
@@ -132,7 +132,7 @@ PWAの名前・アイコン、明暗、ルーターを揃える。画面の通�
 ### 公演を下書きから確定（`concerts`）
 
 - 主に触るファイル: `routes/groups/`の公演・下書き・選択用一覧、`src/contexts/catalog/`と対応試験、`apps/web/src/features/concert/`、マイグレーション
-- 受け持つ試験: A07、W03
+- 受け持つ試験: A07、W03、C06
 
 単発の公演1件を下書きにして、会場とアーティストを選ぶか新しく入力し、公演として確定する。
 一覧と詳細に出ること、別グループの資源を使えないこと、作った人だけが下書きを書き換えられることを確かめる。
@@ -142,7 +142,7 @@ PWAの名前・アイコン、明暗、ルーターを揃える。画面の通�
 ### 申込とリマインド予約（`tickets-and-reminders`）
 
 - 主に触るファイル: `routes/groups/`の申込、`src/contexts/{ticket,notification}/`と対応試験、`apps/web/src/features/{ticket,home}/`、マイグレーション
-- 受け持つ試験: A08、W04–W05、N01–N03、H10–H11
+- 受け持つ試験: A08、W04–W05、N01–N03、H10–H11、C06
 
 申込の作成・編集・状態変更・削除の4本で、同じ関数を使って予約を合わせる。申込と予約は1つのD1の`batch()`で書く。
 日付、申込の状態、次の期限、券の表示を作る。他人の申込を読むときは、本人だけに見せる結果を返さない。試験で4本すべての書き込みと競合を確かめる。
@@ -152,7 +152,7 @@ PWAの名前・アイコン、明暗、ルーターを揃える。画面の通�
 ### 通知先とCron（`push-and-cron`）
 
 - 主に触るファイル: `routes/me/`の購読、`crons/first-slice.ts`、`src/contexts/notification/`と対応試験、`apps/web/src/features/push/`、`apps/web/src/service-worker.ts`、マイグレーション
-- 受け持つ試験: A09、W06、N04–N07、H03–H08
+- 受け持つ試験: A09、W06、N04–N07、H03–H08、C06
 
 購読とService Workerをつなぎ、Cronは期限前の予約を引き受けて送る。送れた記録は別のD1に先に書く。再送は送れていない端末だけにする。
 登録途中の認証情報、使用済みのリンク、古い送信・失効記録も設計どおりに片づける。失敗は本人だけに示す。手元のPushの受け手で回数と中身を確かめる。
@@ -163,7 +163,7 @@ PWAの名前・アイコン、明暗、ルーターを揃える。画面の通�
 ### D1を戻したあとの突き合わせ（`d1-reconciliation`）
 
 - 主に触るファイル: `crons/first-slice.ts`、`routes/groups/`の保留、`routes/auth/`と共通の認証処理、`src/contexts/{group,notification}/`と対応試験、`apps/web/src/features/held-reminders/`、マイグレーション
-- 受け持つ試験: A10、D01–D04
+- 受け持つ試験: A10、D01–D04、C06
 
 停止中はログイン・APIを503にし、Cronの送信も止める。再開後は失効記録を先に当て直し、次に送れた端末と保留する予約を分ける。
 大関さんが本番で戻す手順と、手元のD1だけで試す手順を分ける。途中停止・2回目の戻し・オーナーの送信または取り消しを試し、再送対象が増えなければ完了とする。
