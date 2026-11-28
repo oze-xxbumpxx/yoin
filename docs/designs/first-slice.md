@@ -235,7 +235,7 @@ sequenceDiagram
 1. 確かめの文。期限・使用済み・取り消し・所属が`active`かと、確定する回が変わっていないかを見る
 2. 戻すリンクに`used_at`を入れ、札を出した時刻を空にする
 3. そのユーザーの古いパスキーと、今のセッションを除くセッションの削除
-4. どの復旧を確定したか分かる記録を本体に残す
+4. 別D1の失効記録のIDを、戻すリンクの`completed_recovery_id`に書く
 
 `POST /recovery/{token}/complete`は、応答が届かなかったときに結果を読み直すためだけに置く。何も書かず、その回の本体の確定と別D1の完了を確かめたときだけ成功を返す。
 
@@ -290,7 +290,7 @@ Cronは、本体で消す直前に、同じ回の処理中の記録がないこ�
 
 オーナーが端末をすべてなくしたら、はじめの登録の画面で合言葉を入れる。オーナーがいるときに合言葉が合うと、`setup_state.owner_user_id`のユーザーに戻す札を出す。
 
-札を出した時刻は`setup_state.ticket_issued_at`に書く。`used_at`は使わない。本体では古いパスキーと他のセッションを消すのと同じ`batch()`で、札の時刻を空にし、どの回を確定したかを残す。
+札を出した時刻は`setup_state.ticket_issued_at`に書く。`used_at`は使わない。本体では古いパスキーと他のセッションを消すのと同じ`batch()`で、札の時刻を空にし、失効記録のIDを`setup_state.completed_recovery_id`に書く。
 
 `POST /setup/recover`は、戻すリンクのAPIと同じく結果を読み直すだけで、その回の確定と完了を確かめる。札の時刻が空というだけでは成功としない。
 
@@ -365,8 +365,8 @@ D1にスキーマは無いので、表の名前は`groups_users`のように文�
 |---|---|
 | `groups_users`・`groups_groups`・`groups_members` | `users.auth_user_id`は一意。自分用グループはオーナーごとに1つ（`kind`の部分一意インデックス）。`members`は(group_id, user_id)がPK |
 | `groups_invite_links` | `token_hash`は一意。`used_count`と`max_uses`を確かめの文で比べる |
-| `groups_recovery_links` | データモデルのR26。`token_hash`は一意。札を出した時刻`ticket_issued_at`を足す |
-| `groups_setup_state` | この回で足す。`id`（常に1）、`failed_count`、`locked_until`（null可）、`owner_user_id`（null可）、`ticket_issued_at`（null可）。データモデルに足す |
+| `groups_recovery_links` | データモデルのR26。`token_hash`は一意。`ticket_issued_at`と、確定した回のID `completed_recovery_id`を持つ。確定した回のIDはリンクの行を消すまで残す |
+| `groups_setup_state` | 1行だけの表。`id`（常に1）、`failed_count`、`locked_until`、`owner_user_id`、`ticket_issued_at`、`completed_recovery_id`を持つ。最後に確定した回のIDは、次の回が確定するまで残す |
 | `catalog_artists`・`catalog_venues`・`catalog_tours`・`catalog_concerts`・`catalog_concert_artists`・`catalog_drafts` | 前の版と同じ。`artists`は(group_id, name_key)が一意で、色は12色のCHECK。`drafts`の中身はJSONの`text` |
 | `ticket_ticket_applications` | 前の版と同じ。`seat_or_entry_number`を含む。`created_at`は最初の挿入のときだけ書く |
 | `notification_reminders`・`notification_push_subscriptions`・`notification_reminder_deliveries` | データモデルのとおり。`reminders`は(status, send_at)にインデックス。`status`に`held`を含む |
@@ -560,7 +560,7 @@ APIとBetter Authのログインは、次のどちらかのとき、すべて503
 
 | 失効の状態 | 本体を戻したあとにすること |
 |---|---|
-| 完了 | 戻した先の時点のあとで消したパスキーとセッションを、もう一度消す。使った戻すリンクの`used_at`と、その回の本体の確定記録を戻す。その回の札の時刻が残っていれば空にする |
+| 完了 | 戻した先の時点のあとで消したパスキーとセッションを、もう一度消す。使った戻すリンクの`used_at`と、その回の`completed_recovery_id`を戻す。オーナーの確定が複数あれば最後に確定した回のIDを残す。その回の札の時刻が残っていれば空にする |
 | 処理中 | 残す鍵と、その回の確定または中止の根拠を確かめて続きを行う。安全に続けられなければ、全体の再開後もその人の締め出しを残し、大関さんに知らせる |
 | 中止 | 失効は当て直さない。その回で足したパスキー・セッションや札の時刻が本体に戻っていれば、その回の分だけを片づける。古い鍵と既存のセッションは消さない |
 

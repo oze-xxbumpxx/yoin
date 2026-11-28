@@ -175,9 +175,16 @@ yoinに登録した人。Better Authの言葉はこのテーブルの`auth_user_
 | `used_at` | integer | null可。使ったら時刻を入れ、もう使えない |
 | `revoked_at` | integer | null可。出し直したときと、相手が外れた・抜けた・退会したときに入れる |
 | `ticket_issued_at` | integer | null可。リンクを開いてパスキーを登録する札を最初に出した時刻。出し直しても書き換えない。止まって残ったパスキーをCronが片づけ、確定前のセッションを断るのに使う |
+| `completed_recovery_id` | text | null可。確定した回の`revocations.id`。使い終わったリンクの行を7日後に消すまで残す |
 | `created_at` | integer |  |
 
-使うときは、新しいパスキーを登録したあとの1つの`batch()`で、確かめの文（期限・使用済み・取り消し・所属が`active`）、`used_at`の記入、古いパスキーと、今のセッションを除くセッションの削除をまとめて流す。新しいパスキーは、前と同じBetter Authのユーザーに足す。使い終わった行と切れた行は、1分ごとのCronが7日後に消す。
+新しいパスキーは、前と同じBetter Authのユーザーに足す。本体の書き込みは、次の処理を1つの`batch()`にまとめる。
+
+- 期限・使用済み・取り消し・所属が`active`かを確かめる。
+- `used_at`と`completed_recovery_id`を入れ、札の時刻を空にする。
+- 古いパスキーを消す。セッションは今のものだけを残す。
+
+使い終わった行と切れた行は、Cronが7日後に消す。
 
 #### `groups.setup_state`はじめの登録の状態
 
@@ -190,6 +197,7 @@ yoinに登録した人。Better Authの言葉はこのテーブルの`auth_user_
 | `locked_until` | integer | null可。5回続けて間違えたら、1時間後の時刻を入れる。この時刻までは試せない |
 | `owner_user_id` | uuid | null可。はじめの登録でオーナーになったユーザー（users.id）。オーナー本人を戻すときの相手 |
 | `ticket_issued_at` | integer | null可。オーナー本人を戻す札を最初に出した時刻。値があれば未確定とする。本体の確定時か中止の片づけで空にする。空なだけでは復旧の成功とはみなさない |
+| `completed_recovery_id` | text | null可。最後に確定した回の`revocations.id`。次の回が確定したときだけ書き換える |
 
 #### `groups.erasure_jobs`解散・退会の進み具合
 
