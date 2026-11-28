@@ -1,6 +1,8 @@
 # 最初の1本: Voidの試作
 
-## 上流への問い合わせ案（未投稿）
+## 上流への問い合わせ
+
+オーナーが[VoidのIssue #946](https://github.com/voidzero-dev/void/issues/946)に問い合わせを投稿した。以下は投稿前の文案。
 
 **Title: Does the Void CLI send usage telemetry, and can it be disabled before first run?**
 
@@ -150,10 +152,26 @@ run_spike /usr/bin/env | /usr/bin/cut -d= -f1
 
 `create-void@1.12.2`は配布物を読むだけにした。配布物の`dist/main-CYIGj7S3.mjs`では、Voidのインストール、`void init`、雛形の依存のインストールを順に呼ぶ。新しい場所でこの入口を使うと、通常はパッケージの取得が要るので使わない。
 
-`void init`は同梱の雛形と画像からファイルを作る（`dist/init-B2VZ2Hut.mjs`）。`--deploy none`はVoidやCloudflareへの接続設定を飛ばす。依存を足すとインストールを呼び、雛形が書く`postinstall`は`void prepare`を呼ぶ。依存を先にそろえたReactの静的な雛形なら、このインストールの分岐を通らないと読める。遮断の下での動作はまだ試していない。D1を使う雛形の生成と試験もまだ行っていない。
+`void init`は同梱の雛形と画像からファイルを作る（`dist/init-B2VZ2Hut.mjs`）。`--deploy none`はVoidやCloudflareへの接続設定を飛ばす。依存を足すとインストールを呼び、雛形が書く`postinstall`は`void prepare`を呼ぶ。依存を先にそろえたReactの静的な雛形なら、このインストールの分岐を通らないと読める。
 
-### 初起動は対応するNode.jsを用意してから
+### Node.jsを入れ替えずにVoidを初起動した
 
-このMacのNode.jsは`v24.21.0`で、Voidの入口（`dist/cli/cli.mjs`）は`^24.22.0 || >=26.12.0`を満たさないと本体を読み込まずに終了する。cfも`^22.23.0 || ^24.22.0 || ^26.12.0`を求める。両方に合うNode.jsを用意し、その実行ファイルを使う設定で起動前の確認をやり直す。
+このMacの既存のNode.jsは`v24.21.0`で、Voidとcfが求める版に届かない。両方が支える[Node.js 24.22.3の公式配布](https://nodejs.org/dist/v24.22.3/)からmacOS arm64版を取り、`SHASUMS256.txt`の値と一致することを確かめた。試作専用のディレクトリに展開し、既存のNode.jsは変えなかった。
 
-最初に試すのは、遮断の下で対応する`node`に配布済みの`void/dist/cli/cli.mjs --version`を渡す方法。版の確認後は、別に用意した試作ディレクトリで`init --toolchain vite --framework react --starter static --deploy none --no-git`を試す案とする。追加の通信が必要になったら遮断を緩めずに止める。CPU時間は、パスキーの確かめとPushの暗号を手元で動かせるようになってから、製品の実装前にオーナーが計る。
+試作用のNode.jsを`PATH`の先頭に置き、同じプロファイルで起動前の確認をやり直した。渡した環境変数は`PATH`、`HOME`、`TMPDIR`、`LANG`だけで、Voidの起動前に空の`HOME`を用意した。
+
+| 確認 | 遮断なし | 遮断あり |
+|---|---|---|
+| HTTPS（`example.com`）とOSの名前解決 | HTTP 200、`192.0.2.7`に解決 | 名前解決に失敗 |
+| IPv4の直接TCP（`172.66.147.243:443`）とUDP（`8.8.8.8:53`） | TCP接続、UDP応答あり | いずれも`EPERM` |
+| IPv6の直接TCPとIPv4ループバック | 外向きIPv6は経路なし、ループバックは接続成功 | 外向きIPv6は`EPERM`、ループバックは接続成功 |
+| ホストに存在する認証情報パス5件、模擬の認証情報パスと空ファイル15件 | 読めた | すべて拒否 |
+
+ホストに存在しない認証情報パスは前と同じ6件だった。再確認時の待ち受けは、上の表にあるサービスに加え、`devin-remote`がIPv4ループバックの54175番でも待ち受けていた。有効なシステムプロキシ設定は見つからなかった。
+
+| 遮断下で行った操作 | 結果 |
+|---|---|
+| `node …/void/dist/cli/cli.mjs --version` | 終了コード0、`1.12.2` |
+| 同じ入口に`init --toolchain vite --framework react --starter static --deploy none --no-git`を渡す | 終了コード0、`Created a static React Pages starter` |
+
+試作ディレクトリに`pages/index.tsx`、`vite.config.ts`、`void.config.ts`などができた。依存の指定は用意したロックファイルと一致し、出力に依存のインストールはなかった。遮断は緩めていない。C02は未完了のまま。開発サーバーの起動、C03のパスキー・Cookie・CronとD1の試験はまだ行っていない。CPU時間は、パスキーの確かめとPushの暗号を手元で動かせるようになってから、製品の実装前にオーナーが計る。
