@@ -2,346 +2,750 @@
 
 - ステータス: draft
 - レベル: L3
-- 関連: [承認済みの要件](../requirements/first-slice.md)、[API設計](../api.md)、[データモデル](../data-model.md)、[AWS構成](../architecture.md)、[メール送信のADR](../decisions/ADR-0007-cognito-email.md)
+- 関連: [承認済みの要件](../requirements/first-slice.md)、[API設計](../api.md)、[データモデル](../data-model.md)、[構成](../architecture.md)、[ADR-0008](../decisions/ADR-0008-cloudflare.md)
+- 2026-11-28に、ADR-0008（Cloudflare・D1・Void・パスキー）と論点の記録[first-slice-cloudflare](../discussions/first-slice-cloudflare.md)の6つの決定に合わせて書き直した。AWSの版は`git log`の`docs/designs/first-slice.md`にある
 
 ## この設計を一言で
 
-招待された人はメールのコードで参加し、仲間と公演やチケット申込を共有する。自分の申込の期限は、ホーム画面に追加したiPhoneに届く。通知の時刻変更が保存されなければ、元の予約を残す。
+1つのWorker（Voidで組む）が、画面・API・Better Authのパスキー・1分ごとのCronを持つ。
+
+招待された人はパスキーを登録して参加し、自分の申込の期限はCronがWeb PushでiPhoneに届ける。配置先は本番の1つだけで、0円の無料プランで動かす。
 
 ## 背景
 
-承認済みのAWS構成と文脈の境界を使い、最初の1本を本番と同じ構成で通す。Cognitoの認証だけではアプリへの参加を認めず、Web Pushを送った端末もサーバー側で記録する。
+2026-11-27にADR-0008で、AWSとNeonからCloudflareへ移し、ログインをメールのコードからパスキーに替えた。
+
+前の版の設計（Cognito、SES、Lambda、EventBridge Scheduler、SQS、Terraform）は使えないので、構成・ログイン・リマインドの送り方を書き直す。要件・画面・申込とリマインドの決まりは前の版から変えていない。
 
 ## 目的
 
-実装と試験が同じAPI契約・DB制約・通知の失敗時の動きを参照できるようにする。
+実装と試験が、同じAPIの形・D1の書き込みの順番・リマインドの失敗時の動きを見られるようにする。
 
 ## 要件
 
-G-01・G-02、C-02・C-03・C-07、T-01〜T-03、N-01〜N-03を満たす。公演の申込一覧（T-04の一部）と起動時の自分のグループ一覧も含む。画面・異常系・境界・受け入れ条件は[要件定義書](../requirements/first-slice.md)を正とする。
+[要件定義書](../requirements/first-slice.md)の11本のストーリーと、機能・異常系・境界の要件（F-01〜F-50、E-01〜E-22、B-01〜B-14）を満たす。画面・異常系・境界・受け入れ条件は要件定義書を見る。
 
 | 設計書の節 | 対応する要件 |
 |---|---|
-| 変更後構成・移行とリリース | F-01〜F-04 |
-| データフロー・セキュリティ | F-05〜F-11、E-01〜E-04・E-16、B-08・B-12 |
-| API設計・DB設計 | F-07・F-09・F-13〜F-14・F-19〜F-24・F-26〜F-33・F-39〜F-41、E-01〜E-08・E-14〜E-15・E-18、B-08〜B-09・B-11〜B-12 |
-| フロントエンド設計 | F-06・F-08・F-11〜F-18（F-17aを含む）・F-22〜F-28・F-30〜F-32・F-37b〜F-48、E-09・E-15〜E-17、B-05〜B-07・B-11 |
-| バックエンド設計 | F-27〜F-37（F-37aを含む）、E-05〜E-08・E-10〜E-13、B-01〜B-05・B-10 |
-| エラー処理・ログと監視・性能 | F-04・F-05・F-36、E-10〜E-12・E-16 |
-| テスト方針 | F-49〜F-50。各機能・異常系・境界条件の試験観点は実装前の試験計画に対応付ける |
+| 変更後構成・移行とリリース | F-01〜F-04、F-01a |
+| ログインとユーザーを作る入口 | F-03、F-05〜F-08、F-05a、F-05b、F-10、F-11、E-02、E-16、E-19〜E-21、B-13、B-14 |
+| API設計・DB設計 | F-07、F-09、F-13、F-14、F-19〜F-24、F-26〜F-33、F-36a、F-39〜F-41、E-01〜E-08、E-14、E-15、E-18、E-22、B-08、B-09、B-11、B-12 |
+| フロントエンド設計 | F-06、F-08、F-11〜F-18（F-17aを含む）、F-22〜F-28、F-30〜F-32、F-37b〜F-48、E-09、E-15〜E-17、B-05〜B-07、B-11 |
+| リマインドの送り方 | F-27〜F-37（F-37aを含む）、E-05〜E-08、E-10〜E-13、B-01〜B-05、B-10 |
+| D1を過去の時点に戻したとき | F-36a、E-22 |
+| エラー処理・ログと監視・性能 | F-04、F-36、E-10〜E-12、E-16、非機能要件 |
+| テスト方針 | F-49、F-50、AC-01〜AC-12 |
 
 ## 対象範囲
 
-要件の11画面、下表のAPI、登録前Lambda、通知送信Lambda、14テーブル、Terraform、デプロイ時のマイグレーションと初期データ、PWA、2人のE2Eを作る。
+この回で作るものは次のとおり。
+
+- 要件の14画面と、下の表のAPI
+- 1分ごとのCronの受け手
+- 本体のD1の17表と、Better Authの`auth_`の表
+- `yoin-send-log`のD1の3表
+- Voidの設定と、デプロイの流れ
+- PWAと、2人のE2E
 
 ## 対象外
 
-グループの作成・切替・退会・解散・除名の画面/API、削除ワーカー、ツアー作成、昔の公演をさかのぼって登録する機能（C-06）、公演編集、分配、参戦、グッズ、画像、通知先を手動で外す操作は作らない。この回の公演の下書きはツアーなしの公演1件に限る。確定済みで日付が過ぎた公演は一覧に出す（F-22）。
+この回は、次のものを作らない。
+
+- グループの作成・切替・退会・解散・外すの画面とAPI
+- Queuesの受け手、R2と画像
+- ツアーの作成、昔の公演をさかのぼって登録する機能（C-06）、公演の編集
+- 分配、参戦、グッズ
+- 通知先を外す操作、パスキーを足す・消す画面
+- 結合検証の環境、独自ドメイン
+
+この回の公演の下書きは、ツアーなしの公演1件に限る。
 
 ## 現状構成
 
-承認済みの構成は設計上のもので、配備済みのアプリや移行元のDBはない。Cognitoのメール送信元は従来の構成に含まれていなかった。
-
-```mermaid
-flowchart LR
-    App["PWAの計画"] --> C["Cognito"]
-    App --> A["HTTP APIとLambda"]
-    A --> N[("Neon")]
-    A --> S["Scheduler"] --> P["通知送信LambdaとWeb Push"]
-```
+アプリのコードも配置済みの資源も無い。`infra/terraform/`と`scripts/`にAWS向けのファイルが残っているが、使わない（片づけは作り直しの計画で行う）。
 
 ## 変更後構成
 
-結合検証と本番を同じTerraformから別々に作る。Cognitoプール、Neonプロジェクト、Schedulerのグループ、SSMのパスと実行権限を分離する。AWSとNeonはシンガポールに置く。
+Cloudflareの無料プランに、Worker 1つと、D1を2つ置く。
 
 ```mermaid
 flowchart LR
-    UI["PWA: CloudFrontとS3"] --> C["Cognito Essentials"]
-    C --> SES["Amazon SES: yoin専用の無料メールアドレス"] --> Inbox["利用者のメール"]
-    C --> L["登録前Lambda"] --> DB[("環境別Neon")]
-    UI --> GW["HTTP API: JWT検証"] --> A["api: Hono"]
-    A --> DB
-    A --> S["Scheduler: 送信・見張り・再送"]
-    S --> W["notification-sender"] --> DB
-    W --> Push["Web Push"] --> IOS["iPhoneのホーム画面のPWA"]
-    S --> Q["失敗キュー"]
-    W --> Q
+  subgraph phone[利用者の端末]
+    pwa[PWA<br>Service Worker]
+    key[パスキー<br>iCloudキーチェーン]
+  end
+  subgraph cf["Cloudflare（無料プラン、Worker 1つ）"]
+    assets[画面の静的ファイル]
+    routes["routes/ APIとBetter Auth"]
+    cron["crons/ 1分ごと"]
+    d1[("D1 yoin<br>本体")]
+    log[("D1 yoin-send-log<br>送れた記録")]
+    sec[Workersのsecret]
+  end
+  push[Web Pushの配信サービス]
+  pwa --> assets
+  pwa --> routes
+  key -.署名.-> routes
+  routes --> d1
+  cron --> d1
+  cron --> log
+  cron --> push --> pwa
+  routes -.読む.-> sec
+  cron -.読む.-> sec
 ```
 
-## データフロー
+| 資源 | 名前と設定 |
+|---|---|
+| Worker | `yoin`。URLは`https://yoin.<アカウントのworkers.devの名前>.workers.dev`（F-01a） |
+| D1 本体 | `yoin`。location hintは`apac`（F-04） |
+| D1 送れた記録 | `yoin-send-log`。本体と別のデータベースにして、本体を過去の時点に戻しても戻らないようにする（データモデルR22） |
+| Cron | `* * * * *`の1個（無料プランの5個のうち1個） |
+| secret | `BETTER_AUTH_SECRET`、`INVITE_TOKEN_SECRET`、`RECOVERY_TOKEN_SECRET`、`SETUP_PASSPHRASE`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT`、`MAINTENANCE`。値は大関さんが`void secret put`で置く |
+| 公開の値 | `VAPID_PUBLIC_KEY`。GitHub Actionsの変数（Secretsではない）に置き、画面のビルドで埋め込む |
+
+アカウントのworkers.devの名前は、大関さんが最初の配置の前にCloudflareの管理画面で決める。決めた値は、この表に書き足すPRを出す。Workerの名前とアカウントのworkers.devの名前は、最初の配置のあと替えない。
+
+`MAINTENANCE`は、ふだんは`0`にする。`1`にするとアプリを閉じ、リマインドも止める（下の「D1を過去の時点に戻したとき」）。
+
+配置先が1つなので、環境ごとの`config.json`はやめる。Voidは、自分のアカウントへ配置するときに配置先を1つしか持てない（Voidの文書`reference/cli/deploy.md`。動かしてはいない）。結合検証を作らないと決めた（論点fs-env）ので、この制約に合う。
+
+## ログインとユーザーを作る入口
+
+### パスキーとセッション
+
+ログインはBetter Authのパスキーのプラグインだけで行い、パスワードとメールの方式は入れない。rpIDはWorkerのホスト名（`yoin.<アカウント>.workers.dev`）、originは`https://`付きの同じ名前にする。
+
+セッションは365日もつ（F-06）。クッキーは同じアカウントのほかのWorkerに届かない形にする。
+
+| クッキーの設定 | 値 |
+|---|---|
+| 名前 | `__Host-`で始める |
+| 属性 | `Secure`、`HttpOnly`、`SameSite=Lax`、`Path=/` |
+| `Domain` | 付けない |
+
+Voidの文書に、`workers.dev`の名前ではクッキーが同じアカウントのほかのWorkerに届くとあるため、この形にする。この形をVoidのBetter Authの設定で取れるかは、実装の最初に確かめる。取れなければ、同じアカウントにほかのWorkerを置かないことで足りるので、その旨をこの節に書き足す。
+
+ログアウト（F-08）はBetter Authのセッションを消す。通知先は消さない。
+
+iPhoneのSafariとホーム画面のyoinは、セッションを別々に持つ。パスキーはiCloudキーチェーンで共有されるので、ホーム画面のyoinでは登録し直さずにログインできる（F-11）。
+
+### ユーザーを作れる3つの入口
+
+Better Authのユーザーを作れるのは、招待リンク・はじめの登録・戻すリンクの3つから来たときだけである（F-05）。
+
+どの入口も、同じ3段で進む。まず入口の確かめを通し、次にBetter Authのユーザーとパスキーを作り、最後にアプリの行を1つの`batch()`で書く。
 
 ```mermaid
 sequenceDiagram
-    participant P as Safari/PWA
-    participant C as Cognito
-    participant L as 登録前Lambda
-    participant M as Amazon SES
-    participant A as API Gatewayとapi
-    participant DB as Neon
-    opt 有効な招待から初回登録
-        P->>C: SignUp（メール、生の招待トークンをValidationDataに入れる）
-        C->>L: PreSignUp_SignUp
-        L->>DB: 招待を検査して登録開始枠だけを使う
-        L-->>C: 許可（参加回数は減らさない）
-        C->>M: 確認コードを送る
-        M-->>P: メールでコード
-        P->>C: ConfirmSignUp（コード）
-        C-->>P: Session
-    end
-    P->>C: InitiateAuth USER_AUTH（初回はSession、再ログインはEMAIL_OTP）
-    C-->>P: JWT（再ログインではコード検証後）
-    P->>A: GET /invites/{token}（JWT）
-    P->>A: POST /invites/{token}/accept（JWT）
-    A->>DB: ユーザー・自分用グループ・所属と残数を同時に確定
-    P->>A: GET /me と GET /me/groups（JWT）
+  participant P as 画面
+  participant A as routes（入口）
+  participant B as Better Auth
+  participant D as D1
+  P->>A: 入口の確かめ（招待トークン・合言葉・戻すトークン）
+  A->>D: 読んで判断する
+  A-->>P: 入口の札（10分、HttpOnlyのクッキー）
+  P->>B: パスキーを登録する（札を付けて）
+  B->>B: ユーザーを作る前のつなぎ目で札を確かめる
+  B->>D: auth_のユーザー・パスキー・セッション
+  P->>A: 参加する・オーナーになる・戻す
+  A->>D: batch（先頭に確かめの文）
 ```
 
-- 招待なしのS-01はSignUpを呼ばず、[USER_AUTH](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_InitiateAuth.html)のEMAIL_OTPだけを使う。招待付きでは生の招待トークンをValidationDataに入れてSignUpを試す。UsernameExistsExceptionなら同じ入力でUSER_AUTHへ進む。UserNotConfirmedExceptionなら、招待付きの場合だけ確認入力へ戻り、利用者の操作でResendConfirmationCodeを呼ぶ。招待なしなら招待リンクから開き直すよう案内する。PreventUserExistenceErrorsはENABLED。画面はアカウントの存在を表示しない。CognitoのSignUp自体では既存アドレスの応答を完全には隠せない。
-- [登録前Lambda](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-pre-sign-up.html)は、SignUpの`ValidationData`で受け取った生の招待トークンのハッシュを計算し、DBに保存したハッシュと照合する。招待トークンをアプリ側で暗号化せず、CognitoへはTLSで送る。登録前Lambdaはイベントの中身やトークンをログに書かない。
-- 同期Lambdaは招待トークンのハッシュ照合に加え、有効期限・取り消し・残り参加枠・グループ状態を条件に、登録開始数だけを1文のUPDATEで増やす。このLambdaのDBロールは招待検査と開始数の更新に必要な権限だけを持つ。登録開始数の上限は参加上限の3倍。開始数はCognitoの失敗やトリガー再試行で戻さない。招待は有効7日以内・参加1〜10人。参加のときだけ参加数を増やし、登録開始枠の不足で既存会員のログインや確認済みの招待参加は拒まない。枠を使い切ったときはオーナーが必要に応じてリンクを発行し直す。
-- プールは`AutoVerifiedAttributes=["email"]`を設定し、Cognitoに登録確認コードを送らせる。登録前Lambdaの応答では`autoConfirmUser`と`autoVerifyEmail`を立てない。利用者が届いたコードで確認するまでは未確認のままとする。[ConfirmSignUpのSession](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ConfirmSignUp.html)は初回ログインで再利用する。通常は確認メール1通、再ログインは[EMAIL_OTPのコード入力](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_RespondToAuthChallenge.html)。PreSignUp_AdminCreateUserは初期データ用に通す。
+#### 入口の札
 
-| SDKで受ける結果 | S-01の案内と次の操作 |
+入口を通った人には、10分だけ使える「札」を渡す。札でできるのは、パスキーの登録と、その入口の最後の要求だけで、アプリのほかのAPIは呼べない。
+
+| 札の決まり | 中身 |
 |---|---|
-| SignUpがUserLambdaValidationException | Lambdaの固定メッセージ末尾を完全一致で分類する。invite_unusableなら別の招待リンク、retry_laterまたは読めない文なら時間をおいて再操作。生の例外は出さない |
-| SignUpがLimitExceededException | 未確認アカウントが残る場合がある。後で同じアドレスと招待から続け、既存・未確認なら確認入力と明示的なコード再送へ進む。登録が成功したとは表示しない |
-| 送信操作がTooManyRequestsException、LimitExceededException、CodeDeliveryFailureException、または送信設定エラー | 要求数・送信量・配信の問題として「時間をおいてやり直してください」。自動再送しない。設定エラーが続く場合は運用側で調べる |
-| ConfirmSignUpまたはRespondToAuthChallengeがCodeMismatchException / ExpiredCodeException | 誤り・期限切れの案内からコード入力や再送へ。認証セッション切れはUSER_AUTHからやり直す |
+| 作り方 | 入口の種類・対象のID（招待リンク・戻すリンク・はじめの登録）・期限10分を、`BETTER_AUTH_SECRET`から作った鍵でHMACした値。D1には書かない |
+| 断るとき | 札が無いか、期限切れか、署名が合わなければ、ユーザーを作る前のつなぎ目（Better Authの`databaseHooks.user.create.before`）で断る |
+| 1枚で1人 | 札には乱数の`ticketId`を入れ、作ったユーザーに`ticketId`を持たせる。同じ`ticketId`で作ったユーザーがすでにあれば断る |
 
-確認メールの再送と既存アカウントへの認証コード送信は登録前Lambdaを通らない。PWAが直接呼ぶCognitoにGatewayの流量制限は効かず、既存会員への送信や共有SES枠に負荷がかかる残余リスクがある。AWS WAFは付けず、招待ごとの登録開始数の上限と、[SESの送信数のアラーム](#ログと監視)で始める。
+#### 要求ごとの認証の条件
 
-## API 設計
+認証の条件は、要求によって4通りに分かれる。
 
-HTTP APIからLambdaのHonoに渡す。Zodで未知キーと誤った型を拒む。以下の g は groupId。JSONはcamelCase、公演の日付・時刻は日本時間、期限は時差付きISO 8601で受けて+09:00で返す。[既存の入出力と共通契約](../api.md#全体の決まり)も適用する。
-
-| メソッドとパス | 入力 → 成功応答と認可 |
+| 要求 | 要るもの |
 |---|---|
-| GET /me、GET /me/groups | JWT → 自分のID・表示名・自分用グループID、または所属グループの一覧。起動時に使う |
-| GET /groups/{g}、GET /groups/{g}/members | メンバー → グループ名・種類・状態・オーナー情報、またはメンバーのID・表示名・参加日・役割 |
-| POST /groups/{g}/invite-links | id・expiresAt・maxUses → URL。共有グループのオーナーだけ |
-| GET /invites/{token} | JWT → グループ名・registered・参加可否・既存メンバーか。既存メンバーを先に扱う |
-| POST /invites/{token}/accept | 未登録者だけdisplayName必須 → 200とgroupId。既存メンバーには何も加えず同じ行き先を返す |
-| GET /groups/{g}/artists、GET /groups/{g}/venues | メンバー → 選択用の一覧。アーティストには色、会場には最寄り駅を含める |
-| GET /groups/{g}/concert-drafts、POST /groups/{g}/concert-drafts | 本人の一覧。作成はidとconcerts（1件、ツアーなし）→ 保存した下書き |
-| PATCH /groups/{g}/concert-drafts/{draftId}、DELETE 同パス | 作成者だけ。PATCHは公演1件の更新 → 下書き、DELETEは204 |
-| POST /groups/{g}/concert-drafts/{draftId}/confirm | 作成者だけ。concertIds（UUIDv7を1件、tourIdなし）→ 200と確定した公演ID。再送は同一グループに全IDがあれば同じ応答 |
-| GET /groups/{g}/concerts、GET /groups/{g}/concerts/{concertId} | メンバー → 日付順の公演一覧（when=upcomingまたはwhen=past）、または日付・題名・会場・時刻・公式URL・出演順の詳細 |
-| GET /groups/{g}/ticket-applications | メンバー → 申込一覧。concertIdとapplicant=meで絞れる。displayStatus、pickupAvailable、座席・整理番号、DBで記録したcreatedAtを含む |
-| POST /groups/{g}/ticket-applications | id・concertId・枚数・受取方法・初期状態（applied/won）・任意の受付名・期限3種・座席/整理番号 → 作った人が申込者となる申込 |
-| GET /groups/{g}/ticket-applications/{applicationId} | メンバー → 申込と計算した表示。本人だけにリマインドの種類・実際の時刻・状態を返す。分配は対象外 |
-| PATCH /groups/{g}/ticket-applications/{applicationId}、DELETE 同パス | 申込者だけ。PATCHは編集可能な欄の部分更新 → 申込、DELETEは204 |
-| PUT /groups/{g}/ticket-applications/{applicationId}/status | 申込者だけ。status → 200と申込。同じ状態なら何もしない |
-| GET /me/push-subscriptions、POST /me/push-subscriptions | 本人の通知先一覧。POSTはendpointとkeys（p256dh・auth）→ 登録行。他人と同じendpointなら409、既存IDを返さない |
+| 札を出す3本（`GET /invites/{token}`、`POST /setup/verify`、`GET /recovery/{token}`） | 何も要らない。セッションが無くても呼べる |
+| 未登録の人の最後の要求（初めての人の`accept`、`setup/complete`） | 札と、パスキーの登録でできたセッションの両方 |
+| `users`の行がある人が、別のグループの招待を受ける`accept` | ふつうのセッションと、招待リンクの確かめ。札は要らない（E-03） |
+| ほかのAPI | セッションと`users`の行 |
 
-- API Gatewayは環境のissuerとapp clientを照合する。apiはCognitoアクセストークン（token_use=access）だけを受け、JWTのsubをgroups.users.cognito_subから内部のuuidへ引く。Cognito subを内部の主キーにしない。JWTなしはGatewayの401、users行なしは招待の2本以外403 not_registered。CognitoのアクセスJWTはaudがなければGatewayがclient_idを使う（[JWT authorizer](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-jwt-authorizer.html)）。
-- グループIDと資源IDを組で照会する。非メンバー・不在・別グループIDは404 not_found。メンバーに見える資源があり、操作する権限だけが無いなら403 forbidden。グループの削除対象が不在なら再送でも404。初回が成功して応答が失われた場合も、画面は一覧を読み直す。他のグループでの存在は調べない。初回204、再送404でも副作用は重ならない。
-- 作成は画面が作るUUIDv7で重複を見分ける。初回201。同じ操作・グループ・認証済み作成者に属する同じIDと内容だけを再送として200にする。ただし、グループの全員が読めるアーティストと会場の作成には作成者を持たず、同じグループのメンバーなら、操作・グループ・ID・入力の一致で再送とする。他人の非公開下書きの同一IDには、本文の一致にかかわらず汎用の409 id_conflictを返し、作成者・内容・所属を出さない。通知先はendpointを重複の印にし、同じ本人なら200。PATCHの省略は維持、nullは任意欄だけを消す。APIで申込者IDを入力させない。
-- エラーはRFC 9457のapplication/problem+json。422 invalid_inputはerrorsに欄を入れる。409はinvite_unusable、already_exists、invalid_transition、group_closing、id_conflict、reminder_conflictを区別する。退会開始は403 account_closing。未知の失敗は内容を伏せて500 internal。Gatewayの401と流量制限の429は画面で別扱いにする。
-- 境界値は招待期限が現在より後で7日以内・1〜10回、枚数1〜99、受付名100字・座席と整理番号200字まで。空欄をnullにそろえ、文字数はUnicodeコードポイントで数える。
+戻す2つ（`recovery`と`setup/recover`）は、最後の要求を別に呼ばない。パスキーの登録の中で済ませる（下の「戻すリンク」）。
 
-## DB 設計
+#### 登録の途中で止まったとき
 
-Drizzleの表定義は文脈ごとのinfrastructureに置く。型・null・外部キーの全一覧は[データモデル](../data-model.md#テーブル)を正とし、以下の14表だけを初回SQLに含める。
+パスキーを登録したあと最後の要求が届かないと、`groups.users`から指されないBetter Authのユーザーが残る。これは1時間後にCronが消す（データモデルR24）。
 
-| スキーマ・テーブル | 主な列・制約と照会 |
+セッションの無い人の登録をBetter Authのパスキーのプラグインでどうつなぐかは、Voidに入っているBetter Authの版で実装の最初に確かめる。候補は、セッションなしの登録の設定を使う案と、入口でユーザーを作ってから札つきのセッションで登録する案の2つである。どちらでも、上の札とつなぎ目の確かめは入れる。
+
+### 招待から参加する（F-10、E-01、E-03、E-21、B-08）
+
+招待の画面（S-02）から参加までは、次の3段で進む。
+
+1. 招待の画面は`GET /invites/{token}`を呼ぶ。ログインしていなければ、このAPIは札を出す。画面はログインの画面（S-01）でパスキーを登録させてから、招待の画面に戻る。パスキーをすでに持つ人は、ふつうにログインする。
+2. `POST /invites/{token}/accept`は、1つの`batch()`で参加を書く（データモデルR24）。先頭の確かめの文で、期限・取り消し・回数・グループが`active`かを見る。続けて`users`・自分用グループ・メンバーを作り、`used_count`を足す。最後の1回に2人が同時に来ても、確かめの文で1人だけが通る（B-08）。
+3. 断られたら、この要求で作ったBetter Authのユーザーとパスキーを消してから`invite_unusable`を返す（E-21）。すでに`users`の行がある人のユーザーは消さない。
+
+### はじめの登録（F-03、E-19、B-14）
+
+最初のオーナーは、はじめの登録の画面（S-24）で合言葉を入れてなる。合言葉は大関さんが20文字以上の乱数で作り、Workersのsecretの`SETUP_PASSPHRASE`に置く。
+
+| 段 | 動き |
 |---|---|
-| groups.users / groups.groups | users(id PK, cognito_sub UNIQUE, display_name, status)、groups(id PK, owner_id, kind, status, name)。自分用はowner_idごとに1件（kindに対する部分一意索引） |
-| groups.members / groups.invite_links | members PK(group_id,user_id)、逆引き(user_id,group_id)。invite_links(id PK, group_id, token_hash UNIQUE, expires_at, max_uses, used_count, registration_starts, revoked_at)。参加数と登録開始数を別々に制限 |
-| catalog.artists / catalog.venues | id PKとgroup_id。artistsは(group_id,name_key) UNIQUEと12色のCHECK。名称検索はgroup_idを先頭にする |
-| catalog.tours / catalog.concerts | id PKとgroup_id。concertsのvenue_id/tour_idは同じグループへの複合FK。tour_idはnull可。公演一覧は(group_id,日付,id) |
-| catalog.concert_artists / catalog.drafts | concert_artists PK(concert_id,artist_id)、同じグループへの複合FK、出演順。draftsはJSONBのpayloadを持ち、(group_id,created_by,created_at)で一覧 |
-| ticket.ticket_applications | id PK。公演への同グループ複合FK、申込者、各期限、状態、枚数、受取方法、座席・整理番号。created_atは初回の挿入時にDBで記録し、編集・状態変更・作成の再送では変えない。CHECKで状態・受取方法・枚数を守り、(group_id,concert_id)、(group_id,申込者)で絞る |
-| notification.reminders | id PK、宛先、dedupe_key UNIQUE、send_at、recover_until、schedule_name UNIQUE、status CHECK、claimed_at、sent_at、attempts smallint NOT NULL DEFAULT 0（0〜4をCHECK）、retry_at、通知文とURL。宛先の索引 |
-| notification.push_subscriptions / notification.reminder_deliveries | subscriptionsのendpoint UNIQUE、user_id索引。deliveries PK(reminder_id,push_subscription_id)、status CHECK、attempt_no smallint NOT NULL（1〜4をCHECK）、attempted_at。FKで両親の削除時CASCADE、push_subscription_id側にも索引 |
+| 合言葉を確かめる | `POST /setup/verify`。本文は`{ passphrase }`。入れた値と`SETUP_PASSPHRASE`をそれぞれSHA-256にし、長さの同じ値として時間の変わらない比べ方で比べる |
+| 間違えた回数 | 5回続けて間違えたら1時間試せない（`too_many_attempts`）。合えば回数を0に戻す |
+| オーナーになる | 合えば札を出す。画面はパスキーを登録して`POST /setup/complete`を呼ぶ。本文は`{ groupId, groupName, displayName }` |
+| オーナーができたあと | `setup/complete`は、確かめの文で必ず断る（`setup_closed`）。はじめの登録の画面は、オーナー本人の戻し方（下の節）だけに使う |
+
+合言葉も、そのハッシュも、ログに書かない。間違えた回数と試せない期限は、`groups.setup_state`の1行に持つ。1時間に5回しか試せないので、総当たりでは当たらない。
+
+`setup/complete`は、1つの`batch()`でオーナーとグループを作る。先頭の確かめの文で、`groups.users`が0行であることを見る。続けて`users`、自分用グループ、仲間と使うグループ、2つのメンバーの行を作り、`setup_state.owner_user_id`を書く。
+
+2人が同時に正しい合言葉を入れても、確かめの文で1人だけが通る（B-14）。通らなかった人のBetter Authのユーザーは消し、`setup_closed`を返す。
+
+### 戻すリンク（F-05a、E-20、B-13）
+
+パスキーの端末をすべてなくしたメンバーは、オーナーが出す「戻すリンク」で新しいパスキーを登録し、前のアカウントに戻る。
+
+#### オーナーがリンクを出す
+
+オーナーは、メンバーと招待の画面（S-21）で、メンバーごとに`POST /groups/{g}/members/{userId}/recovery-links`を呼ぶ。本文は`{ id }`で、応答はリンクのURL（`/recover/{token}`）である。
+
+| 決まり | 中身 |
+|---|---|
+| 出せる人 | オーナーだけ。自分の分は出せない（`forbidden`）。相手が`active`なメンバーでなければ`not_found` |
+| トークン | `RECOVERY_TOKEN_SECRET`とリンクのIDからHMAC-SHA256で作る。`groups.recovery_links`にはハッシュだけを書く |
+| 前のリンク | 同じ`batch()`で、その人あての前のリンクの`revoked_at`に時刻を入れる |
+| 2回目 | 同じIDの2回目は同じURLを返す |
+
+#### 本人がリンクを開く
+
+本人は、アカウントを戻す画面（S-25）でリンクを開く。`GET /recovery/{token}`は、使えるかと表示名だけを返し、使えるなら札を出す。
+
+使った・切れた・出し直した・取り消したリンクは、どれも同じ`recovery_unusable`にする（E-20）。期限は`expires_at`ちょうどから使えない（B-13）。
+
+#### 新しいパスキーで戻る
+
+本人が札で新しいパスキーを登録すると、Better Authの同じユーザーに足される。戻す確定は、パスキーの登録を確かめる同じ要求の中（Better Authの登録のあとのつなぎ目）で済ませ、画面から別の確定の要求は送らない。
+
+確定の`batch()`には、次の3つを入れる。
+
+1. 確かめの文。期限・使用済み・取り消し・所属が`active`かを見る
+2. `used_at`の記入
+3. そのユーザーの古いパスキーと、今のセッションを除くセッションの削除
+
+確かめの文で断られたら、その要求で足したパスキーとセッションを消して`recovery_unusable`を返す。`POST /recovery/{token}/complete`は、応答が届かなかったときに結果を読み直すためだけに置き、何も書かない。
+
+#### 確定の前に止まったとき
+
+パスキーを足したあと`batch()`の前にWorkerが止まると、新しいパスキーが残る。残ったパスキーは、確定するまで何もできないようにし、11分たったらCronが消す。
+
+この片づけには、札を出した時刻`ticket_issued_at`を使う。
+
+| 場面 | `ticket_issued_at`の扱い |
+|---|---|
+| 札を出す | 空なら時刻を書く。すでに入っていれば書き換えず、最初の札の時刻を保つ |
+| 確定の`batch()`が通る | 空に戻す |
+| リンクを出し直す | 空に戻す。残ったパスキーとセッションは同じ`batch()`で消す |
+
+最初の札の時刻を保つのは、札を出し直しても、前の札で作ったパスキーとセッションが判定から外れないようにするためである。
+
+確定するまでの締め出しと、11分後の片づけは、次のとおりにする。
+
+| 仕組み | 決まり |
+|---|---|
+| APIの締め出し | セッションを確かめるとき、その人の戻すリンク（またはオーナーの戻しの`setup_state`）に`ticket_issued_at`が入っていて`used_at`が空で、セッションが`ticket_issued_at`より後に作られたものなら、`recovery_pending`の401で断る |
+| Cronの片づけ | `ticket_issued_at`から11分たっても`used_at`が空の行を見つけたら、そのユーザーのパスキーのうち`ticket_issued_at`より後に作ったものと、そのセッションを消す |
+
+### オーナー本人の戻し方（F-05b）
+
+オーナーが端末をすべてなくしたら、はじめの登録の画面で合言葉を入れる。オーナーがいるときに合言葉が合うと、`setup_state.owner_user_id`のユーザーに戻す札を出す。
+
+そのあとは戻すリンクと同じく、新しいパスキーの登録の中の`batch()`で古いパスキーとセッションを消す。止まったときの片づけも戻すリンクと同じで、札を出した時刻は`setup_state.ticket_issued_at`に書く。`POST /setup/recover`は結果を読み直すためだけに置く。間違えた回数の上限は、はじめの登録と同じものを使う。
+
+使ったあと、大関さんは`void secret put SETUP_PASSPHRASE`で合言葉を新しい値に替える。合言葉が漏れたままだと、ほかの人がオーナーになれるためである。
+
+## API設計
+
+APIはVoidの`routes/`にHonoの書き方で置き、Zodで知らないキーと誤った型を断る。[API設計の全体の決まり](../api.md#全体の決まり)も当てる。
+
+| 形の決まり | 中身 |
+|---|---|
+| JSONのキー | キャメルケース |
+| 公演の日付・時刻 | 日本時間 |
+| 期限 | 時差付きのISO 8601で受けて、`+09:00`で返す |
+
+下の表の`g`は`groupId`である。
+
+| メソッドとパス | 入力と、成功の応答と、できる人 |
+|---|---|
+| `GET /me`、`GET /me/groups` | 自分のID・表示名・自分用グループのID、または入っているグループの一覧。起動したときに使う |
+| `GET /groups/{g}`、`GET /groups/{g}/members` | メンバー。グループ名・種類・状態・オーナー、またはメンバーのID・表示名・参加した日・オーナーか |
+| `POST /groups/{g}/invite-links` | `{ id, expiresAt, maxUses }`。仲間と使うグループのオーナーだけ。応答はURL |
+| `GET /invites/{token}`、`POST /invites/{token}/accept` | 上の「招待から参加する」 |
+| `POST /setup/verify`、`POST /setup/complete`、`POST /setup/recover` | 上の「はじめの登録」「オーナー本人の戻し方」。`users`の行が無くても呼べる |
+| `POST /groups/{g}/members/{userId}/recovery-links` | 上の「戻すリンク」。オーナーだけ |
+| `GET /recovery/{token}`、`POST /recovery/{token}/complete` | 上の「戻すリンク」。`users`の行の確かめは、戻す相手の行で行う |
+| `GET /groups/{g}/held-reminders` | オーナーだけ。`held`のリマインドごとに、ID・宛先の表示名・期限の種類・届ける予定だった時刻・公演名。0件なら空の配列（止めたリマインドの画面の入口を出さない） |
+| `PUT /groups/{g}/held-reminders/{reminderId}` | `{ decision }`（`send`か`cancel`）。オーナーだけ。決めたあとの2回目は何も変えず200（E-22） |
+| `GET /groups/{g}/artists`、`GET /groups/{g}/venues` | メンバー。選ぶための一覧。アーティストは色、会場は最寄り駅を含む |
+| `GET`・`POST /groups/{g}/concert-drafts`、`PATCH`・`DELETE /groups/{g}/concert-drafts/{draftId}` | 本人の下書き。作るときは`id`と公演1件（ツアーなし）。直す・消すのは作った人だけ |
+| `POST /groups/{g}/concert-drafts/{draftId}/confirm` | 作った人だけ。`{ concertIds }`（UUIDv7を1件）。2回目は、全部のIDがこのグループにあれば同じ応答 |
+| `GET /groups/{g}/concerts`、`GET /groups/{g}/concerts/{concertId}` | メンバー。`when=upcoming`か`when=past`の公演一覧、または公演の詳細 |
+| `GET`・`POST /groups/{g}/ticket-applications` | 一覧は`concertId`と`applicant=me`で絞れる。作る人が申込者 |
+| `GET`・`PATCH`・`DELETE /groups/{g}/ticket-applications/{applicationId}`、`PUT …/status` | 見るのはメンバー。リマインドの予定は申込者にだけ返す。直す・状態を変える・消すのは申込者だけ |
+| `GET`・`POST /me/push-subscriptions` | 本人の通知先。ほかの人と同じ`endpoint`なら`already_exists` |
+
+### 認証と、断るときの応答
+
+認証はBetter Authのセッションで行い、セッションが無ければ401にする。セッションの`auth_user_id`から`groups.users`の行を引き、行が無ければ`not_registered`、`withdrawing`なら`account_closing`で断る。例外は、招待の2本、はじめの登録の3本、戻すリンクの2本だけである。
+
+グループの中の資源は、パスのグループIDと資源のIDを組で引く。メンバーでない、行が無い、別グループのIDは、どれも404 `not_found`にする。メンバーに見える資源で、操作する権限だけが無ければ403 `forbidden`にする。
+
+エラーはRFC 9457の`application/problem+json`で返す。前の版の`code`に、`too_many_attempts`（429）、`setup_closed`（409）、`recovery_unusable`（409）を足す。想定していない失敗は、中身を伏せて500 `internal`にする。
+
+### 2回目の作成
+
+作成は、画面が作るUUIDv7で2回目を見分ける。1回目は201、同じ操作・グループ・作成者・中身の2回目は200を返す。中身が違えば409 `id_conflict`にする。
+
+### 入力の境界
+
+空の文字列は`null`にそろえ、文字数はUnicodeのコードポイントで数える（B-09、B-12）。
+
+| 入力 | 境界 |
+|---|---|
+| 招待の期限 | 今より後で、7日以内 |
+| 招待の回数 | 1〜10 |
+| 枚数 | 1〜99 |
+| 受付名 | 100字まで |
+| 座席と整理番号 | 200字まで |
+
+## DB設計
+
+Drizzleの表の定義は各文脈の`infrastructure/`に置き、時刻はUTCのミリ秒の`integer`で持つ。型・null・外部キーの全部は[データモデル](../data-model.md#テーブル)を見る。
+
+D1にスキーマは無いので、表の名前は`groups_users`のように文脈の名前を頭に付ける（データモデルR19）。
+
+| 表 | この回で使う主な列と決まり |
+|---|---|
+| `groups_users`・`groups_groups`・`groups_members` | `users.auth_user_id`は一意。自分用グループはオーナーごとに1つ（`kind`の部分一意インデックス）。`members`は(group_id, user_id)がPK |
+| `groups_invite_links` | `token_hash`は一意。`used_count`と`max_uses`を確かめの文で比べる |
+| `groups_recovery_links` | データモデルのR26。`token_hash`は一意。札を出した時刻`ticket_issued_at`を足す |
+| `groups_setup_state` | この回で足す。`id`（常に1）、`failed_count`、`locked_until`（null可）、`owner_user_id`（null可）、`ticket_issued_at`（null可）。データモデルに足す |
+| `catalog_artists`・`catalog_venues`・`catalog_tours`・`catalog_concerts`・`catalog_concert_artists`・`catalog_drafts` | 前の版と同じ。`artists`は(group_id, name_key)が一意で、色は12色のCHECK。`drafts`の中身はJSONの`text` |
+| `ticket_ticket_applications` | 前の版と同じ。`seat_or_entry_number`を含む。`created_at`は最初の挿入のときだけ書く |
+| `notification_reminders`・`notification_push_subscriptions`・`notification_reminder_deliveries` | データモデルのとおり。`reminders`は(status, send_at)にインデックス。`status`に`held`を含む |
+| `auth_`の表 | Better Authが決めた形のまま（ユーザー・セッション・パスキーなど） |
+| `yoin-send-log`の`send_log` | (reminder_id, push_subscription_id, attempt_no)がPK、`sent_at`。90日より前の行はCronが消す。戻すリンクの`batch()`では、本体の書き込みの前に`revocations`も書く |
+| `yoin-send-log`の`send_log`の`send_at` | 送ったときの予約の`send_at`も持つ。突き合わせで、時刻を直す前の記録を数えないため |
+| `yoin-send-log`の`revocations` | 戻すリンクとオーナーの戻しで消したもの。`id`、`auth_user_id`、`kept_passkey_id`、`recovery_link_id`（null可）、`revoked_at`。戻したあと本体に当て直す。90日より前の行は消す |
+| `yoin-send-log`の`control` | `id`（常に1）、`paused_at`（null可）、`reconciled_at`（null可）。下の「D1を過去の時点に戻したとき」で使う |
 
 ```mermaid
 erDiagram
-    USER ||--o{ MEMBER : joins
-    GROUP ||--o{ MEMBER : includes
-    GROUP ||--o{ INVITE_LINK : issues
-    GROUP ||--o{ DRAFT : owns
-    GROUP ||--o{ CONCERT : shares
-    VENUE ||--o{ CONCERT : holds
-    TOUR o|--o{ CONCERT : groups
-    CONCERT ||--o{ CONCERT_ARTIST : lists
-    ARTIST ||--o{ CONCERT_ARTIST : appears
-    CONCERT ||--o{ TICKET_APPLICATION : has
-    USER ||--o{ TICKET_APPLICATION : applies
-    USER ||--o{ REMINDER : receives
-    USER ||--o{ PUSH_SUBSCRIPTION : registers
-    REMINDER ||--o{ REMINDER_DELIVERY : records
-    PUSH_SUBSCRIPTION ||--o{ REMINDER_DELIVERY : receives
+  USER ||--o{ MEMBER : joins
+  GROUP ||--o{ MEMBER : includes
+  GROUP ||--o{ INVITE_LINK : issues
+  USER ||--o{ RECOVERY_LINK : recovers
+  GROUP ||--o{ DRAFT : owns
+  GROUP ||--o{ CONCERT : shares
+  VENUE ||--o{ CONCERT : holds
+  CONCERT ||--o{ CONCERT_ARTIST : lists
+  ARTIST ||--o{ CONCERT_ARTIST : appears
+  CONCERT ||--o{ TICKET_APPLICATION : has
+  USER ||--o{ REMINDER : receives
+  USER ||--o{ PUSH_SUBSCRIPTION : registers
+  REMINDER ||--o{ REMINDER_DELIVERY : records
+  PUSH_SUBSCRIPTION ||--o{ REMINDER_DELIVERY : receives
 ```
 
-招待参加はユーザー作成・自分用グループ・所属・利用回数を1トランザクションで更新する。対象の招待行とグループの状態を確認し、所属を新規に加えた場合だけ、期限内かつ残数が正の条件付きUPDATEで1回加算する。0行なら全体を戻す。競合した同じ人はコミット後に既存所属を確認し、残数を減らさない。確定した公演と下書き削除も1トランザクション。
+書き込みは、先に読んで判断し、`batch()`の先頭に確かめの文を置いて流す（データモデル「書き込みの順番」、R20）。確かめの文は、条件が外れたら失敗する文で、`batch()`全体を取り消させる。
 
-申込削除では先に未送信のリマインドを取り消し、申込を削除する。Pushの404/410は通知先とその子の送信結果を削除する。退会・解散・匿名化のAPIやジョブ表は今回作らない。SESのアカウント単位の抑止リストは、Cognitoとは別に宛先が残り得る。後の退会処理で消す順序は[データモデル](../data-model.md#退会の手順yadr-04)に記録する。公開前のプライバシーポリシーにも、シンガポールのAmazon SESがログインメールの宛先を扱うことを書く。
+申込を直す・状態を変える・消すときは、申込とリマインドの書き込みを同じ`batch()`に入れる。
 
 ## フロントエンド設計
 
-React＋Vite、React RouterとTanStack Query、Honoクライアントを使う。認証されたセッションごとにQueryClientを作り、キーにユーザーIDとグループIDを含める。ログアウト・アカウント交代では通信を中断し、キャッシュを消して別のQueryClientに替える。完了が遅れた旧応答は新しいキャッシュに入らない。Service Workerは認証済み応答を保存しない。S-01の招待先や通知からの戻り先は同一オリジンのパスに限る。
+画面はReact＋Vite、React RouterとTanStack Query、Voidの`void/client`で作る（論点`routing-data-tools`の推奨。この設計書の承認で決める）。
+
+### キャッシュと戻り先
+
+QueryClientはセッションごとに作り、キーにユーザーIDとグループIDを入れる。ログアウトしたら通信を止め、キャッシュを消して別のQueryClientにする。
+
+Service Workerは、認証の要る応答と、招待・戻すリンクの画面をキャッシュに置かない。通知からの戻り先とログインのあとの戻り先は、同じオリジンのパスに限る。
+
+### ログインと、アカウントを作る画面
+
+| 画面 | 出すもの |
+|---|---|
+| ログイン（S-01） | パスキーでログインするボタン。招待か戻すリンクから来たときだけ、パスキーを登録するボタンも出す |
+| はじめの登録（S-24） | 合言葉の欄。オーナーがまだいないときだけ、グループの名前と表示名の欄も出す |
+| アカウントを戻す（S-25） | 表示名と「パスキーを登録して戻る」ボタンだけ |
+| 止めたリマインド（S-26） | 入口は、メンバーと招待の画面（S-21）に出す。オーナーが`GET /groups/{g}/held-reminders`を呼んで1件以上あるときだけ |
+
+パスキーに対応していない端末や、本人が登録を取り消したときは、ログインの画面にその旨を出してやり直せるようにする（E-16）。
+
+### ホーム
+
+ホームは、自分の申込とまだ来ていない期限から「次にすること」を作り、一番近い期限を帯にする。
+
+通知先が0台か、`lastFailedAt`の入った端末があれば、通知先の画面（S-23）への帯を出す。通知の許可を断られても、この帯は残す。
+
+一番近い公演は`when=upcoming`で探す。中身が無いときは、次の文言を出す（F-17a）。
+
+| 場面 | 出すもの |
+|---|---|
+| これからの公演が無い | 「これからの公演はありません。」と、「公演を追加する」ボタン（公演の下書きの画面（S-08）へ） |
+| 次にすることが無い | 「次にすることはありません。」 |
+
+公演まで7日ちょうどのときは、残り時間を出さず、7日を切ってから出す（B-07）。
+
+### 公演の券と通知
+
+公演の券に出す座席は、本人の入金済みか受取済みの申込のうち、座席が空でないものから選ぶ（F-24）。受取済みを先にし、同じ状態なら`createdAt`が新しいもの、同じ時刻ならIDの小さいものを使う。
+
+通知はDeclarative Web Pushの形で送り、対応していない端末ではService Workerが出す。押すと同じオリジンの申込のURLを開く。消した申込なら、見つからない画面を出す（E-09）。
 
 ```mermaid
 flowchart LR
-    A["Safariで招待を開く"] --> B["コードを入れて参加"] --> C["ホーム画面に追加"]
-    C --> D["ホーム画面のyoinで再ログイン"] --> E["通知を許可し端末を登録"]
-    E --> F["通知を押す"] --> G["未ログインならログイン"] --> H["申込の詳細"]
+  A["Safariで招待を開く"] --> B["パスキーを登録して参加"] --> C["ホーム画面に追加"]
+  C --> D["ホーム画面のyoinでパスキーでログイン"] --> E["通知を許可して端末を登録"]
+  E --> F["通知を押す"] --> G["切れていればログイン"] --> H["申込の画面"]
 ```
 
-- Safariとホーム画面のPWAは別のログイン状態を持つ。リフレッシュトークンは365日。Cognitoの失効を有効にしてログアウト時はRevokeTokenを呼び、成否にかかわらず端末の保持分を消す。Gatewayの署名検証は発行済みのアクセストークンの失効を見ないため、最長1時間の有効期限までは使える前提とする。通知先はログアウトでは消さない。Service WorkerにJWTを渡さず、招待トークンや認証画面もオフラインキャッシュに置かない。
-- ホームは自分の申込と有効な期限から「次にすること」を作り、最も近い期日を帯にする。通知先0台またはlastFailedAt付きの端末があればS-23へ案内する。許可拒否でも帯を残す。
-- ホームはwhen=upcomingで最も近い公演を探す。公演一覧（S-06）はwhen=upcomingとwhen=pastを使い、自分の下書きも別に出す。日本時間の今日の公演は「これから」に入れる。
-- これからの公演がないときは、券の代わりに「これからの公演はありません。」と表示する。「公演を追加する」ボタンで公演の下書き（S-08）を開く。次にすることがないときは「次にすることはありません。」と表示し、この欄にボタンは置かない。期限の帯も出さない（F-17・F-17a）。
-- 7日ちょうどはカウントダウンなし。座席を出せる自分の申込が複数なら、座席が空でない入金済み/受取済みのうち、受取済みを優先する。同じ状態では申込一覧のcreatedAtが新しいものを選び、同時刻ならIDの昇順で最初の1件を使う。
-- 通知はDeclarative Web Pushで出し、未対応端末はService Workerで表示する。開くのは同一オリジンの申込URLだけ。削除済みなら見つからない画面を出す。
+## リマインドの送り方
 
-## バックエンド設計
+### 予約を合わせる
 
-Lambdaの入口で依存を手動で組み立て、Honoから文脈の公開関数を呼ぶ。domainはI/OやDrizzleを知らない。applicationは集約の生成と再構築を分け、infrastructureが変換する。SQLは各文脈内に閉じる。メンバー検査と書き込みロックを先に取り、文脈をまたぐ処理には同じトランザクションを明示的に渡す。チケットは通知の公開関数を呼ぶが、通知はチケットを読まない。
+申込の4つの書き込みは、どれも同じ1つの関数で、あるべき予約に合わせる（`docs/api.md`の「申込とリマインド」）。予約は`notification_reminders`の行を書くだけにし、1件ごとの予約は作らない（データモデルR22）。
 
-申込の4種類の書き込みは同じ予約調整関数を使う。appliedは結果発表、wonは日本時間の前日20時と締切3時間前、paidは受取開始、lost/picked_up/削除では予約なし。期限が空なら作らない。予定時刻を過ぎた場合は期限前だけ原則1分後に予約する。入金では1分後の予約と[Schedulerの60秒精度](https://docs.aws.amazon.com/scheduler/latest/UserGuide/schedule-types.html)による起動幅（60秒未満）が締切前に収まらない場合、該当する通知は作らない。状態も期限も変わらなければ、通知文・計算済み時刻・送信済みの状態を変えない。期限切れと受取開始はその時刻ちょうどから表示に反映する。
+申込の状態ごとに、作る予約は次のとおり。期限が空なら作らない（B-03）。
+
+| 申込の状態 | 予約 |
+|---|---|
+| `applied` | 結果発表 |
+| `won` | 前日20時と、締切の3時間前 |
+| `paid` | 受取開始 |
+| `lost`・`picked_up`・消した申込 | なし |
+
+届ける時刻をすでに過ぎていたときは、送信期限より前なら行を書き、次のCronで届ける。送信期限は届ける時刻の1時間後で、入金はそれと締切の早いほうにする。送信期限ちょうど以降なら書かない（F-34、B-01）。
+
+時刻を直すときは、`status = 'scheduled'`の行だけを条件付きで更新する。条件に合わなかったら、もう送り始めているので、申込の変更ごと取り消して409 `reminder_conflict`を返す。画面は申込を取り直してやり直せる。
+
+状態も期限も変わらない予約は、文・時刻・送った状態を変えない（B-04）。旧期限の行は`dedupe_key`を`history:<旧予約ID>`に移し、要るときだけ元のキーで別IDの行を作る。
+
+通知の文は予約のときに作って、行に保存する（F-37、F-37a）。
+
+### Cronが送る
+
+1分ごとのCronが、送る時刻の来た予約を引き受けて、端末ごとにWeb Pushで送る。
 
 ```mermaid
 sequenceDiagram
-    participant A as apiと予約調整
-    participant S as Scheduler
-    participant D as Neon
-    participant W as notification-sender
-    A->>S: 変更後に必要な予約と見張りを作る
-    alt 予約の差分と申込を確定
-        A->>D: 予約の切り替えまたは追加と申込を同時に確定
-        A->>S: 置き換えた未送信の組だけを削除
-    else 未送信の予約を同時に引き受けた、または保存失敗
-        A->>S: 新しい組を後片付け
-        Note over D,S: 古い組と元の期限を残す
-    end
-    S->>W: 送信予約名・種別・回数を渡す
-    W->>D: 有効名と状態が一致し、送信期限前の行だけを引き受け
+  participant C as crons/（1分ごと）
+  participant D as D1 yoin
+  participant L as D1 yoin-send-log
+  participant P as Web Push
+  C->>L: control.paused_at を見る（止めていれば何もしない）
+  C->>D: 引き受け（UPDATE ... RETURNING、最大3件）
+  loop 端末ごと（1回で最大5台）
+    C->>D: 期限と claimed_at を確かめる
+    C->>P: 送る
+    C->>L: 送れたら先に記録
+    C->>D: batch（sent と last_failed_at を空に）
+  end
+  C->>D: 再送・続き・完了（claimed_at が同じ値のときだけ）
 ```
 
-- 新規・変更は送信と見張り（10分後）を先に作る。世代nは環境別の`notification.reminder_generation_seq`から発行する。予約名のidはハイフンなし32桁のUUID、nは正のbigintを小文字36進数で表す。送信と見張りは`reminder-<id>-<n>`と`reminder-watch-<id>-<n>`。差分を計算した時点でscheduledだった行だけを、旧名かつscheduledの条件付きUPDATEで切り替える。競合で0行なら申込変更も戻し、新しい組だけを消し、409 `reminder_conflict`を返す。画面は申込を取り直して編集をやり直せる。コミット結果が不明なら、別の接続で有効名を確かめるまで削除しない。
-- 状態や期限が変わったとき、差分計算時点でscheduledで後継も必要なら、上の切り替えで現行キーを保つ。それ以外で旧予約が新しい期限を表さなくなったら、申込と同じトランザクションで旧行のdedupe_keyを`history:<旧予約ID>`に移す。不要なscheduledは先にcanceledにする。計算時点でsending・sent・canceledの行はその状態を保ち、引き受け済みの行は自分の処理を終える。後継が必要なときだけ元のキーで別IDを挿入し、再送回数・送信結果を引き継がない。申込詳細は元のキーだけで読み、旧期限の送信結果を返さない。同じ期限の再送信や受付名だけの編集では履歴化も作り直しもしない。
-- 送信・見張り・再送にはDB上の有効名を渡す。旧名や未確定の名前では送らない。初回予約がDB確定前に起動した場合も、確定後に起動する見張りがscheduledを引き受ける。送信と再送は起動後に自動削除する。見張りは同名で時刻を動かすため自動削除を無効にし、不要になった時点で明示的に消す。古い見張りは自分の世代の予約だけを消す。
-- 引き受けは状態とclaimed_atも見る条件付きUPDATE。新しい回だけはattempts < 4を条件に1増やす。見張りはclaimed_atが10分以上古ければ同じ回を再開し、10分未満ならclaimed_atの10分1秒後に見張りを移す。作成と移動で同じ設定を使い、[UpdateSchedule](https://docs.aws.amazon.com/scheduler/latest/APIReference/API_UpdateSchedule.html)にもターゲット、実行ロール、入力、DLQ、再試行設定、FlexibleTimeWindow=OFF、自動削除なしを毎回渡す。
-- 初回・再送・見張りのすべてで、引き受けの条件付きUPDATEに「DBの現在時刻 < recover_until」を入れる。引き受け後も端末ごとにWeb Push要求の直前に時刻を確認し、期限ちょうど以降は新たに要求も再送予約も作らない。その回で一時失敗があっても、期限前なら残りの対象端末への送信を続ける。
-- 送信期限は通常、計算した送信時刻の1時間後。入金はその時刻と入金締切の早い方とする。チケットが期限を`recover_until`に保存し、通知側はチケットを読まない。
-- DB障害中に送信と見張りが再試行を使い切ると、予約が未完了のまま残る。申込詳細を読むときに、DB時刻が`recover_until`ちょうど以降なら、`scheduled`と`sending`を表示上の完了として扱う。配信サービスに1台分も受理された記録がなければ「送信なし」と出し、記録があれば送信済みの表示を保つ。DBを更新せず、送り直しもしない。
-- 端末の最新結果に、その結果を記録した回の`reminders.attempts`を`attempt_no`として保存する。`sent`・`gone`の端末は以後送らない。見張りが同じ回を再開するときは、同じ`attempt_no`で`failed`を記録済みの端末も飛ばし、その回で結果がない端末に送る。次の再送回では回数が増えるため、前の回で`failed`だった端末を再び試せる。端末ごとの成功とlast_failed_atの解除、初回の成功時刻sent_atは同じトランザクションで保存する。404/410の端末はgoneとして扱ってから削除する。通知先が0台なら再送待ちにせず、完了状態sentにする。申込詳細はsent_atから得たsentToAnyDeviceを使い、1台分も受理されなかった完了を「送信なし」と表示する。後から通知先を足しても過去の通知は出さない。
-- その回で全対象端末を試すか、実際に期限に達して残りの送信を止めたあとに、次の再送を判断する。一時失敗が残り、再送時刻が送信期限より前なら5分後に3回まで再送する。`reminder-retry-<id>-<n>-<回数>`で世代と回ごとの重複を止める。停止後に作り直すとき同名があれば、入力も一致する既存予約の時刻を使う。再送予約と見張り（再送の10分後）を確保してから、retry_atを保存しclaimed_atを空にする。再送はretry_at以降、attempts < 4かつ入力の回数がattemptsの次のときだけ引き受ける。次の再送が来なければ見張りが同じ条件で引き受ける。引き受け時はretry_atを空にする。再送回数を使い切ったか、次の再送時刻が期限ちょうど以降なら、再送を作らず完了処理に進む。
-- 再送を使い切ったときと期限で打ち切ったときは、同じ完了処理を使う。有効名・状態・引き受け時刻を照合し、送信中の実行または条件付きUPDATEで引き受けた1実行だけが完了処理を行う。このための引き受けではPushを送らず、attemptsも増やさない。最新の結果がfailedのままの登録済み端末だけにlast_failed_atを保存する。成功・gone・未試行の端末は対象外。該当端末があればC-4へ通知してから状態をsentにし、retry_atとclaimed_atを空にし、その世代の残りの予約を消す。送信結果とsent_atは変えない。通知に失敗したら完了にせず、見張りが10分以上経過した引き受けを取り直し、Pushせずに完了処理を再開する。C-4の同一予約に対する重複報告は許す。Web Pushの受理直後に停止した場合も重複を許す。
+引き受けと再送と完了は、データモデル「送り方」のとおりにする。引き受けた`claimed_at`の値を印にし、その回の書き込みはどれも、印が変わっていないことを条件にする。
+
+#### 1回で送る量
+
+1回のCronで引き受ける行は3件まで、送る端末は合わせて5台までにする（仮の値）。5台に達したら、`retry_at`はnullのまま`claimed_at`をnullに戻して止め、次の分のCronが同じ回の続きを送る。
+
+この値は、パスキーの確かめとWeb Pushの暗号のCPU時間を大関さんの手元で計ってから決め直す（非機能要件）。
+
+#### 送れたとき、送れなかったとき
+
+| 結果 | 動き |
+|---|---|
+| 送れた | まず`send_log`に書く。書けたときだけ本体の`reminder_deliveries`を`sent`にし、同じ`batch()`で`push_subscriptions.last_failed_at`を空にする |
+| 404・410 | その端末を`gone`として扱い、通知先の行を消す（E-11） |
+| 429・5xx・通信の失敗 | 一時失敗にする |
+
+その回で一時失敗が残り、5分後が送信期限より前なら`retry_at`を入れる（3回まで）。次の再送ができなければ完了処理に進み、失敗が残った端末にだけ`last_failed_at`を書く。オーナーには知らせない（F-18、論点fs-failed-notice）。
+
+#### 端末が無い人と、期限を過ぎた予約
+
+端末が1台も無い人の予約は、引き受けた回に端末0台で完了し、`sent`にする（B-10）。`sent_at`はnullのままなので、申込の画面では「送信なし」と出す。あとで端末を登録しても、過去の通知は送らない。
+
+申込を読むとき、DBの今の時刻が`recover_until`ちょうど以降の`scheduled`・`sending`は、表示上だけ完了にする。行は更新しない。
+
+#### 毎時の片づけ
+
+Cronは毎時0分にだけ、次の3つを片づける。
+
+- 残ったBetter Authのユーザーを消す
+- 使い終わって7日たった戻すリンクを消す
+- 90日より前の`send_log`を消す
+
+### D1を過去の時点に戻したとき（F-36a）
+
+本体のD1を戻すのは大関さんで、手でSQLは流さない。戻しているあいだと、戻したあとの突き合わせが終わるまでは、アプリ全体を閉じる。
+
+閉じるのは、戻すと消したはずのパスキーとセッションも本体に戻るためである。突き合わせで消し直すまで、古い端末からログインさせない。
+
+APIとBetter Authのログインは、次のどちらかのとき、すべて503 `maintenance`で断る。
+
+- `MAINTENANCE`が`1`のとき
+- `control.paused_at`があって、`reconciled_at`が空のとき
+
+戻しても消えてはいけない記録は、`yoin-send-log`に置く。
+
+| `yoin-send-log`の表 | 持つもの |
+|---|---|
+| `control` | 止める印（止めた時刻と、突き合わせを終えた時刻） |
+| `send_log` | 送れた記録 |
+| `revocations` | パスキーを消した記録 |
+
+#### 戻す手順
+
+1. 大関さんが`void secret put MAINTENANCE 1`で止める。APIはすぐ503を返し始める。次のCronは、`paused_at`が空か`reconciled_at`が入っていれば、`paused_at`に今の時刻を書き、`reconciled_at`を空にする。こうすると、2回目の戻しでも突き合わせが要る状態になる。以後は送らない。
+2. 大関さんがCloudflareの管理画面かcf CLIで、本体のD1（`yoin`）だけを戻したい時点に戻す。
+3. 大関さんが`void secret put MAINTENANCE 0`で再開する。次のCronは、`paused_at`があって`reconciled_at`が無いとき、送る前に突き合わせをする（下の「突き合わせ」）。終わったら`reconciled_at`を書く。
+4. 突き合わせは1回のCronで20件ずつ進め、全部を終えるまで送らない。10人の規模では数分で終わる（推測）。そのあいだ、ほかの予約の送信も遅れる。送信期限を過ぎた予約は送らない。
+5. オーナーは止めたリマインドの画面（S-26）で、1件ずつ送るか送らないかを決める（下の「オーナーが決める」）。
+
+#### 突き合わせ
+
+突き合わせは、まず`revocations`を本体に当て直し、そのあと予約を合わせる。
+
+`revocations`の当て直しでは、戻した先の時点のあとで消したパスキーとセッション（戻すリンクとオーナーの戻しで消したもの）を、もう一度消す。使った戻すリンクも、`revocations`に残したリンクのIDで`used_at`を入れ直す。
+
+予約は、`send_log`の記録で次のように分ける。
+
+| 予約の様子 | 移す先 |
+|---|---|
+| 対象の端末すべてに記録がある | `sent` |
+| 記録が一部の端末にしか無い | `held` |
+| `send_at`が`paused_at`以前の`scheduled`・`sending` | `held` |
+
+記録がある端末は、本体でも`sent`にする。`held`と`sent`に移すときは、同じ更新で`retry_at`と`claimed_at`を空にする（`retry_at`は`sending`の行だけが持てる）。
+
+`send_log`の行は、その予約の今の`send_at`と同じ`send_at`のものだけを数える。未送信の予約の時刻を直すと、同じIDのまま`send_at`が変わる。直す前の時刻で送った記録を、直したあとの予約の記録として数えないためである。
+
+戻した先の時点より前に送信時刻があって、戻した時点ですでに送っていた予約も、記録が一部にしか無ければ`held`になる。届いたかを確かめられないものは、オーナーに決めてもらう形に寄せる。
+
+#### オーナーが決める
+
+| 決定 | 動き |
+|---|---|
+| `send` | データモデルの手順5のとおり、送信期限を今から1時間後にして`scheduled`か`sending`に戻す。`send_log`で`sent`にした端末には送らない |
+| `cancel` | `canceled`にする |
+
+`send`は、その予約の`dedupe_key`が`history:`で始まらない（今の期限を表している）ときだけ受ける。そうでなければ`cancel`として扱う。
+
+`held`のあいだに申込者が申込を直したときは、予約を合わせる関数が`held`の行も扱う。`scheduled`の行と同じく、取り消し・時刻の変更・履歴への移動の対象にする。入金済みにしたあとで、古い入金期限のリマインドを送ることはない。
 
 ## エラー処理
 
 | 観点 | 設計 |
 |---|---|
-| リトライ | Schedulerの送信不能は最大2回、Lambda非同期実行の関数エラーも最大2回、各イベントの保持は最大1時間。サービスのバックオフに従い、使い切り・期限切れはC-4へ送る。Web Pushの業務上の再送3回は5分固定。Cognitoのメール送信要求を画面で自動再送しない |
-| タイムアウト | 登録前LambdaはAWSの5秒制限より短い4秒。SSMのDB接続情報は初期化時に取得して実行環境内に保ち、DB書き込みに最大3秒を充てる。初期化と処理を含む応答枠も超えないよう残り時間で打ち切る。apiは20秒、DB文とScheduler SDKは各3秒、送信Lambdaは60秒、端末のPush要求は各5秒を上限とする |
-| 冪等性 | 作成ID、招待の所属PK、通知先endpoint、予約の世代・回数と端末ごとの送信記録を使う。Schedulerの再呼び出しは同名・同じ入力に限る |
-| 部分失敗 | 予約作成とDB確定の一方だけが成功しても、旧予約を先に消さず、有効名で送信を止める。取消・削除はDBから確定し、その後AWS側を消す |
-| 縮退 | SESが止まれば新規登録・再ログインに時間をおく案内を出す。既にログイン済みの操作は継続できる。予約を保存できなければ申込の変更を成功と返さない。Pushが届かなくてもアプリから期限を確認できる |
+| 再試行 | Web Pushの再送は5分おきに3回まで。Cronが途中で止まったら、`claimed_at`から10分後に引き受け直す（E-12）。画面は作成の要求を同じIDで送り直せる |
+| 時間の上限 | 1回の要求とCronのCPU時間は10ミリ秒まで（無料プラン）。Web Pushの1回の要求は5秒で打ち切る。待ち時間はCPU時間に入らない |
+| 2回届いたとき | 作成のID、招待の所属のPK、通知先の`endpoint`、引き受けの印、端末ごとの送信結果で、同じ結果にする |
+| 一部だけ失敗 | `send_log`に書けなければ本体を`sent`にしない。送れたのに記録が無いことは起きるが、記録があるのに送っていないことは起きない |
+| 無料の上限に当たった | その日の残りの要求は断られる。画面は「時間をおいてやり直してください」と出す（E-16）。リマインドは、上限が戻ったあと送信期限より前なら送る |
 
 ## ログと監視
 
-Powertoolsの構造化ログを7日保存する。操作種別・要求ID・エラー分類・回数・経過時間のみとし、招待URLやヘッダー、氏名、メール、JWT、Push endpointと鍵、通知文を記録しない。Gatewayのログに実パスや本文を入れない。
+ログには、操作の種類・要求のID・エラーの分類・回数・かかった時間だけを書く。次のものは書かない。
 
-ADR-0006に従い、Budgetsは月5ドル、Gatewayは20回/秒・瞬間40回。CloudWatchはC-4キューの可視件数>0を環境別2個、API Gatewayの要求数1時間125件を環境別2個、Lambdaの起動数1時間150件をリージョン合計1個で見る。
+- 名前、合言葉、トークン、招待と戻すリンクのURL、クッキー
+- Pushの`endpoint`と鍵、通知の文、申込の中身
 
-C-4は`ApproximateNumberOfMessagesVisible`を使う。[SQSは使われていないキューの指標を送らなくなる](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/monitoring-using-cloudwatch.html)。[CloudWatchの既定では全評価点が欠測すると`INSUFFICIENT_DATA`になる](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/alarms-and-missing-data.html)ため、C-4では`TreatMissingData=notBreaching`を設定し、欠測はしきい値を超えていない点として扱う。
+ログはWorkersのログを使い、保存期間は無料プランのままにする。全体の失敗（Cronが止まった、上限に当たった）は、大関さんがCloudflareの管理画面で見る（論点fs-failed-notice）。
 
-環境別の同じ標準SQSキューに、SchedulerのTarget.DeadLetterConfig、送信Lambda非同期呼び出しのOnFailure、一時失敗が残ったまま送信を終えたアプリ通知を送る。Schedulerターゲット実行ロールとLambda実行ロールには、それぞれ対象キューだけのsqs:SendMessageを付ける。受信メッセージはSchedulerの属性、LambdaのrequestContext/requestPayload、アプリ通知の種別で分ける。予約の入力と報告には通知ID・有効名・種別・回数だけを入れる。 ログや対処記録には宛先・通知文を書かない。
-
-キューにメッセージが入ったら、C-4のアラームがオーナーにメールで知らせる。ALARM中は次の失敗ごとにメールが届くとは限らない。キューのメッセージは4日で自動的に消える。キューからの再送や手動復旧は行わず、オーナーは必要に応じて本人に伝える。
-
-SchedulerやLambdaが失敗キューへの書き込み自体に失敗しても、その失敗ではキューの件数が増えず、C-4の警報は鳴らない。[オーナーの判断](https://github.com/oze-xxbumpxx/yoin/pull/32#issuecomment-7118722857)に従い、書き込みの失敗は監視対象外とする。通知が届かなかったという問い合わせを受けたら、端末ごとの送信結果と残っているログを調べる。
-
-SESは共有のアカウント／リージョンで、1時間のSendが20件以上ならアラーム1個で知らせる。オーナーに宛先も本文もない警報を送る。宛先入りのSESイベント通知は構成しない。
-
-恒久バウンスがあった宛先と、SESが苦情報告を受け取った宛先は、SESの[アカウント単位の抑止リスト](https://docs.aws.amazon.com/ses/latest/dg/sending-email-suppression-list.html)に自動登録し、以後の送信を止める。AWSによると、2019年11月25日より後にSESを使い始めたアカウントでは両方が既定で有効になる。利用開始時期や既存の設定に頼らず、Terraformの`aws_sesv2_account_suppression_attributes`で`suppressed_reasons = ["BOUNCE", "COMPLAINT"]`を明示する。結合検証と本番で共有するため、AWSアカウントとリージョンの組につき1つだけ管理する。オーナーが本人と宛先を別経路で確認し、原因が解消した場合のみ解除する。問い合わせや監視ログに抑止対象の一覧を転記しない。
-
-[AWS公式文書](https://docs.aws.amazon.com/ses/latest/dg/sending-email-suppression-list.html)によると、Gmailは苦情報告をSESに渡さない。Gmailで受信者が迷惑メールとして報告しても、`COMPLAINT`を有効にしただけでは抑止リストに自動登録されない。
-
-SESの送信割当超過はこのアラームでは検知できない。Cognito経由の画面では原因を断定せずE-16の案内を出す。問い合わせを受けたオーナーは時刻と操作種別から、SESの送信割当とCognitoのSignUpThrottles・SignInThrottlesを切り分けて確認する。Cognitoの指標はSESの拒否件数とはみなさない。
+送れなかった端末は、本人のホームの帯と通知先の画面で知らせる。オーナーにもメールにも知らせない。
 
 ## セキュリティ
 
-Cognitoのプール・発行者・アプリクライアントを環境で分離する。SSMの秘密は必要な関数だけが読み、VAPID公開鍵をPWAへ配る。HMACから作る元の招待トークンはDBにハッシュだけを保存する。秘密の値・送信元メールアドレスの実値をコード、作業ログ、Terraformソースに書かない。招待画面にReferrer-Policy: no-referrerを設定し、外部リソースへURLを送らない。CORSはその環境のPWAのオリジンに限る。
+秘密の値はWorkersのsecretだけに置き、リポジトリ・Voidの設定・PR・ログに書かない。`CLOUDFLARE_API_TOKEN`はGitHubのSecretsに置く（ADR-0008）。
 
-送信元の設定はplanやstateにも残り得る。planの平文をCIに出さず、公開の成果物にも置かない。S3の状態は専用の環境別キーと権限で分離し、暗号化とアクセス制限を適用する。SSMの秘密値はTerraformのデータソースでは読まず、許可された関数が実行時に読む。
+招待・戻すリンク・はじめの登録の画面には`Referrer-Policy: no-referrer`を付け、外部の資源を読まない。トークンはハッシュだけを保存する。
 
-通知の購読情報は本人にしか返さない。任意URLへのサーバーからの要求を避けるため、PushのendpointはHTTPSで、対応するPushプロバイダーのホストに限り、転送先URLには追従しない。ロック画面に公演名と受付名が出ることは通知を許可する画面で案内する。
+戻すリンクは、漏れるとその人になれるので、次の条件で絞る。使ったら古いパスキーとセッションを消す。
+
+- 1回だけ使え、24時間で切れる
+- オーナーだけが出せ、自分の分は出せない
+- 出し直すと、前のものは使えない
+
+合言葉は、間違えた回数の上限で総当たりを止める。オーナー本人の戻しに使ったら、大関さんが替える。
+
+通知先は本人にしか返さない。Pushの`endpoint`はHTTPSで、知っている配信サービスのホスト（Apple、Google、Mozilla、Microsoft）に限り、転送先には付いていかない。
+
+ロック画面に公演名と受付名が出ることは、通知を許可する画面で案内する。
 
 ## 性能
 
-定期ポーリングでNeonを起こさず、予約単位で起動する。登録前LambdaのDB書き込みは1文とする。一覧は10人の利用を前提にページ分けしない。日付と申込者の索引を使い、ホームの表示に端末ごとの送信履歴を読まない。
+使う人は10人以下なので、一覧はページを分けない。日付と申込者のインデックスを使い、ホームでは端末ごとの送信結果を読まない。
+
+D1の書き込みは1日10万行が上限で、10人が1日30回操作しても数千行に収まる（推測。実装のあとに大関さんがCloudflareの管理画面で見る）。
 
 ## テスト方針
 
-- CIはメールを送らない。Playwrightはランナー内のPWAとHono、使い捨てPostgreSQLを使う。2つのcontextで、オーナーの招待発行、招待者の参加、公演確定、申込から受取済みまでを通す。試験専用の入口がランナー内の短命な鍵とテストissuerで2人のJWTを発行し、試験用アダプターがJWTを検証してHonoの認証済み入力に渡す。画面の試験用コード入力はランナー内の代替だけで扱う。試験用の入口・鍵・発行者を製品ビルドの依存から外し、成果物に試験用の入口が無く、試験JWTを受けないことを検査する。結合検証は実際のメールOTPのみとし、パスワード方式は足さない。
-- ローカルのHonoではusers行なし・非メンバー・非オーナー、招待の最後の1回、他人の下書きIDへ同じ／違う内容を送った場合の応答、DELETE不在と別グループの404を確かめる。Gatewayの401はローカルHonoの試験に含めず、Terraformでissuer・client・全ルートのauthorizerを照合し、実環境でJWTなし・別issuer・別clientを拒否することを確かめる。同じブラウザで会員を交代し、旧会員の下書きや通知状態が一瞬も表示されないことも確かめる。
-- 登録前のイベント試験は招待の無効・期限・登録開始枠・AdminCreateUserを確認する。SDKの境界に上の例外を注入し、特にSignUpのLimitExceededExceptionから未確認ユーザーの確認を再開できることを確かめる。結合検証で休止したNeonを使う初回登録の応答時間を測り、登録開始枠を超えた新規登録は送信されず、既存会員のログインは継続することを確かめる。
-- fast-checkで予約の時刻と状態遷移、再送上限、世代切替と引き受けの競合、旧見張り、同じ再送、端末ごとの再開を確かめる。Push成功直後に失敗させ、成功記録と端末の失敗印が別々に残らないことも確かめる。
-- 固定時計で12:00締切の通知を11:40に開始し、端末Aの一時失敗を`attempt_no=1`で保存した直後、端末Bへの送信前に停止させる。11:50に見張りが同じ回を再開して、Aを再試行せずBに送ること、Bが成功したら11:55の再送（2回目）ではAだけに送ることを確かめる。
-- 1月10日12時の入金期限で、1月9日20時の通知を送ったあと、同日21時に期限を翌日の1月11日12時へ延ばす。期限が保存され、1月10日20時は別IDで予約され、3時間前の予約が1月11日9時に切り替わることを確かめる。同じ変更を送り直しても予約を増やさない。
-- 送信済みの期限を過去に直したときは、申込詳細に旧予約の時刻や結果がなく、新規予約もないことを確かめる。取り消した期限の入れ直し、旧世代の送信結果の分離、5回目の拒否も確かめる。結合検証では見張り移動後の設定も確かめる。
-- 結合検証ではSchedulerとLambdaの失敗経路を1つずつ試す。最初にC-4の設定が`TreatMissingData=notBreaching`であることを確認する。各試験の前に、結合検証のキューから前の試験のメッセージを除いて空にし、CloudWatchの評価でアラームが`OK`になるのを待つ。可視件数の0のデータ点は前提にしない。失敗を起こした後は、該当する経路のメッセージがキューに入ったことと、アラームが`OK`から`ALARM`に変わってメールが届いたことを別々に確かめる。休止していたキューでは、再開後に指標が届くまで最大15分かかり得る。
-- 同じ公演の受取済みの申込2件に座席を入れ、古い申込をあとで編集しても、券面が作成日時の新しい申込を選ぶことを確かめる。
-- 固定時計で、入金締切12:00の予約済み通知が締切ちょうど・締切後に起動した場合に、初回・再送・見張りのどれもPushを要求せず完了することを確かめる。締切前に引き受けた場合は、処理中に締切を越えた後の未送信端末に送らず、すでに受理された結果は保持する。
-- 固定時計で、送信と見張りがDB障害中に再試行を使い切り、`scheduled`か`sending`のまま残った予約を用意する。申込詳細は期限直前まで`scheduled`、期限ちょうどから`sent`を返すことを確かめる。受理記録がない場合は「送信なし」と表示し、受理記録があれば`sentToAnyDevice`はtrueのままとする。どちらも行の更新や送り直しは行わない。
-- 固定時計で、12:00締切を11:58に登録したときは2件を11:59に予約し、11:59に登録したときは予約が締切ちょうどになるためどちらも作らない。12:00ちょうど以降もどちらも作らないことを確かめる。
-- 固定時計で、12:00締切の予約済みの通知を11:59に開始し、先に送った端末Aだけが一時失敗する。次の再送が間に合わなくても、締切前なら端末Bにも送る。Bが成功した場合は再送を作らず、Aだけに失敗表示を出してC-4に報告し、Bの成功を保持する。Bへ送る直前に12:00になった場合はBに送らず、失敗表示も付けない。予約済みの再送が遅れて締切後に起動した場合はPushせず、失敗が残る端末だけを報告する。C-4への通知に失敗させた場合は、見張りがPushせずに報告と完了処理をやり直すことを確かめる。
-- 固定時計で、12:00締切の通知で一時失敗が残り、その回が11:55に終わる場合は、次の再送が締切ちょうどになるため再送を作らない。
-- 共有のアーティスト・会場を作成し、同じグループの別メンバーが同一ID・同一入力で送っても200で1行のまま、同一ID・異なる入力や別グループでは409 id_conflictになることを確かめる。アーティストは同じグループでIDだけが異なる同名の要求を409 already_existsにする。
-- 日本時間で昨日・今日・明日の確定済み公演と、自分の下書きを用意する。S-06の「これから」に今日と明日、「過去」に昨日、自分の下書きは別の一覧に出ることを確かめる。
-- 結合検証では初期データでオーナーと共有グループを用意する。大関さんはオーナーとして招待リンクを発行し、2人目として別のメールアドレスでiPhoneのSafariから参加する。2人目はホーム画面のyoinで再ログインして通知を許可し、公演を確定して自分の期限付き申込を作る。そのiPhoneで結果発表・入金期限・受取開始の通知を受け取り、通知から自分の申込を開く（AC-07〜AC-10b）。大関さんはオーナーとしてパソコンでも開き、2人目の申込が読めても編集できないことを確かめる（AC-11）。
-- 結合検証では、本番で使うyoin専用の送信元から送った認証メールが、GmailとiCloudの両方で迷惑メールではなく受信トレイに入ることを確かめる。
-- AC-10bでは2人目が受取開始の通知を予約してからS-22でログアウトする。通知先を残したまま、そのiPhoneの未ログイン状態で通知を押す。S-01で同じ人が再ログインし、ホームではなく押した通知の申込詳細へ戻ることを確かめる。
-- AC-09の予約時刻は固定時計で厳密に比べる。結合検証ではFlexibleTimeWindowなしの予約時刻、Scheduler起動、Push受理、端末着信を別々に記録する。通常経路の試験目安は、Scheduler起動が予約の分内（60秒未満）、Push受理が起動から60秒以内、着信が受理から2分以内。端末は通信可能な状態にし、範囲を外れた段を記録する。試験計画にもこの判定を引き継ぐ。
-- 大関さんはTerraform適用後の実プールで、登録拒否後のAdminGetUser不在・メール0通、正常な初回1通、メールOTPによる再ログインを確認する。結合検証では専用の宛先でSESの送信数アラームを確かめ、バウンスと苦情は実宛先に送らずSESシミュレーターで確かめる。シミュレーターの宛先は抑止リストに入らないため、抑止の検査は同意済みの検証専用宛先を明示登録し、送信停止と解除を別に確かめる。実AWSとiPhoneはこの設計作成時点では未検証。
-- 大関さんは結合検証のTerraform適用後に、対象のAWSアカウントで[SESのアカウント設定](https://docs.aws.amazon.com/cli/latest/reference/sesv2/get-account.html)を読み取る。`aws sesv2 get-account --region ap-southeast-1 --query 'SuppressionAttributes.SuppressedReasons'`の結果が、順不同で`BOUNCE`と`COMPLAINT`の2つであることを確かめる。この試験が確認するのは自動登録の設定だけで、宛先側の苦情報告がSESに届くかは確認しない。宛先を手動で抑止リストに入れる試験とも分ける。
+CIはPRごとに、型チェック、lint、Vitest、fast-check、手元のD1（`--local`）へのマイグレーション、Playwrightを流す。CloudflareのアカウントにもWeb Pushの配信サービスにもつながない。
+
+### 2人のE2E
+
+PlaywrightはVoidの手元の開発サーバー（D1は手元）を起動し、ブラウザのcontextを2つ作って、Chromiumで流す。
+
+パスキーは、contextごとに仮の認証器を足して登録し、ログインする（AC-01）。仮の認証器は、Chrome DevTools Protocolの`WebAuthn.enable`と`WebAuthn.addVirtualAuthenticator`で足し、設定は次のとおりにする。
+
+| 設定 | 値 |
+|---|---|
+| `protocol` | `ctap2` |
+| `transport` | `internal` |
+| `hasResidentKey` | `true` |
+| `hasUserVerification` | `true` |
+| `isUserVerified` | `true` |
+
+E2Eの流れは次のとおり。
+
+1. 手元のsecretに試験用の合言葉を置き、1人目がはじめの登録の画面でオーナーになる。
+2. オーナーが招待リンクを出し、2人目が参加する。
+3. 公演を確定し、申込を作って当選・入金済み・受取済みまで進める。
+4. 同じブラウザでログアウトして別の人に替え、前の人の下書きや通知の状態が出ないことを見る。
+
+Web Pushは、試験のときだけ配信サービスの代わりにする手元の受け手を使い、送った中身と回数を見る。試験の受け手は製品のビルドに入れない。
+
+### APIの試験
+
+手元のHonoで、断る場面と境目を確かめる。
+
+| 対象 | 確かめる場面 |
+|---|---|
+| 認可 | `users`の行が無い人、メンバーでない人、オーナーでない人、別グループのIDの404 |
+| 招待 | 最後の1回。登録済みの人が別のグループの招待を受けると、札なしで参加できる |
+| 合言葉 | 5回目と6回目の間違い。オーナーができたあとの`setup/complete` |
+| 戻すリンク | 24時間ちょうど、使用済み、出し直し。札を2回出したとき、1回目の札で作ったパスキーのセッションも`recovery_pending`で断られる |
+
+### リマインドの試験
+
+fast-checkで、次の3つの決まりを確かめる。
+
+- 申込からあるべき予約を出す関数（AC-02）
+- 状態の移り方（AC-03）
+- 引き受けと再送と完了（AC-04）
+
+引き受けの試験には、Cronを2つ同時に流しても同じ行を2回引き受けないこと、取り消した予約を引き受けないことを含める。端末の数の上限で止めた回の続きで、送れた端末に送り直さないことも含める。
+
+送信期限の境目は、固定の時計で試す。
+
+| 予約 | 登録した時刻 | 結果 |
+|---|---|---|
+| 入金期限12:00の3時間前（9:00、送信期限10:00） | 9:30 | 次のCronで送る |
+| 同上 | 10:00 | 作らない |
+| 前日20時（送信期限21:00） | 20:30 | 次のCronで送る |
+| 同上 | 21:00 | 作らない |
+
+あわせて、Cronが締切ちょうどに起動したら送らないこと、再送が送信期限に間に合わなければ作らないこと、送信期限を過ぎた`scheduled`は表示上だけ完了にすることも確かめる。
+
+### D1を戻す手順の試験
+
+戻す手順（AC-06b）は、手元のD1で次を確かめる。
+
+- `send_log`に一部の端末だけ記録がある予約、全部ある予約、無い予約を作り、`MAINTENANCE`を1から0に戻すと、`held`と`sent`に分かれる
+- 止めたリマインドの画面の`send`で、まだ送っていない端末にだけ送る
+- 2回続けて戻しても、2回目に突き合わせが流れる
+- 時刻を直した予約で、直す前の送信記録を数えない
+- `retry_at`の入った予約を`held`にできる
+- 戻すリンクで消したパスキーが、戻したあとも使えない
+- `MAINTENANCE`が`1`のあいだと、突き合わせが終わるまで、APIとログインが503になる
+
+### 本番で人が確かめるもの
+
+本番で人が確かめるもの（AC-06c、AC-07〜AC-12）は、要件定義書の表のとおりにする。大関さんがオーナーと2人目の両方を操作する。
+
+2人目を退会させる機能はまだ無い。本番に招くのは、大関さんの2つ目のアカウントか、退会の回までいてもらってよい人に限る。
 
 ## 移行とリリース
 
 ### コードと設定の置き場所
 
-[ADR-0002の決定7](../decisions/ADR-0002-schema-and-functions.md#7コードの置き場所)と[ADR-0004の決定2](../decisions/ADR-0004-dev-tools.md#2-dbの読み書きはdrizzle-ormにする)に沿って、ルートからの置き場所を決める。
-
 | 対象 | 置き場所 |
 |---|---|
-| React＋Viteの画面とService Worker | `apps/web/` |
-| Terraform | `infra/terraform/`。2環境で同じ定義を使い、状態と環境ごとの設定は分ける |
-| Drizzleのテーブル定義 | `src/contexts/<文脈名>/infrastructure/` |
-| マイグレーションSQL | `db/migrations/`。drizzle-kitの設定は`db/drizzle.config.ts`。どちらも文脈の外に置き、アプリの実行時コードから読み込まない |
-| API、登録前Lambda、通知送信Lambdaの入口 | `src/functions/api/`、`src/functions/pre-sign-up/`、`src/functions/notification-sender/` |
-| 初期データのジョブ | `.github/workflows/deploy.yml`のデプロイ内のジョブ。実行するコードは`scripts/seed-initial-data.ts`。対象環境の設定だけを読む |
+| 画面（React＋Vite）とService Worker | Voidの画面の置き場所（Voidの雛形に合わせる。実装の最初に決めて計画に書く） |
+| API | `routes/`。文脈の公開関数（`src/contexts/<文脈>/index.ts`）だけを呼ぶ |
+| Cronの受け手 | `crons/` |
+| Drizzleの表の定義 | `src/contexts/<文脈>/infrastructure/` |
+| マイグレーションのSQL | `void db generate`が出す場所。文脈の外に置き、アプリの実行時のコードから読まない |
+| Voidの設定 | `void.config.ts`と`void.lock.json`。資源の名前とsecretの名前だけを書き、値は書かない |
+| デプロイ | `.github/workflows/deploy.yml`。`main`へのマージで、試験のあと`void deploy` |
 
-Drizzleで環境共通のSQLを生成し、表・制約・索引・世代シーケンスの差分をレビューする。マイグレーションは環境ごとのデプロイに1回だけ組み込み、手動適用しない。mainの試験→結合検証のマイグレーション→Terraform→初期データ→PWA配置→オーナーの確認→承認付き本番デプロイの順。既存データ移行・旧クライアントの互換対応は不要。
+### 配置の流れ
 
-2人目を招いて行う確認は結合検証に限る。退会の機能ができるまでは、本番に2人目を招かない。
+`main`にマージすると、試験を通してから`void deploy`が本番に配置する。マイグレーションはこの中で流れ、手で流す手順は作らない（F-02、AC-06）。本番の前の承認の段は置かない。
 
-初期データは環境別にCognitoのsubを取得し、オーナー・自分用グループ・共有グループ・所属を二重に作らない。オーナーのCognitoアカウントはemail_verified=true、パスワードなし、招待メール送付なしで作る。結合検証と本番の設定を混同しない。Neonの復元はADR-0006の6時間が上限。事故時は書き込みと送信を停止し、復元先とCognito・Schedulerの差を確認する。照合できない予約をそのまま有効にせず、有効な申込と宛先から未来の予約だけを組み直して再開する。この回は解散・退会を作らないため、その削除をやり直す仕組みは対象外。
+```mermaid
+flowchart LR
+  pr[PR] --> ci["CI: 試験と手元のD1"] --> merge[mainにマージ] --> deploy["void deploy<br>マイグレーション→配置"] --> prod[本番]
+```
 
-### SESを足した費用
+最初の配置は、次の順で進める。
 
-[ADR-0006の試算](../decisions/ADR-0006-region-and-cost.md#費用の試算)と同じ10人・1日30操作/人・1ドル150円で比べる。API約9,000回/月など既存の内訳は変えない。API操作のたびにメールは送らないため、比較用に10人が各月10通まで使う月100通を置く。登録・再ログイン・再送・結合検証の合計として見積もり、実測値とはしない。
+1. 大関さんが最初に一度だけ、Cloudflareのアカウントのworkers.devの名前を決め、上の資源の表に書き足すPRを出す。
+2. 大関さんがsecretを置く（`void secret put`）。`MAINTENANCE`は`0`にする。
+3. `main`にマージすると、GitHub Actionsが試験を通してから`void deploy`を流す。
+4. 大関さんがはじめの登録の画面で合言葉を入れて、オーナーになる（P-00、AC-06c）。
+5. オーナーになったら、大関さんが`void secret put SETUP_PASSPHRASE`で合言葉を新しい乱数に替える。新しい値は、パスワードの管理の道具にだけ残す。
 
-| 項目 | 月額（税・クレジット・SES無料枠を除く） |
+合言葉を替えるのは、はじめの登録に使った値が、コマンドの履歴やメモからオーナーを戻す鍵として使われないようにするためである。
+
+マイグレーションの誤りで本番が壊れたときは、上の「D1を過去の時点に戻したとき」の手順で戻す。戻せるのは無料プランで7日までである。既存のデータの移行と、古い画面への互換は要らない。
+
+### 費用
+
+すべてCloudflareの無料プランで、月0円にする（ADR-0008の決定2）。上限を超えるとその日の処理が止まるだけで、料金はかからない。独自ドメインは取らない（論点fs-domain）。
+
+| 資源 | 無料プランの上限 |
 |---|---|
-| Cognito Essentials | 10 MAUは直接ログイン月1万MAUの無料枠内（アカウント/組織で共有）。0円、固定費なし |
-| SES à la carte | 100通 × 0.10ドル/1,000通 = 0.01ドル = 約1.50円。固定費なし。専用IPや新規ドメインは購入しない |
-| 監視を含む比較値 | ADR-0006の約3円＋SESの約1.50円＝約4.50円（税込約4.95円）。標準アラームは失敗キュー2個・API Gateway2個・Lambdaのリージョン合計1個・共有SES1個の計6個で、無料枠10個が使えれば追加料金なし |
-| Neonが無料枠を超えた場合 | 2つの環境ともプロジェクトごとの無料枠内が上の合計の前提。片方が月120 CU時でLaunchに移れば、そのプロジェクトの計算だけで120 × 0.106ドル＝12.72ドル（約1,908円）。データ保存などの従量費は別 |
-
-試算は同じAWSアカウントの2環境で利用量を合わせた比較で、他のアラームや費用、WAF、税・クレジットは含めない。SESはà la carteとし、単価と無料枠は[AWS Cognito料金](https://aws.amazon.com/cognito/pricing/)・[Amazon SES料金](https://aws.amazon.com/ses/pricing/)・[CloudWatch料金](https://aws.amazon.com/cloudwatch/pricing/)・[Neon料金](https://neon.com/pricing)による。既定送信の50通/日はSESの枠ではない。
+| Workers | 1日10万リクエスト、1回のCPU時間10ミリ秒 |
+| D1 | 1日に読み500万行・書き10万行、5GB |
+| Cron | 5個 |
 
 ## リスク
 
-- yoin専用の無料メールのアドレスを、送信元・返信先・問い合わせ先に使う。独自ドメインは取らない。[AWSのDMARC解説](https://docs.aws.amazon.com/ses/latest/dg/send-email-authentication-dmarc.html)のとおり、アドレスの確認だけではDMARCに合格しない。結合検証でGmailまたはiCloudの迷惑メールに入る場合は、独自ドメインを取り、DKIMを設定する案に切り替える。
-- SchedulerとDBは一つのトランザクションにはできない。不要予約が一時的に残っても、有効名を確かめて止める。Pushの受理とDB保存も一つにはできず、重複通知を完全にはなくせない。
+- Voidは公開から6週間で、確かめたのは文書だけである。Better Authのパスキーのセッションなしの登録、クッキーの`Domain`、Cronの置き場所が文書どおりに動くかは、実装の最初の小さいタスクで確かめる。
+- パスキーの確かめとWeb Pushの暗号が、1回10ミリ秒のCPU時間に収まるかは計っていない。収まらなければ、1回のCronで送る端末の数を減らす。それでも収まらなければ、費用の方針を大関さんと決め直す。
+- Web Pushの受理とD1の書き込みは1つにできないので、送った直後に止まると2回届くことがある。設計で許している。
+- workers.devの名前を替えると、全員のパスキーが使えなくなる。替えたら、全員が戻すリンクか招待で登録し直す（ADR-0008の決定5）。
 
 ## 決めたこと（問いと答え）
 
-[論点の記録](../discussions/first-slice.md)
+- [論点の記録 first-slice](../discussions/first-slice.md)
+- [論点の記録 first-slice-cloudflare](../discussions/first-slice-cloudflare.md)（2026-11-28。本番だけ、workers.devの名前、はじめの合言葉、戻すリンク、送れなかったことは本人にだけ、`held`はオーナーの画面）
+
+要件定義書が設計に回したものは、この設計書で次のように決めた。
+
+| 要件 | 決めたこと |
+|---|---|
+| AC-01 パスキーのE2E | Chrome DevTools Protocolの仮の認証器を、contextごとに足す |
+| F-03 合言葉の間違いの上限 | 5回続けて間違えたら1時間試せない |
+| F-05b オーナー本人の戻し方 | はじめの登録の画面で合言葉を入れて、新しいパスキーを足す。使ったら合言葉を替える |
+| 合言葉をオーナーのあとも使えるままにするか | 使えるままにする。間違えた回数は全員で数え、第三者がオーナー本人の戻しを1時間止められることは受け入れる。はじめの登録のあとと、オーナーの戻しに使ったあとに替える（2026-11-28、大関さんがPR #100のレビューで出た判断に答えた） |
+| F-36a 戻す手順の細部 | `MAINTENANCE`で止め、`yoin-send-log`の`control`に止めた時刻を置き、再開の最初のCronで突き合わせる |
+| 非機能 1回のCronで送る端末 | 引き受け3件・端末5台（仮。計ってから決め直す） |
+| B-07 残り7日ちょうど | 出さない |
+| B-09 上限 | 枚数1〜99、受付名100字、座席と整理番号200字 |
+| B-10 端末が無い人 | 端末0台で完了にし、「送信なし」と出す |
+| F-24 券に出す申込 | 受取済みを先に、同じ状態なら新しい申込 |
+| 対象範囲 この回の表 | 上の「DB設計」の表。`groups_setup_state`をデータモデルに足す |
 
 ## 未決事項
 
-オーナーへの未回答の質問はない。[画面とデータ取得の道具](../discussions/first-slice.md#画面の移り方とデータの取り方の道具を何にするか)の技術提案1件は設計書と一緒に承認を受ける。
+- アカウントのworkers.devの名前（大関さんが最初の配置の前に決める）。
+- 1回のCronで送る端末の数（大関さんの手元で計ってから決める）。
+- 画面の置き場所の名前（Voidの雛形に合わせて、実装計画で決める）。
+- voidとcf CLIの利用状況の送信の止め方（`docs/agents/command-scope.md`。これらを初めて動かす作業より前のPRで書く）。
