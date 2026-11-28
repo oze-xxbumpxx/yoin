@@ -217,7 +217,7 @@ HTTPの3回は、同じ遮断の下でPythonの`http.client`から送った。�
 
 PWAを使わない雛形のビルドでは、`.cloudflare/output/v1/workers/default/bundle/`にWorker、同じ階層の`assets/`に静的ファイルを出した。`worker.config.json`にはD1の`DB`とCronの式が入っていた。`dist/ssr/`と`dist/client/`にも出力があり、Workerの入口と静的ファイルのマニフェストはそれぞれ主出力と一致した。
 
-読み出し用の`routes/api/cron-runs.dev.ts`は開発時だけ使い、Workerのビルド済みJavaScriptにはそのルートが入っていなかった。試作コードはリポジトリに入れていない。計画の担当パスとCIの出力検査は、この試作の後続作業で揃える。
+読み出し用の`routes/api/cron-runs.dev.ts`は開発時だけ使い、Workerのビルド済みJavaScriptにはそのルートが入っていなかった。試作コードはリポジトリに入れていない。
 
 ### Chromeが遮断下で起動できず、パスキーとCookieは未判定
 
@@ -296,4 +296,34 @@ Set-Cookie: __Host-yoin.session_token=[redacted]; Max-Age=31536000; Path=/; Http
 
 `Domain`はなく、`__Host-`に必要な`Secure`と`Path=/`が付いていた。`HttpOnly`、`SameSite=Lax`も付いていた。Node.jsからCookieを送り返すと、Better Authはセッションを返した。
 
-試作の合成トークンを使ったサーバー側の試験では、3項目とも通った。札つきのセッション案への切り替えは行わない。実ブラウザでのパスキー作成とCookieの保存・送信、製品用の招待トークンの検証は、この結果では確かめていない。CLIの通信を止める試験（C02）と、オーナーが行うCPU計測も未完了のまま。
+試作の合成トークンを使ったサーバー側の試験では、3項目とも通った。札つきのセッション案への切り替えは行わない。実ブラウザでのパスキー作成とCookieの保存・送信、製品用の招待トークンの検証は、この結果では確かめていない。CLIの通信を止める試験（C02）も未完了のまま。
+
+### オーナーの手元でCPU時間と実ブラウザを確かめる
+
+手順は、作業クローンの隣に置く試作ディレクトリ`void-spike-work/`を起点とする。試作一式（`yoin-c03-owner-spike.tar.gz`）をその中に展開すると、`preflight.py`、`sandbox-passkey.py`、`starter/`が揃う。クローンの名前は`yoin`とし、試作専用のNode.js 24.22.3を`void-spike-work/node/bin/`に置く。
+
+依存がまだなければ、`starter/`で`npm ci --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org`を遮断の外で一度だけ実行する。手元のデータや認証情報は持ち込まない。以後の実行は同じ遮断の下で行う。起動前の確認が通らなければ中止する。
+
+#### CPU時間
+
+計測コードは`starter/bench-c03-cpu.mjs`にある。`void-spike-work/`で次を実行する。第1引数は計測回数、第2引数は1回に暗号化する端末の数。初回は設計の仮の上限である5台を使う。
+
+```sh
+/usr/bin/python3 sandbox-passkey.py cpu 100 5
+```
+
+パスキーは、Better Authが使う`@simplewebauthn/server`でES256のログイン署名を検証する。Pushは、端末ごとに鍵共有、鍵の導出、AES-GCMによる本文の暗号化、VAPID署名を行う。合成データのみを使い、Pushを送信しない。
+
+各処理は準備の10回を除き、`process.cpuUsage`の差をミリ秒で出す。機種・OS・Node.jsの版、本文サイズ、台数、p50・p95・最大値を記録する。これは手元の暗号処理だけの目安で、Workers上の1要求やCron全体のCPU時間ではない。
+
+10ミリ秒を超えたら、まずCronで送る台数を減らし、同じ条件で測り直す。台数を減らしても収まらない場合は、費用の方針をオーナーが決め直す。パスキー単独の超過は台数では解消しないため、別に記録してオーナーに渡す。
+
+#### 実ブラウザ
+
+空の手元のD1と試作専用のChromeプロファイルを使う。外向き通信と認証情報の読み取りを遮断したまま、ChromeがローカルUnixソケットを使える使い捨て環境で、`void-spike-work/`から次を実行する。
+
+```sh
+/usr/bin/python3 sandbox-passkey.py
+```
+
+ViteとChromeの起動前に別々に遮断を確認する。操作は`starter/test-c03-passkey.mjs`がPlaywrightとCDPの仮想認証器を使い、`http://localhost:5188`だけで行う。トークンなしの拒否とD1の0件、トークンありの登録と各1件、実際の`Set-Cookie`、ChromeがCookieを送り返してセッションが得られることを記録する。起動時に再び`SingletonSocket`が拒否された場合は、遮断を緩めずに中止する。

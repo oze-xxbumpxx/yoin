@@ -14,4 +14,4 @@ Viteは開発時もビルド時も`.env`や`VITE_*`の値を取り込みませ�
 
 マイグレーション検査（`check:migrations`）、結合試験（`test:integration`）、Playwrightは、対応するコマンドか設定があるときだけ動きます。対象がなければ、成功ではなく「未実行」と記録します。
 
-Voidの試作（`void-spike`）でPWA以外の出力先を確かめ、その出力の検査をつなぎ直します。
+PWA以外では、`.cloudflare/output/v1/workers/*/`、`dist/ssr/`、`dist/client/`を検査します。まだ出力がない場所は飛ばします。出力がある場所で試験用のファイルや値などが見つかれば、検査は失敗します。

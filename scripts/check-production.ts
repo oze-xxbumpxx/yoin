@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { assertProductionFiles } from "./production-boundary.ts";
+import { assertProductionFiles, assertVoidProductionFiles } from "./production-boundary.ts";
 
 const markersPath = "tests/support/production-markers.json";
 const markers: unknown = existsSync(markersPath)
@@ -11,4 +11,7 @@ if (!Array.isArray(markers) || !markers.every((marker) => typeof marker === "str
   throw new Error("Expected a non-empty list of test-only auth markers");
 }
 
-await assertProductionFiles("dist/pwa", markers);
+if (!process.argv.includes("--skip-pwa")) {
+  await assertProductionFiles("dist/pwa", markers);
+}
+await assertVoidProductionFiles(".", markers);
