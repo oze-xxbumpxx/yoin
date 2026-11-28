@@ -39,3 +39,47 @@ That setting covers the bundled `cf` subprocess, not necessarily Void itself. We
 - UDP: `replicatord`とOSサービスのソケットがあった。`netstat`では`mDNSResponder`が5353番ポートで待ち受けていた（IPv4とIPv6）。
 
 このMacには外へ出るIPv6の経路がないため、遮断なしで届く宛先とは比較できていない。待ち受けの用途から、任意の通信を外へ中継するプロキシではないと判断した。これらのサービスが実際に中継しないことは試していない。
+
+### ホストの認証情報の読み取りを拒否する
+
+通信の遮断に、認証情報の置き場の読み取り拒否を足した。`sandbox-exec`の`-p`に次のプロファイルを渡し、`-D HOST_HOME=<ホストのホームの絶対パス>`を指定した。試験するプロセスには、別の空の一時ディレクトリを`HOME`として渡した。
+
+```scheme
+(version 1)
+(allow default)
+(deny network*)
+(allow network-bind (local ip "localhost:*"))
+(allow network-inbound (local ip "localhost:*"))
+(allow network-outbound (remote ip "localhost:*"))
+(deny file-read*
+  (subpath (string-append (param "HOST_HOME") "/.ssh"))
+  (subpath (string-append (param "HOST_HOME") "/.aws"))
+  (subpath (string-append (param "HOST_HOME") "/.config"))
+  (subpath (string-append (param "HOST_HOME") "/.npmrc"))
+  (subpath (string-append (param "HOST_HOME") "/.gitconfig"))
+  (subpath (string-append (param "HOST_HOME") "/.git-credentials"))
+  (subpath (string-append (param "HOST_HOME") "/.git-credential-cache"))
+  (subpath (string-append (param "HOST_HOME") "/.wrangler"))
+  (subpath (string-append (param "HOST_HOME") "/Library/Keychains"))
+  (subpath "/Library/Keychains")
+  (subpath "/System/Library/Keychains"))
+```
+
+ディレクトリは`ls`、ファイルは読み取り用に開いて結果を比べた。出力は置き場の有無と読み取りの成否だけにし、中身は表示しなかった。
+
+| 読み取りの対象 | ホストに存在 | 遮断なし | 遮断あり |
+|---|---|---|---|
+| ホストの`~/.ssh`、`~/.gitconfig`、`~/Library/Keychains`、`/Library/Keychains`、`/System/Library/Keychains` | あり | 読めた | 拒否 |
+| ホストの`~/.aws`、`~/.config`、`~/.npmrc`、`~/.git-credentials`、`~/.git-credential-cache`、`~/.wrangler` | なし | 未実施 | 未実施 |
+| 一時ディレクトリに作ったホストのホーム配下の全対象と、各対象ディレクトリ内の空ファイル | 模擬データのみ | 読めた | 拒否 |
+
+| 通信の再確認 | 遮断なし | 遮断あり |
+|---|---|---|
+| HTTPS（`https://example.com`） | 終了コード0、577バイト取得 | 終了コード6、名前解決に失敗 |
+| IPv4のTCP（`1.1.1.1:443`） | 接続成功 | `EPERM` |
+| OSの名前解決（未使用の名前） | `1.1.1.1`に解決 | 名前解決に失敗 |
+| IPv4のUDP（`1.1.1.1:53`へのDNS問い合わせ） | 問い合わせに対応する応答を受信 | `EPERM` |
+| IPv6のTCP（`[2606:4700:4700::1111]:443`） | `EHOSTUNREACH`、経路なし | `EPERM` |
+| IPv4のループバック（`127.0.0.1`） | 接続成功 | 接続成功 |
+
+確認したのは、表にあるパスの読み取りだけである。キーチェーンのAPIや、表にない保存先は試していない。Voidとcfは起動していない。
